@@ -15,7 +15,8 @@ const KEY = 'bridge-tower-duel.v1';
 export function loadSettings(): Settings {
   const raw = load<Partial<Settings>>(KEY, {});
   const deck = Array.isArray(raw.deck) && isValidDeck(raw.deck) ? raw.deck : [...DEFAULT_PLAYER_DECK];
-  const level: AiLevel = raw.level === 'easy' || raw.level === 'hard' ? raw.level : 'normal';
+  // 第一次來的玩家預設「簡單」（多半是從社群連結點進來的新手）；選過難度就沿用
+  const level: AiLevel = raw.level === 'easy' || raw.level === 'normal' || raw.level === 'hard' ? raw.level : 'easy';
   const r = raw.record;
   return {
     deck,

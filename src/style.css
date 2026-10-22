@@ -581,7 +581,7 @@ button { cursor: pointer; touch-action: manipulation; }
 .result-title { font-size: 34px !important; letter-spacing: 3px; margin: 2px 0 !important; text-shadow: 0 3px 0 #000; }
 .result.win .result-title { color: var(--gold); }
 .result.lose .result-title { color: #ff8a80; }
-.result-stats { font-size: 13px; color: var(--muted); }
+.result-stats { font-size: 13px; color: var(--muted); white-space: pre-line; line-height: 1.5; }
 
 /* ───────── 覆蓋層 ───────── */
 .overlay {

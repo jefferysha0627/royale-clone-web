@@ -24,7 +24,7 @@ npm run dev        # 開發伺服器，手機可用區網 IP 連入
 | `npm run build` | 型別檢查 + production build，輸出到 `dist/`（gzip 後約 210 KB） |
 | `npm run preview` | 在 4173 埠預覽 `dist/` |
 | `npm test` | 規則與電腦對手的自動測試（vitest） |
-| `npm run sim -- 30 1 normal hard --swap --quiet` | 無畫面電腦對電腦批次模擬（場數、起始 seed、雙方難度；`--swap` 交換座位） |
+| `npm run sim -- 30 1 normal hard --swap --quiet` | 無畫面電腦對電腦批次模擬（場數、起始 seed、雙方難度；`--swap` 交換座位）；`scripts/dev/deckmatrix.ts` 牌組矩陣、`scripts/dev/novice.ts` 新手腳本對各難度 |
 | `npm run e2e` | 先 `npm run build`。用真實瀏覽器操作桌面與 360×640、390×844、430×932，含一場以觸控即時打完的對戰（約 8 分鐘）；加 `-- --quick` 略過即時整場。結果寫入上一層 `verification/v2/` |
 | `npm run assets` | 用遊戲自己的 3D 渲染器重新產生 `public/og-image.png`（1200×630）與 `public/apple-touch-icon.png` |
 | `npm run check` | 型別檢查 + 測試 + build |
@@ -47,7 +47,7 @@ npm run dev        # 開發伺服器，手機可用區網 IP 連入
 
 - 3 分鐘一局，剩 1 分鐘能量加倍。推倒側塔得 1 皇冠並開放該路的前進部署區；推倒國王塔直接 3 皇冠獲勝。國王塔受傷或側塔倒下才會醒來（約 4 秒後開火）。
 - 時間到皇冠多者勝；平手進入 2 分鐘驟死延長賽（最後 1 分鐘三倍能量），先推倒任一座塔者勝；仍平手則所有部隊消失、塔同步扣血，最低血量的塔先倒的一方落敗。
-- 電腦難度：簡單／普通／困難，全部遵守同一套能量、手牌與部署規則，只透過與玩家相同的出牌介面行動。
+- 電腦難度：簡單（新手對手）／普通／困難，全部遵守同一套能量、手牌與部署規則，只透過與玩家相同的出牌介面行動，也只看得到公開資訊。第一次開啟預設簡單，選過的難度會記在本機。
 
 ## 程式結構
 

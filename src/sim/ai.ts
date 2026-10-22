@@ -30,12 +30,13 @@ export type AiLevel = 'easy' | 'normal' | 'hard';
 // 也只看得到場上公開的資訊（對手的出牌與花費可以記，手牌、牌序與能量看不到）。
 export const AI_LEVELS: Record<AiLevel, AiOptions> = {
   easy: {
-    reaction: 1.8, reactDelay: 1.5, skill: 0.2, noise: 2.2, aim: 0, track: 0.25, pushElixir: 8.6, spellValue: 0.8, leak: 10,
-    counterPush: 0.3, minGain: 1.5, plan: 1, pocket: false,
+    // 新手對手：反應慢、常出錯、幾乎不主動進攻（能量滿了才出牌）
+    reaction: 2.8, reactDelay: 2.8, skill: 0, noise: 3, aim: 0, track: 0, pushElixir: 10, spellValue: 2.5, leak: 10,
+    counterPush: 0, minGain: 4, plan: 1, pocket: false,
   },
   normal: {
-    reaction: 0.75, reactDelay: 0.45, skill: 0.72, noise: 0.7, aim: 0.6, track: 0.6, pushElixir: 7, spellValue: 1.0, leak: 9.7,
-    counterPush: 0.9, minGain: 0.6, plan: 2, pocket: false,
+    reaction: 1.0, reactDelay: 0.8, skill: 0.6, noise: 1.0, aim: 0.5, track: 0.5, pushElixir: 7.4, spellValue: 1.1, leak: 9.7,
+    counterPush: 0.75, minGain: 0.8, plan: 2, pocket: false,
   },
   hard: {
     reaction: 0.4, reactDelay: 0.12, skill: 0.95, noise: 0.25, aim: 1, track: 1, pushElixir: 7.4, spellValue: 1.25, leak: 9.4,

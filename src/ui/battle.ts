@@ -850,7 +850,8 @@ export class Battle {
       }, 350 + i * 380);
     }
     $('result-reason').textContent = REASON_TEXT[r.reason](r.winner);
-    $('result-stats').textContent = `${LEVEL_NAME[this.level]}電腦（${this.aiDeckName}）· 出牌 ${p.cardsPlayed} 張 · 花費 ${Math.round(p.elixirSpent)} 能量 · ${fmtTime(r.time)}`;
+    $('result-stats').textContent =
+      `對手：${LEVEL_NAME[this.level]}電腦（${this.aiDeckName}）\n你出牌 ${p.cardsPlayed} 張、花費 ${Math.round(p.elixirSpent)} 能量・對戰 ${fmtTime(r.time)}`;
     $('btn-share-result').textContent = '分享戰績給朋友';
     $('share-manual-result').hidden = true;
     this.ovResult.hidden = false;
