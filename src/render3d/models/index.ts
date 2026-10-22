@@ -47,7 +47,7 @@ const HUMANOIDS: Record<string, (t: TeamPal) => HumanoidSpec> = {
     hat: 'bandana', weapon: 'spear',
   }),
   skeleton: () => ({
-    height: 0.95, skin: BONE, face: 'skull', bones: true, torso: '#e6dfcc', legs: '#e6dfcc', boots: '#d9d2c0', hands: BONE, pads: true, weapon: 'sword',
+    height: 0.95, skin: BONE, face: 'skull', bones: true, torso: '#e6dfcc', legs: '#e6dfcc', boots: '#d9d2c0', hands: BONE, scarf: true, weapon: 'sword',
   }),
   musketeer: () => ({
     height: 1.2, skin: SKIN, face: 'dot', mustache: '#5a3a1e', hair: { style: 'bob', color: '#5a3a1e' }, hat: 'cap', hatColor: '#3a3f5a', torso: '#7a5a3a',
@@ -79,7 +79,7 @@ const HUMANOIDS: Record<string, (t: TeamPal) => HumanoidSpec> = {
   }),
   giant_skeleton: () => ({
     height: 2.0, build: 1.25, headScale: 0.8, torsoScale: 1.15, skin: BONE, face: 'skull', bones: true, torso: '#e6dfcc', legs: '#e6dfcc', boots: '#d9d2c0',
-    hands: BONE, hat: 'skull', hatColor: '#7a6a5a', pads: true,
+    hands: BONE, scarf: true,
   }),
 };
 
@@ -119,10 +119,14 @@ function buildGiantSkeleton(t: TeamPal): ModelAsset {
   const k = new Kit();
   const root = k.addBone('root', -1, [0, 0, 0]);
   const rig = addHumanoid(k, HUMANOIDS.giant_skeleton(t), t, root);
-  // 胸腔裡發光的大炸彈
-  k.sphere(0.24, { at: [0, 0.92, 0.02], color: '#2a2c33', bone: rig.spine }, 12);
-  k.sphere(0.08, { at: [0, 1.2, 0.02], color: '#ffb347', bone: rig.spine }, 8);
-  k.torus(0.25, 0.03, { at: [0, 0.92, 0.02], rot: [Math.PI / 2, 0, 0], color: t.main, bone: rig.spine }, 12);
+  // 背上綁著的大炸彈（從後方看得到），導火線發光
+  k.sphere(0.42, { at: [0, 1.05, -0.42], color: '#2a2c33', bone: rig.spine }, 14);
+  k.torus(0.43, 0.04, { at: [0, 1.05, -0.42], rot: [0, 0, 0], color: '#6b4426', bone: rig.spine }, 16);
+  k.torus(0.43, 0.04, { at: [0, 1.05, -0.42], rot: [0, Math.PI / 2, 0], color: '#6b4426', bone: rig.spine }, 16);
+  k.cyl(0.04, 0.04, 0.22, { at: [0, 1.52, -0.42], color: '#c9a24a', bone: rig.spine }, 6);
+  k.sphere(0.07, { at: [0, 1.65, -0.42], color: '#ffb347', bone: rig.spine }, 8);
+  k.box(0.08, 0.7, 0.08, { at: [0.22, 1.05, -0.1], rot: [0.4, 0, 0], color: t.main, bone: rig.spine });
+  k.box(0.08, 0.7, 0.08, { at: [-0.22, 1.05, -0.1], rot: [0.4, 0, 0], color: t.main, bone: rig.spine });
   return k.build(2.0);
 }
 

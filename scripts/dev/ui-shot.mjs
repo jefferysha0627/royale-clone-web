@@ -8,7 +8,7 @@ const [w, h] = size.split('x').map(Number);
 const root = fileURLToPath(new URL('../..', import.meta.url));
 const server = await createServer({ root, server: { port: 5199, strictPort: true }, logLevel: 'error' });
 await server.listen();
-const browser = await launchBrowser({ args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
+const browser = await launchBrowser();
 try {
   const mobile = w < 700;
   const ctx = await browser.newContext({ viewport: { width: w, height: h }, deviceScaleFactor: 2, isMobile: mobile, hasTouch: mobile });

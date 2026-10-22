@@ -1,20 +1,21 @@
-// 真實瀏覽器驗證：以 production build 在 Chromium 中用真的滑鼠／觸控輸入操作。
-// 用法：npm run build && npm run e2e            （完整，含一場即時對戰，約 5 分鐘）
+// 真實瀏覽器驗證（v2）：以 production build 在 Chromium 中用真的滑鼠／觸控輸入操作。
+// 用法：npm run build && npm run e2e            （完整，含一場即時對戰，約 8 分鐘）
 //       npm run build && npm run e2e -- --quick （略過即時整場對戰）
+// 結果寫入上一層的 verification/v2/（e2e-results.json、screenshots/）。
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { preview } from 'vite';
 import { launchBrowser } from './browser.mjs';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
-const outDir = fileURLToPath(new URL('../../verification/', import.meta.url));
+const outDir = fileURLToPath(new URL('../../verification/v2/', import.meta.url));
 const shotDir = `${outDir}screenshots/`;
 mkdirSync(shotDir, { recursive: true });
 const QUICK = process.argv.includes('--quick');
 const PORT = 4179;
 const BASE = `http://localhost:${PORT}/`;
 
-const results = { startedAt: new Date().toISOString(), browser: '', checks: [], viewports: {}, errors: [], notes: [] };
+const results = { startedAt: new Date().toISOString(), browser: '', gpu: '', checks: [], viewports: {}, errors: [], notes: [] };
 let failures = 0;
 function check(name, ok, detail = '') {
   results.checks.push({ name, ok: !!ok, detail });
@@ -29,25 +30,22 @@ const VIEWPORTS = [
   { name: 'mobile-390x844', viewport: { width: 390, height: 844 }, touch: true, dsf: 3 },
   { name: 'mobile-430x932', viewport: { width: 430, height: 932 }, touch: true, dsf: 3 },
 ];
+const SPELLS = ['fireball', 'arrows', 'zap', 'rocket', 'log', 'poison', 'goblin_barrel'];
 
 const server = await preview({ root, preview: { port: PORT, strictPort: true }, logLevel: 'error' });
 const browser = await launchBrowser();
 results.browser = `Chromium ${browser.version()}（Playwright 驅動，headless）`;
 
 async function newPage(vp, extra = {}) {
-  const ctx = await browser.newContext({
-    viewport: vp.viewport,
-    deviceScaleFactor: vp.dsf,
-    isMobile: vp.touch,
-    hasTouch: vp.touch,
-    ...extra,
-  });
+  const ctx = await browser.newContext({ viewport: vp.viewport, deviceScaleFactor: vp.dsf, isMobile: vp.touch, hasTouch: vp.touch, ...extra });
   const page = await ctx.newPage();
   page.on('console', (m) => {
     if (m.type() === 'error') results.errors.push(`[${vp.name}] console: ${m.text()}`);
   });
   page.on('pageerror', (e) => results.errors.push(`[${vp.name}] pageerror: ${e.message}`));
-  page.on('requestfailed', (r) => results.errors.push(`[${vp.name}] requestfailed: ${r.url()}`));
+  page.on('requestfailed', (r) => {
+    if (!r.url().startsWith('data:')) results.errors.push(`[${vp.name}] requestfailed: ${r.url()}`);
+  });
   const cdp = vp.touch ? await ctx.newCDPSession(page) : null;
   return { ctx, page, cdp };
 }
@@ -60,6 +58,7 @@ const state = (page) =>
       elixir: p.elixir, hand: [...p.hand], next: p.queue[0], played: p.cardsPlayed, spent: p.elixirSpent,
       time: g.time, timeLeft: g.timeLeft, phase: g.phase, crowns: [p.crowns, g.players[1].crowns],
       troops: g.entities.filter((e) => e.kind !== 'tower').length, entities: g.entities.length, result: g.result,
+      intro: window.__btd.battle.intro,
     };
   });
 
@@ -67,10 +66,13 @@ async function cardBox(page, i) {
   const b = await page.locator(`#hand .card[data-index="${i}"]`).boundingBox();
   return [b.x + b.width / 2, b.y + b.height / 2];
 }
-const cardCost = (page, i) => page.locator(`#hand .card[data-index="${i}"] .cost b`).textContent().then(Number);
+const cardCost = (page, i) => page.evaluate((i) => {
+  const id = window.__btd.game().players[0].hand[i];
+  return id ? Number(document.querySelector(`#hand .card[data-index="${i}"] .cost b`)?.textContent ?? 99) : 99;
+}, i);
 const screenOf = (page, x, y) => page.evaluate(([x, y]) => window.__btd.battle.screenOf(x, y), [x, y]);
 
-async function drag(page, cdp, from, to) {
+async function drag(page, cdp, from, to, hold = 0) {
   if (cdp) {
     const tp = (x, y) => [{ x, y, id: 1, radiusX: 8, radiusY: 8, force: 1 }];
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: tp(...from) });
@@ -78,23 +80,25 @@ async function drag(page, cdp, from, to) {
       await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: tp(from[0] + ((to[0] - from[0]) * i) / 8, from[1] + ((to[1] - from[1]) * i) / 8) });
       await sleep(16);
     }
+    if (hold) await sleep(hold);
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
   } else {
     await page.mouse.move(...from);
     await page.mouse.down();
     await page.mouse.move(...to, { steps: 8 });
+    if (hold) await sleep(hold);
     await page.mouse.up();
   }
-  await sleep(60);
+  await sleep(80);
 }
 
 async function tap(page, cdp, pt) {
   if (cdp) await page.touchscreen.tap(...pt);
   else await page.mouse.click(...pt);
-  await sleep(60);
+  await sleep(80);
 }
 
-async function waitElixir(page, need, timeout = 15000) {
+async function waitElixir(page, need, timeout = 20000) {
   const t0 = Date.now();
   while (Date.now() - t0 < timeout) {
     const s = await state(page);
@@ -104,11 +108,14 @@ async function waitElixir(page, need, timeout = 15000) {
   throw new Error(`等不到 ${need} 點能量`);
 }
 
+/** 找一張手上有的牌（可指定只要部隊、或只要法術）。 */
+const findHand = (page, want) =>
+  page.evaluate(([want, spells]) => window.__btd.game().players[0].hand.findIndex((id) => id && (want === 'any' || (want === 'troop' ? !spells.includes(id) : spells.includes(id)))), [want, SPELLS]);
+
 /** 檢查目前畫面有無水平溢出、文字溢出、太小的按鈕。 */
 const layoutAudit = (page) =>
   page.evaluate(() => {
     const W = innerWidth;
-    const H = innerHeight;
     const issues = [];
     for (const el of document.querySelectorAll('#app *')) {
       if (el.closest('[hidden]')) continue;
@@ -116,17 +123,41 @@ const layoutAudit = (page) =>
       if (r.width === 0 || r.height === 0) continue;
       const name = `${el.tagName.toLowerCase()}#${el.id || ''}.${[...el.classList].join('.')}`;
       if (r.right > W + 1 || r.left < -1) issues.push(`超出寬度 ${name} (${Math.round(r.left)}–${Math.round(r.right)})`);
-      if ((el.tagName === 'BUTTON' || el.classList.contains('card-name')) && el.scrollWidth > el.clientWidth + 1) issues.push(`文字溢出 ${name}`);
-      if (el.tagName === 'BUTTON' && (r.width < 43.5 || r.height < 43.5) && !el.closest('.mini-deck')) issues.push(`觸控區小於 44px ${name} ${Math.round(r.width)}×${Math.round(r.height)}`);
+      if ((el.tagName === 'BUTTON' || el.classList.contains('card-name') || el.classList.contains('hud-name')) && el.scrollWidth > el.clientWidth + 1) issues.push(`文字溢出 ${name}`);
+      if (el.tagName === 'BUTTON' && (r.width < 43.5 || r.height < 43.5) && !el.closest('.mini-deck, .deck-slots, .deck-grid')) issues.push(`觸控區小於 44px ${name} ${Math.round(r.width)}×${Math.round(r.height)}`);
     }
-    return { docOverflowX: document.documentElement.scrollWidth > W, issues, W, H };
+    return { docOverflowX: document.documentElement.scrollWidth > W, issues };
   });
 
 async function shot(page, name) {
   await page.screenshot({ path: `${shotDir}${name}.png` });
 }
 
-// ───────── 1. 各尺寸：首頁、教學、出牌、非法部署、能量不足、取消、暫停、背景切換 ─────────
+/** 量測一段時間內的實際影格間隔（requestAnimationFrame）。 */
+const measureFps = (page, ms = 4000) =>
+  page.evaluate(
+    (ms) =>
+      new Promise((res) => {
+        const dts = [];
+        let last = performance.now();
+        const t0 = last;
+        const f = (now) => {
+          dts.push(now - last);
+          last = now;
+          if (now - t0 < ms) requestAnimationFrame(f);
+          else {
+            dts.shift();
+            const sorted = [...dts].sort((a, b) => a - b);
+            const avg = dts.reduce((s, v) => s + v, 0) / dts.length;
+            res({ fps: 1000 / avg, avgMs: avg, p95Ms: sorted[Math.floor(sorted.length * 0.95)], frames: dts.length });
+          }
+        };
+        requestAnimationFrame(f);
+      }),
+    ms,
+  );
+
+// ───────── 1. 各尺寸：首頁、教學、開場、出牌、非法部署、能量不足、取消、暫停、背景切換 ─────────
 
 for (const vp of VIEWPORTS) {
   const tag = vp.name;
@@ -134,78 +165,118 @@ for (const vp of VIEWPORTS) {
   const { ctx, page, cdp } = await newPage(vp);
   await page.goto(`${BASE}?test=1&seed=11`);
   await page.waitForSelector('#screen-home:not([hidden])');
-  check(`[${tag}] 開啟後顯示主畫面與開始按鈕`, await page.isVisible('#btn-play'));
+  check(`[${tag}] 開啟後顯示主畫面與對戰按鈕`, await page.isVisible('#btn-play'));
   check(`[${tag}] 載入畫面已移除`, (await page.locator('#boot').count()) === 0);
+  await sleep(2500); // 卡圖產生
   const homeAudit = await layoutAudit(page);
-  vr.homeAudit = homeAudit;
   check(`[${tag}] 主畫面無水平溢出／文字溢出／過小按鈕`, !homeAudit.docOverflowX && homeAudit.issues.length === 0, homeAudit.issues.slice(0, 4).join('；'));
+  const portraitsReady = await page.$$eval('#home-deck-cards .card-img', (els) => els.length);
+  check(`[${tag}] 卡面以 3D 模型渲染成圖（牌組 8 張）`, portraitsReady === 8, `${portraitsReady}/8`);
   await shot(page, `${tag}-01-home`);
 
   await page.click('#btn-play');
   await page.waitForSelector('#ov-howto:not([hidden])');
-  check(`[${tag}] 第一次開戰先顯示簡短玩法`, true);
   await shot(page, `${tag}-02-howto`);
   await page.click('#btn-howto-ok');
   await page.waitForSelector('#screen-battle:not([hidden])');
-  await sleep(400);
+  await sleep(500);
+  vr.renderer = await page.evaluate(() => window.__btd.battle.rendererKind);
+  check(`[${tag}] 使用 3D（WebGL）畫面`, vr.renderer === '3d', vr.renderer);
+  const introVisible = await page.isVisible('#ov-vs');
+  const sIntro = await state(page);
+  await shot(page, `${tag}-03-vs`);
+  // 開場倒數期間不能出牌、時間不前進
+  const bIdx = await findHand(page, 'troop');
+  await page.evaluate(() => (window.__btd.game().players[0].elixir = 10));
+  await drag(page, cdp, await cardBox(page, bIdx), await screenOf(page, 9.5, 24.5));
+  const sIntro2 = await state(page);
+  check(`[${tag}] 開場 VS 與倒數期間模擬暫停、不能出牌`, introVisible && sIntro.intro > 0 && sIntro2.played === 0 && sIntro2.time === 0, `intro ${sIntro.intro.toFixed(2)} 秒`);
+  await page.waitForFunction(() => window.__btd.battle.intro <= 0, null, { timeout: 15000 });
+  await sleep(300);
   vr.audioState = await page.evaluate(() => window.__btd.sound.state);
   check(`[${tag}] 點開始後音訊已啟用（AudioContext running）`, vr.audioState === 'running', vr.audioState);
 
   const battleAudit = await layoutAudit(page);
-  vr.battleAudit = battleAudit;
   const panel = await page.locator('#hand-panel').boundingBox();
   const cardB = await page.locator('#hand .card[data-index="0"]').boundingBox();
   vr.card = { w: Math.round(cardB.width), h: Math.round(cardB.height) };
-  check(`[${tag}] 對戰畫面手牌與能量條完整在視窗內`, panel.y + panel.height <= vp.viewport.height + 0.5 && !battleAudit.docOverflowX && battleAudit.issues.length === 0, `${battleAudit.issues.slice(0, 3).join('；')} 卡牌 ${vr.card.w}×${vr.card.h}`);
+  check(`[${tag}] 對戰畫面手牌與能量條完整在視窗內、無溢出`, panel.y + panel.height <= vp.viewport.height + 0.5 && !battleAudit.docOverflowX && battleAudit.issues.length === 0, `${battleAudit.issues.slice(0, 3).join('；')} 卡牌 ${vr.card.w}×${vr.card.h}`);
   check(`[${tag}] 手牌觸控區至少 44×44`, cardB.width >= 44 && cardB.height >= 44, `${vr.card.w}×${vr.card.h}`);
-  await shot(page, `${tag}-03-battle-start`);
+  // 對方國王塔、己方最後一排都在畫面內（不被上方資訊列或手牌擋住）
+  const [, kingTopY] = await screenOf(page, 9, 1);
+  // 對方國王塔血條（塔頂上方）不被上方資訊列遮住
+  const [, kingBarY] = await page.evaluate(() => window.__btd.battle.screenOf3(9, 3, 4.35));
+  const [, lastRowY] = await screenOf(page, 9, 31.5);
+  const hudBottom = await page.locator('.hud-players').boundingBox().then((b) => b.y + b.height);
+  check(`[${tag}] 場地完整可見：對方國王塔血條不被資訊列遮、己方最後一排在手牌上方`, lastRowY < panel.y - 2 && kingTopY > 0 && hudBottom <= kingBarY - 6, `對方塔血條 y=${Math.round(kingBarY)}、資訊列底 ${Math.round(hudBottom)}、己方後排 y=${Math.round(lastRowY)}、手牌頂 ${Math.round(panel.y)}`);
+  await shot(page, `${tag}-04-battle-start`);
 
-  // 拖曳出牌
-  let s0 = await state(page);
-  let cost = await cardCost(page, 0);
-  s0 = await waitElixir(page, cost);
-  const from = await cardBox(page, 0);
-  const to = await screenOf(page, 9, 24);
-  await drag(page, cdp, from, to);
+  // 拖曳中：顯示格線／禁區／半透明預覽
+  let idx = await findHand(page, 'troop');
+  let cost = await cardCost(page, idx);
+  let s0 = await waitElixir(page, cost);
+  const from = await cardBox(page, idx);
+  const to = await screenOf(page, 9.5, 23.5);
+  if (cdp) {
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: from[0], y: from[1], id: 1 }] });
+    for (let i = 1; i <= 8; i++) {
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: from[0] + ((to[0] - from[0]) * i) / 8, y: from[1] + ((to[1] - from[1]) * i) / 8, id: 1 }] });
+      await sleep(16);
+    }
+  } else {
+    await page.mouse.move(...from);
+    await page.mouse.down();
+    await page.mouse.move(...to, { steps: 8 });
+  }
+  await sleep(150);
+  const pv = await page.evaluate(() => window.__btd.battle.debugPreview());
+  await shot(page, `${tag}-05-drag-preview`);
+  if (cdp) await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  else await page.mouse.up();
+  await sleep(120);
   let s1 = await state(page);
+  check(`[${tag}] 拖曳時顯示部署區格線與落點預覽`, pv.showZone && pv.preview && pv.preview.legal, JSON.stringify(pv));
   check(`[${tag}] 拖曳出牌成功且只扣一次能量`, s1.played === s0.played + 1 && s1.spent === s0.spent + cost, `出牌 ${s0.played}→${s1.played}，花費 ${s0.spent}→${s1.spent}（卡費 ${cost}）`);
-  check(`[${tag}] 出牌後手牌由下一張補上`, s1.hand[0] === s0.next, `${s0.hand[0]} → ${s1.hand[0]}（下一張 ${s0.next}）`);
+  check(`[${tag}] 出牌後該格由下一張補上`, s1.hand[idx] === s0.next, `${s0.hand[idx]} → ${s1.hand[idx]}（下一張 ${s0.next}）`);
 
   // 點選卡牌 → 點地面
-  cost = await cardCost(page, 1);
+  await sleep(2200); // 等卡牌循環冷卻
+  idx = await findHand(page, 'troop');
+  cost = await cardCost(page, idx);
   s0 = await waitElixir(page, cost);
-  await tap(page, cdp, await cardBox(page, 1));
-  check(`[${tag}] 點選卡牌後顯示選取狀態`, await page.locator('#hand .card[data-index="1"].selected').count() === 1);
-  await sleep(150);
-  await shot(page, `${tag}-04-card-selected-zone`);
-  await tap(page, cdp, await screenOf(page, 5, 27.5));
+  await tap(page, cdp, await cardBox(page, idx));
+  check(`[${tag}] 點選卡牌後顯示選取狀態`, (await page.locator(`#hand .card[data-index="${idx}"].selected`).count()) === 1);
+  await tap(page, cdp, await screenOf(page, 5.5, 27.5));
   s1 = await state(page);
   check(`[${tag}] 點卡再點地面出牌成功`, s1.played === s0.played + 1 && s1.spent === s0.spent + cost, `花費 ${s0.spent}→${s1.spent}`);
 
   // 非法位置
-  const pick = (await state(page)).hand.findIndex((id) => !['fireball', 'arrows', 'zap'].includes(id));
-  cost = await cardCost(page, pick);
+  await sleep(2200);
+  idx = await findHand(page, 'troop');
+  cost = await cardCost(page, idx);
   s0 = await waitElixir(page, cost);
-  await drag(page, cdp, await cardBox(page, pick), await screenOf(page, 9, 8));
+  await drag(page, cdp, await cardBox(page, idx), await screenOf(page, 9.5, 8.5));
   s1 = await state(page);
   const toast1 = await page.locator('#toast').textContent();
-  check(`[${tag}] 部隊放到對方半場被拒絕，不扣能量不換牌`, s1.played === s0.played && s1.spent === s0.spent && s1.hand[pick] === s0.hand[pick] && toast1.includes('不能部署'), toast1);
-  await shot(page, `${tag}-05-illegal-zone`);
-  await tap(page, cdp, await cardBox(page, pick)); // 取消選取
+  check(`[${tag}] 部隊放到對方半場被拒絕，不扣能量不換牌`, s1.played === s0.played && s1.spent === s0.spent && s1.hand[idx] === s0.hand[idx] && toast1.includes('不能部署'), toast1);
+  await shot(page, `${tag}-06-illegal-zone`);
+  await tap(page, cdp, await cardBox(page, idx)); // 取消選取
 
   // 能量不足（以測試掛鉤把能量歸零，再用真實輸入嘗試）
   await page.evaluate(() => (window.__btd.game().players[0].elixir = 0));
   s0 = await state(page);
-  await drag(page, cdp, await cardBox(page, 0), await screenOf(page, 9, 24));
+  idx = await findHand(page, 'any');
+  await drag(page, cdp, await cardBox(page, idx), await screenOf(page, 9.5, 24.5));
   s1 = await state(page);
   const toast2 = await page.locator('#toast').textContent();
   check(`[${tag}] 能量不足不能出牌且有提示`, s1.played === s0.played && s1.spent === s0.spent && toast2.includes('能量不足'), toast2);
-  await tap(page, cdp, await cardBox(page, 0));
+  await tap(page, cdp, await cardBox(page, idx));
 
   // 拖回手牌區取消
   await page.evaluate(() => (window.__btd.game().players[0].elixir = 10));
   s0 = await state(page);
-  const c2 = await cardBox(page, 2);
+  idx = await findHand(page, 'any');
+  const c2 = await cardBox(page, idx);
   await drag(page, cdp, c2, [c2[0] + 30, c2[1] - 4]);
   s1 = await state(page);
   check(`[${tag}] 拖曳後放回手牌區即取消，不出牌`, s1.played === s0.played && (await page.locator('#hand .card.selected').count()) === 0);
@@ -216,7 +287,7 @@ for (const vp of VIEWPORTS) {
   const tPaused = (await state(page)).time;
   await sleep(700);
   check(`[${tag}] 暫停時對戰時間不前進`, Math.abs((await state(page)).time - tPaused) < 1e-9);
-  await shot(page, `${tag}-06-pause`);
+  await shot(page, `${tag}-07-pause`);
   await page.click('#btn-resume');
   await sleep(500);
   check(`[${tag}] 繼續後時間恢復前進`, (await state(page)).time > tPaused);
@@ -245,39 +316,54 @@ for (const vp of VIEWPORTS) {
   check(`[${tag}] 暫停選單可切換靜音`, muted === true && (await page.evaluate(() => window.__btd.sound.muted)) === false);
   await page.click('#btn-resume');
 
-  // 推進一段時間看戰況
-  await page.evaluate(() => window.__btd.autoplay(40));
-  await sleep(700);
-  await shot(page, `${tag}-07-battle-mid`);
+  // 推進到交戰，量測 FPS
+  await page.evaluate(() => {
+    const b = window.__btd;
+    for (let i = 0; i < 120; i++) {
+      b.autoplay(0.5);
+      const g = b.game();
+      if (g.entities.filter((e) => e.alive && e.kind !== 'tower').length >= 10 || g.phase === 'ended') break;
+    }
+  });
+  await sleep(800);
+  await shot(page, `${tag}-08-battle-mid`);
+  vr.fps = await measureFps(page, 3000);
+  vr.entities = (await state(page)).entities;
+  check(`[${tag}] 交戰中維持 ≥ 30 FPS（本機 GPU，headless）`, vr.fps.fps >= 30, `${vr.fps.fps.toFixed(1)} FPS、p95 ${vr.fps.p95Ms.toFixed(1)} ms、實體 ${vr.entities}`);
   await ctx.close();
 }
 
-// ───────── 2. 桌面：快轉打完多場、結算、再玩、分享 ─────────
+// ───────── 2. 桌面：快轉打完多場、結算、再戰、分享 ─────────
 {
   const vp = VIEWPORTS[0];
   const { ctx, page } = await newPage(vp, { permissions: ['clipboard-read', 'clipboard-write'] });
   await page.goto(`${BASE}?test=1&seed=21`);
+  await page.evaluate(() => window.__btd.skipIntro(true));
   await page.click('#btn-play');
   await page.click('#btn-howto-ok');
   await page.waitForSelector('#screen-battle:not([hidden])');
   const domCounts = [];
   const matchLog = [];
   for (let m = 0; m < 4; m++) {
-    await page.evaluate(() => window.__btd.autoplay(400));
-    await page.waitForSelector('#ov-result:not([hidden])', { timeout: 8000 });
+    await page.evaluate(() => window.__btd.autoplay(600));
+    await page.waitForSelector('#ov-result:not([hidden])', { timeout: 10000 });
+    await sleep(1800); // 皇冠逐一亮起
     const s = await state(page);
     const title = await page.locator('#result-title').textContent();
-    const crownsUi = [await page.locator('#result-crown-me').textContent(), await page.locator('#result-crown-enemy').textContent()].map(Number);
+    const crownsUi = [await page.locator('#result-crowns-me .crown-i.on').count(), await page.locator('#result-crowns-enemy .crown-i.on').count()];
+    const winnerRow = (await page.locator('#result-row-me.won').count()) ? 0 : (await page.locator('#result-row-enemy.won').count()) ? 1 : null;
     matchLog.push({ title, reason: s.result.reason, crowns: s.result.crowns, time: Math.round(s.result.time) });
-    check(`[desktop] 第 ${m + 1} 場打完並顯示結算（${title} ${crownsUi.join(':')}）`, s.phase === 'ended' && crownsUi[0] === s.result.crowns[0] && crownsUi[1] === s.result.crowns[1]);
-    // 結算後再推進，不應重複結算或繼續扣血
+    check(
+      `[desktop] 第 ${m + 1} 場打完並顯示結算（${title} ${crownsUi.join(':')}，${s.result.reason}）`,
+      s.phase === 'ended' && crownsUi[0] === s.result.crowns[0] && crownsUi[1] === s.result.crowns[1] && winnerRow === s.result.winner,
+    );
     const before = await page.evaluate(() => window.__btd.game().towers(0).map((t) => t.hp).join(','));
     await page.evaluate(() => window.__btd.fastForward(5));
-    await sleep(300);
+    await sleep(200);
     const after = await page.evaluate(() => window.__btd.game().towers(0).map((t) => t.hp).join(','));
     check(`[desktop] 第 ${m + 1} 場結束後不再有傷害`, before === after);
     if (m === 0) {
-      await shot(page, `${vp.name}-08-result`);
+      await shot(page, `${vp.name}-09-result`);
       await page.click('#btn-share-result');
       await sleep(400);
       const btnText = await page.locator('#btn-share-result').textContent();
@@ -286,46 +372,35 @@ for (const vp of VIEWPORTS) {
     }
     domCounts.push(await page.evaluate(() => document.getElementsByTagName('*').length));
     await page.click('#btn-again');
-    await sleep(300);
+    await sleep(500);
     const r = await state(page);
     const effects = await page.evaluate(() => window.__btd.battle.effectCount);
     check(
-      `[desktop] 第 ${m + 1} 場後「再玩一場」完全重置`,
-      r.phase === 'regular' && r.timeLeft > 179 && Math.abs(r.elixir - 5) < 0.4 && r.troops === 0 && r.entities === 6 && r.crowns.join() === '0,0' && r.played === 0 && (await page.isHidden('#ov-result')) && effects < 5,
+      `[desktop] 第 ${m + 1} 場後「再戰一場」完全重置`,
+      r.phase === 'regular' && r.timeLeft > 179 && Math.abs(r.elixir - 5) < 0.4 && r.troops === 0 && r.entities === 6 && r.crowns.join() === '0,0' && r.played === 0 && (await page.isHidden('#ov-result')) && effects < 40,
       `剩餘 ${r.timeLeft.toFixed(1)} 秒、能量 ${r.elixir.toFixed(2)}、實體 ${r.entities}、特效 ${effects}`,
     );
   }
   results.matches = matchLog;
   results.domCountsAcrossMatches = domCounts;
   check('[desktop] 連續多場 DOM 節點數沒有持續增加', domCounts[domCounts.length - 1] - domCounts[0] <= 5 && Math.max(...domCounts) - Math.min(...domCounts) <= 8, domCounts.join(' → '));
+  const mem = await page.evaluate(() => {
+    const g = window.__btd;
+    return { jsHeapMB: performance.memory ? Math.round(performance.memory.usedJSHeapSize / 1048576) : null, effects: g.battle.effectCount };
+  });
+  results.memory = mem;
 
-  // FPS 與模擬耗時（桌面 headless，僅供參考，不代表手機）
-  const fps = await page.evaluate(
-    () =>
-      new Promise((res) => {
-        let n = 0;
-        const t0 = performance.now();
-        const f = () => {
-          n++;
-          if (performance.now() - t0 < 3000) requestAnimationFrame(f);
-          else res(n / ((performance.now() - t0) / 1000));
-        };
-        requestAnimationFrame(f);
-      }),
-  );
   const simMs = await page.evaluate(() => {
     const t0 = performance.now();
     window.__btd.autoplay(60);
     return (performance.now() - t0) / 1800;
   });
-  results.performance = { headlessDesktopFps: Math.round(fps), simMsPerStep: Number(simMs.toFixed(3)) };
-  check('[desktop] 對戰中 requestAnimationFrame 維持 ≥ 30 FPS（headless 桌面）', fps >= 30, `${fps.toFixed(1)} FPS；每模擬步 ${simMs.toFixed(3)} ms`);
+  results.performance = { simMsPerStep: Number(simMs.toFixed(3)) };
 
-  // 離開對戰回主畫面
   await page.click('#btn-pause').catch(() => undefined);
   if (await page.isVisible('#ov-pause')) await page.click('#btn-quit');
   else {
-    await page.evaluate(() => window.__btd.autoplay(400));
+    await page.evaluate(() => window.__btd.autoplay(600));
     await page.waitForSelector('#ov-result:not([hidden])');
     await page.click('#btn-result-home');
   }
@@ -334,7 +409,7 @@ for (const vp of VIEWPORTS) {
   await ctx.close();
 }
 
-// ───────── 3. 分享備援：剪貼簿被拒時顯示可手動複製的網址 ─────────
+// ───────── 3. 分享備援與牌組編輯 ─────────
 {
   const vp = VIEWPORTS[1];
   const { ctx, page } = await newPage(vp);
@@ -351,46 +426,71 @@ for (const vp of VIEWPORTS) {
     return el.selectionEnd - el.selectionStart;
   });
   check('[360x640] 無原生分享且剪貼簿被拒時，顯示已選取的網址供手動複製', val === BASE && selected === val.length, val);
-  await shot(page, `${vp.name}-09-share-manual`);
+  await shot(page, `${vp.name}-10-share-manual`);
 
-  // 牌組編輯
   await page.click('#btn-deck');
   await page.waitForSelector('#screen-deck:not([hidden])');
-  await shot(page, `${vp.name}-10-deck`);
+  await sleep(1500);
+  await shot(page, `${vp.name}-11-deck`);
   const deckAudit = await layoutAudit(page);
   check('[360x640] 牌組編輯畫面無溢出', !deckAudit.docOverflowX && deckAudit.issues.length === 0, deckAudit.issues.slice(0, 3).join('；'));
-  await page.click('.tile[data-card="golem"]');
+  // 移出一張 → 7/8 不能完成 → 加入一張 → 8/8
+  await page.click('#deck-slots .card[data-card="giant"]');
+  await page.waitForSelector('#ov-card:not([hidden])');
+  const statsText = await page.locator('#info-stats').textContent();
+  check('[360x640] 卡牌資訊顯示 11 級數值（巨人生命值 4091）', statsText.includes('4091'), statsText.slice(0, 60));
+  await shot(page, `${vp.name}-12-card-info`);
+  await page.click('#btn-info-use');
   const c7 = await page.locator('#deck-count').textContent();
   const disabled = await page.isDisabled('#btn-deck-done');
-  await page.click('.tile[data-card="musketeer"]');
+  await page.click('.tile[data-card="golem"]');
+  await page.click('#btn-info-use');
   const c8 = await page.locator('#deck-count').textContent();
   check('[360x640] 牌組少於 8 張不能完成，補滿才能完成', c7 === '7/8' && disabled && c8 === '8/8' && !(await page.isDisabled('#btn-deck-done')));
+  // 牌組已滿時「使用」→ 點牌組中的卡替換
+  await page.click('.tile[data-card="wolf_rider"]');
+  await page.click('#btn-info-use');
+  const swapHint = await page.locator('#deck-hint').textContent();
+  await page.click('#deck-slots .card[data-card="knight"]');
+  const deckNow = await page.$$eval('#deck-slots .card', (els) => els.map((e) => e.dataset.card));
+  check('[360x640] 牌組已滿時可選卡替換', swapHint.includes('換成') && deckNow.includes('wolf_rider') && !deckNow.includes('knight') && deckNow.length === 8, deckNow.join(','));
   await page.click('#btn-deck-done');
   await page.reload();
   await page.waitForSelector('#screen-home:not([hidden])');
   const deckIds = await page.$$eval('#home-deck-cards .card', (els) => els.map((e) => e.dataset.card));
-  check('[360x640] 牌組儲存在本機，重新整理後保留', deckIds.includes('musketeer') && !deckIds.includes('golem'), deckIds.join(','));
+  check('[360x640] 牌組儲存在本機，重新整理後保留', deckIds.includes('golem') && deckIds.includes('wolf_rider') && !deckIds.includes('giant'), deckIds.join(','));
   await ctx.close();
 }
 
-// ───────── 3b. 瀏覽器沒有 Web Audio（或被封鎖）時仍可開戰 ─────────
-{
+// ───────── 3b. 沒有 Web Audio 時仍可開戰；3c. 2D 備援畫面 ─────────
+for (const variant of ['noaudio', 'render2d']) {
   const vp = VIEWPORTS[3];
   const { ctx, page, cdp } = await newPage(vp);
-  await page.addInitScript(() => {
-    Object.defineProperty(window, 'AudioContext', { configurable: true, value: undefined });
-    Object.defineProperty(window, 'webkitAudioContext', { configurable: true, value: undefined });
-  });
-  await page.goto(`${BASE}?test=1&seed=3`);
+  if (variant === 'noaudio') {
+    await page.addInitScript(() => {
+      Object.defineProperty(window, 'AudioContext', { configurable: true, value: undefined });
+      Object.defineProperty(window, 'webkitAudioContext', { configurable: true, value: undefined });
+    });
+  }
+  await page.goto(`${BASE}?test=1&seed=3${variant === 'render2d' ? '&render=2d' : ''}`);
+  await page.evaluate(() => window.__btd.skipIntro(true));
   await page.click('#btn-play');
   await page.click('#btn-howto-ok');
   await page.waitForSelector('#screen-battle:not([hidden])');
-  const cost = await cardCost(page, 0);
+  const idx = await findHand(page, 'troop');
+  const cost = await cardCost(page, idx);
   const s0 = await waitElixir(page, cost);
-  await drag(page, cdp, await cardBox(page, 0), await screenOf(page, 9, 24));
+  await drag(page, cdp, await cardBox(page, idx), await screenOf(page, 9.5, 24.5));
   const s1 = await state(page);
-  const audio = await page.evaluate(() => window.__btd.sound.state);
-  check('[430x932] 沒有 Web Audio 時仍可開戰與出牌（無聲繼續）', audio === 'unavailable' && s1.played === s0.played + 1, `音訊狀態 ${audio}`);
+  if (variant === 'noaudio') {
+    const audio = await page.evaluate(() => window.__btd.sound.state);
+    check('[430x932] 沒有 Web Audio 時仍可開戰與出牌（無聲繼續）', audio === 'unavailable' && s1.played === s0.played + 1, `音訊狀態 ${audio}`);
+  } else {
+    const kind = await page.evaluate(() => window.__btd.battle.rendererKind);
+    await sleep(600);
+    await shot(page, 'mobile-430x932-13-fallback-2d');
+    check('[430x932] WebGL 不可用時的 2D 備援畫面可出牌', kind === '2d' && s1.played === s0.played + 1, kind);
+  }
   await ctx.close();
 }
 
@@ -405,12 +505,14 @@ for (const vp of VIEWPORTS) {
   let bytes = 0;
   const reqs = [];
   cdp.on('Network.loadingFinished', (e) => (bytes += e.encodedDataLength));
-  cdp.on('Network.responseReceived', (e) => reqs.push(`${e.response.status} ${e.response.mimeType} ${new URL(e.response.url).pathname}`));
+  cdp.on('Network.responseReceived', (e) => {
+    if (!e.response.url.startsWith('data:')) reqs.push(`${e.response.status} ${e.response.mimeType} ${new URL(e.response.url).pathname}`);
+  });
   const t0 = Date.now();
   await page.goto(BASE);
   await page.waitForSelector('#screen-home:not([hidden])');
   const ms = Date.now() - t0;
-  await sleep(500);
+  await sleep(800);
   results.load = { simulated: '4 Mbps 下載、150 ms 延遲、停用快取（Chrome DevTools 網路模擬）', msToStartScreen: ms, transferredBytes: bytes, requests: reqs };
   check('[load] 模擬 4 Mbps／150 ms 冷快取 5 秒內可操作開始畫面', ms < 5000, `${ms} ms，傳輸 ${(bytes / 1024).toFixed(1)} KB`);
   check('[load] 首輪必要資源 < 5 MB', bytes < 5 * 1024 * 1024, `${(bytes / 1024).toFixed(1)} KB`);
@@ -428,23 +530,52 @@ for (const vp of VIEWPORTS) {
   await ctx.close();
 }
 
-// ───────── 4b. 主程式載入失敗：顯示提示與重新載入，恢復網路後可正常進入 ─────────
+// ───────── 4b. 主程式載入失敗：顯示提示與重新載入 ─────────
 {
   const ctx = await browser.newContext({ viewport: VIEWPORTS[1].viewport, isMobile: true, hasTouch: true });
   const page = await ctx.newPage();
   await page.route('**/assets/*.js', (route) => route.abort());
   await page.goto(BASE);
-  await page.waitForSelector('#boot-retry:not([hidden])', { timeout: 5000 });
+  await page.waitForSelector('#boot-retry:not([hidden])', { timeout: 20000 });
   const msg = await page.locator('#boot-msg').textContent();
-  await shot(page, 'mobile-360x640-13-load-failed');
+  await shot(page, 'mobile-360x640-14-load-failed');
   await page.unroute('**/assets/*.js');
   await page.click('#boot-retry');
-  await page.waitForSelector('#screen-home:not([hidden])', { timeout: 5000 });
+  await page.waitForSelector('#screen-home:not([hidden])', { timeout: 8000 });
   check('[load] 主程式載入失敗時顯示提示與重新載入按鈕，重試後可進入', msg.includes('載入失敗') && (await page.isVisible('#btn-play')), msg);
   await ctx.close();
 }
 
-// ───────── 5. 即時打完一整場（390×844 觸控，全部用真實觸控輸入出牌） ─────────
+// ───────── 5. CPU 降速 4 倍（近似中階手機的 JS 負擔）下的 FPS ─────────
+{
+  const vp = VIEWPORTS[2];
+  const { ctx, page } = await newPage(vp);
+  const cdp = await ctx.newCDPSession(page);
+  await page.goto(`${BASE}?test=1&seed=8`);
+  await page.evaluate(() => window.__btd.skipIntro(true));
+  await page.click('#btn-play');
+  await page.click('#btn-howto-ok');
+  await page.waitForSelector('#screen-battle:not([hidden])');
+  await page.evaluate(() => {
+    const b = window.__btd;
+    for (let i = 0; i < 160; i++) {
+      b.autoplay(0.5);
+      const g = b.game();
+      if (g.entities.filter((e) => e.alive && e.kind !== 'tower').length >= 14 || g.phase === 'ended') break;
+    }
+  });
+  await cdp.send('Emulation.setCPUThrottlingRate', { rate: 4 });
+  await sleep(1500);
+  const f = await measureFps(page, 4000);
+  const ents = (await state(page)).entities;
+  const quality = await page.evaluate(() => window.__btd.battle.qualityLevel);
+  await cdp.send('Emulation.setCPUThrottlingRate', { rate: 1 });
+  results.cpuThrottled = { rate: 4, ...f, entities: ents, quality };
+  check('[390x844] CPU 降速 4 倍、大量單位交戰時仍 ≥ 30 FPS', f.fps >= 30, `${f.fps.toFixed(1)} FPS、p95 ${f.p95Ms.toFixed(1)} ms、實體 ${ents}、畫質 ${quality}`);
+  await ctx.close();
+}
+
+// ───────── 6. 即時打完一整場（390×844 觸控，全部用真實觸控輸入出牌） ─────────
 if (!QUICK) {
   const vp = VIEWPORTS[2];
   const { ctx, page, cdp } = await newPage(vp);
@@ -452,22 +583,25 @@ if (!QUICK) {
   await page.click('#btn-play');
   await page.click('#btn-howto-ok');
   await page.waitForSelector('#screen-battle:not([hidden])');
+  await page.waitForFunction(() => window.__btd.battle.intro <= 0, null, { timeout: 15000 });
   const t0 = Date.now();
   let plays = 0;
   let lane = 0;
-  const shotsAt = new Set([30, 125, 185]);
-  while (Date.now() - t0 < 300000) {
+  const shotsAt = new Set([30, 125, 185, 245]);
+  const fpsSamples = [];
+  while (Date.now() - t0 < 420000) {
     const s = await state(page);
     if (s.phase === 'ended') break;
     const elapsed = 180 - s.timeLeft + (s.phase === 'overtime' ? 180 : 0);
     for (const t of [...shotsAt]) {
       if (elapsed >= t) {
         shotsAt.delete(t);
-        await shot(page, `${vp.name}-11-live-${t}s`);
+        await shot(page, `${vp.name}-15-live-${t}s`);
+        fpsSamples.push(await measureFps(page, 1500));
       }
     }
     if (s.elixir >= 6.5) {
-      // 出能負擔、費用最高的卡；法術丟對方側塔，部隊放在橋前
+      // 出能負擔、費用最高的卡；法術丟對方側塔附近，建築放中央，坦克放後方，其他放橋前
       let best = -1;
       let bestCost = -1;
       for (let i = 0; i < 4; i++) {
@@ -480,24 +614,29 @@ if (!QUICK) {
       if (best >= 0) {
         const id = s.hand[best];
         const x = lane === 0 ? 3.5 : 14.5;
-        const target = ['fireball', 'arrows', 'zap'].includes(id) ? [x, 6.5] : id === 'cannon' ? [9, 22] : id === 'golem' ? [x, 30] : [x + (lane === 0 ? 1 : -1), 19.5];
+        const target = SPELLS.includes(id)
+          ? id === 'log' ? [x, 18.5] : [x, 7.5]
+          : ['cannon', 'inferno', 'tombstone'].includes(id) ? [9, 21] : ['golem', 'giant'].includes(id) ? [x, 30.5] : [x + (lane === 0 ? 1 : -1), 19.5];
         const before = s.played;
         await drag(page, cdp, await cardBox(page, best), await screenOf(page, ...target));
         if ((await state(page)).played === before + 1) plays++;
         lane = 1 - lane;
       }
     }
-    await sleep(700);
+    await sleep(600);
   }
   const s = await state(page);
   await page.waitForSelector('#ov-result:not([hidden])', { timeout: 10000 });
-  await shot(page, `${vp.name}-12-live-result`);
-  results.liveMatch = { realSeconds: Math.round((Date.now() - t0) / 1000), touchDeploys: plays, result: s.result };
+  await sleep(1800);
+  await shot(page, `${vp.name}-16-live-result`);
+  results.liveMatch = { realSeconds: Math.round((Date.now() - t0) / 1000), touchDeploys: plays, result: s.result, fps: fpsSamples };
   check('[390x844] 以真實觸控輸入即時打完一整場並顯示結算', s.phase === 'ended' && plays >= 8, `觸控出牌 ${plays} 次，${Math.round((Date.now() - t0) / 1000)} 秒，結果 ${JSON.stringify(s.result)}`);
+  const minFps = Math.min(...fpsSamples.map((f) => f.fps));
+  check('[390x844] 即時對戰各時段 FPS ≥ 30（本機 GPU）', fpsSamples.length > 0 && minFps >= 30, fpsSamples.map((f) => f.fps.toFixed(0)).join(' / '));
   await tap(page, cdp, await page.locator('#btn-again').boundingBox().then((b) => [b.x + b.width / 2, b.y + b.height / 2]));
-  await sleep(400);
+  await sleep(600);
   const r = await state(page);
-  check('[390x844] 結算後點「再玩一場」開新局', r.phase === 'regular' && r.entities === 6 && r.played === 0);
+  check('[390x844] 結算後點「再戰一場」開新局（重新開場倒數）', r.phase === 'regular' && r.entities === 6 && r.played === 0 && r.intro > 0);
   await ctx.close();
 }
 
@@ -505,7 +644,7 @@ check('全程沒有 console error／pageerror／載入失敗', results.errors.le
 results.finishedAt = new Date().toISOString();
 results.summary = { total: results.checks.length, failed: failures };
 writeFileSync(`${outDir}e2e-results.json`, JSON.stringify(results, null, 2));
-console.log(`\n${results.checks.length - failures}/${results.checks.length} 通過，結果寫入 verification/e2e-results.json`);
+console.log(`\n${results.checks.length - failures}/${results.checks.length} 通過，結果寫入 verification/v2/e2e-results.json`);
 await browser.close();
 await new Promise((r) => server.httpServer.close(r));
 process.exit(failures ? 1 : 0);

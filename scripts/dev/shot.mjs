@@ -8,7 +8,7 @@ const [path = '/', out = 'shot.png', w = '900', h = '700', wait = '1500', dpr = 
 const root = fileURLToPath(new URL('../..', import.meta.url));
 const server = await createServer({ root, server: { port: 5199, strictPort: true }, logLevel: 'error' });
 await server.listen();
-const browser = await launchBrowser({ args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
+const browser = await launchBrowser();
 try {
   const page = await browser.newPage({ viewport: { width: Number(w), height: Number(h) }, deviceScaleFactor: Number(dpr) });
   const errors = [];

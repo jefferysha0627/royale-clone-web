@@ -1,3 +1,4 @@
+import { CylinderGeometry } from 'three';
 import { Kit, type ModelAsset, type V3 } from '../kit';
 
 // 參數化 Q 版人形：大頭、短身、粗四肢。面向 +Z，腳底在原點；角色的右手在 −X。
@@ -33,6 +34,7 @@ export interface HumanoidSpec {
   arms?: string; // 袖子；預設同 torso
   hands?: string; // 手套；預設同 skin
   pads?: boolean; // 肩甲（隊伍色）
+  scarf?: boolean; // 圍巾（隊伍色）
   cape?: boolean; // 披風（隊伍色）
   sash?: boolean; // 斜背帶（隊伍色）
   plume?: boolean; // 頭盔羽飾（隊伍色）
@@ -109,6 +111,10 @@ export function addHumanoid(k: Kit, s: HumanoidSpec, team: { main: string; dark:
     if (s.robe) k.cyl(0.2 * B, 0.3 * B, legLen + 0.06, { at: [ox, oy + (legLen + 0.06) / 2, oz], color: s.apron ?? s.torso }, 12);
   }
   if (s.sash) k.box(0.1 * B, torsoH * 1.05, 0.42 * B, { at: [ox, torsoCY, oz], rot: [0, 0, 0.7], color: team.main });
+  if (s.scarf) {
+    k.torus(0.11 * B + 0.04, 0.045 * H, { at: [ox, neckY - 0.03, oz], rot: [Math.PI / 2, 0, 0], color: team.main }, 12);
+    k.box(0.08 * H, 0.18 * H, 0.03, { at: [ox + 0.06, neckY - 0.12, oz - 0.13 * B], rot: [0.3, 0, 0.2], color: team.main });
+  }
   if (s.cape) {
     k.box(0.44 * B, torsoH * 1.25 + legLen * 0.6, 0.04, { at: [ox, hipY + torsoH * 0.35, oz - 0.21 * B], rot: [-0.12, 0, 0], color: team.main });
     k.box(0.46 * B, 0.06, 0.08, { at: [ox, neckY - 0.03, oz - 0.18 * B], color: team.dark });
@@ -282,9 +288,13 @@ function addWeapon(k: Kit, w: Weapon, h: V3, armR: number, H: number, team: { ma
       break;
     case 'axe2':
       k.cyl(0.03 * H, 0.03 * H, 0.9 * H, { at: [x, y + 0.25 * H, z + 0.05], color: wood, bone: armR }, 6);
+      // 雙刃巨斧：兩片半月形斧刃＋中間的金屬套環
       for (const sx of [1, -1]) {
-        k.cyl(0.2 * H, 0.2 * H, 0.04 * H, { at: [x + sx * 0.16 * H, y + 0.6 * H, z + 0.05], rot: [Math.PI / 2, 0, 0], scale: [1, 1, 1.25], color: steel, bone: armR }, 3);
+        k.add(new CylinderGeometry(0.24 * H, 0.24 * H, 0.035 * H, 14, 1, false, sx > 0 ? 0 : Math.PI, Math.PI), {
+          at: [x + sx * 0.03 * H, y + 0.6 * H, z + 0.05], rot: [0, 0, Math.PI / 2], scale: [1, 1, 1.15], color: steel, bone: armR,
+        });
       }
+      k.cyl(0.06 * H, 0.06 * H, 0.14 * H, { at: [x, y + 0.6 * H, z + 0.05], color: '#8a6a3a', bone: armR }, 8);
       break;
     case 'club':
       k.cyl(0.07 * H, 0.035 * H, 0.45 * H, { at: [x, y + 0.2 * H, z + 0.05], color: wood, bone: armR }, 7);

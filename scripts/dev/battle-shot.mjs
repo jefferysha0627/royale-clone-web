@@ -7,7 +7,7 @@ const [prefix = 'battle', secs = '25', sizes = '390x844', seed = '7', extra = ''
 const root = fileURLToPath(new URL('../..', import.meta.url));
 const server = await createServer({ root, server: { port: 5199, strictPort: true }, logLevel: 'error' });
 await server.listen();
-const browser = await launchBrowser({ args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
+const browser = await launchBrowser();
 try {
   for (const size of sizes.split(',')) {
     const [w, h] = size.split('x').map(Number);

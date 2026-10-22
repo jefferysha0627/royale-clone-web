@@ -182,12 +182,12 @@ export function buildBlimp(team: TeamPal): ModelAsset {
   const bay = k.addBone('bay', body, [0, 0.4, 0.1]);
   k.bone = body;
   // 氣囊：前後兩段隊伍色、中間米白，前端金色鼻蓋
-  k.sphere(0.5, { at: [0, 1.0, 0], scale: [1.05, 0.95, 1.7], color: '#f1e6cc' }, 18);
-  k.shell(0.505, { at: [0, 1.0, 0.18], rot: [Math.PI / 2, 0, 0], scale: [1.05, 1.7, 0.95], color: team.main }, Math.PI * 0.22, 0, Math.PI * 2, 18);
-  k.shell(0.505, { at: [0, 1.0, -0.18], rot: [-Math.PI / 2, 0, 0], scale: [1.05, 1.7, 0.95], color: team.main }, Math.PI * 0.22, 0, Math.PI * 2, 18);
-  k.sphere(0.12, { at: [0, 1.0, 0.84], color: '#f2b233' }, 10);
+  k.sphere(0.5, { at: [0, 1.0, 0], scale: [1.0, 0.9, 1.7], color: '#c9b48e' }, 18);
+  // 隊伍色的縱向布條，從上方俯視也看得到
+  for (const sx of [-0.22, 0, 0.22]) k.sphere(0.5, { at: [sx, 1.02, 0], scale: [0.16, 0.92, 1.71], color: sx === 0 ? team.main : team.light }, 14);
+  k.sphere(0.13, { at: [0, 1.0, 0.85], color: '#f2b233' }, 10);
   for (const [sx, sy] of [[1, 0], [-1, 0], [0, 1]] as const) {
-    k.box(sy ? 0.05 : 0.36, sy ? 0.36 : 0.05, 0.38, { at: [sx * 0.32, 1.0 + sy * 0.32, -0.78], color: team.dark });
+    k.box(sy ? 0.06 : 0.5, sy ? 0.5 : 0.06, 0.45, { at: [sx * 0.38, 1.0 + sy * 0.38, -0.8], color: team.dark });
   }
   for (const sx of [1, -1]) k.cyl(0.015, 0.015, 0.4, { at: [sx * 0.18, 0.62, 0.1], rot: [0, 0, sx * 0.2], color: '#4a3a2a' }, 4);
   k.bone = bay;

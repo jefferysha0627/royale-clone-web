@@ -3,7 +3,7 @@ import type { BattleRenderer } from '../render/types';
 import { tryCreateRenderer3D } from '../render3d/renderer3d';
 import { AI_DECKS, AI_LEVELS, AiController, ARENA, CARDS, DT, Game, MATCH, Rng, type AiLevel, type GameEvent, type MatchResult } from '../sim';
 import type { Sound } from './audio';
-import { crownSlots, fillCard } from './cardview';
+import { crownSlots, crownSvg, fillCard } from './cardview';
 import { shareGame, shareUrl } from './share';
 
 export interface BattleHost {
@@ -38,6 +38,16 @@ const REASON_TEXT: Record<MatchResult['reason'], (winner: 0 | 1 | null) => strin
   tiebreak: () => '延長賽結束：塔同步扣血，最低血量的塔先倒',
   draw: () => '延長賽結束，雙方塔血量相同',
 };
+
+/** 表情（原創文字＋系統表情符號）。 */
+const EMOTES: { id: string; em: string; text: string }[] = [
+  { id: 'good', em: '👍', text: '讚！' },
+  { id: 'haha', em: '😆', text: '哈哈' },
+  { id: 'wow', em: '😮', text: '哇！' },
+  { id: 'thanks', em: '🙏', text: '謝謝' },
+  { id: 'grr', em: '😤', text: '可惡' },
+  { id: 'luck', em: '🍀', text: '祝好運' },
+];
 
 /** 開場：VS 畫面 → 3、2、1 → 開戰。 */
 const INTRO_VS = 1.7;
@@ -102,6 +112,13 @@ export class Battle {
   private readonly ovPause = $<HTMLElement>('ov-pause');
   private readonly ovResult = $<HTMLElement>('ov-result');
   private readonly handSlots: (string | null)[] = [null, null, null, null];
+  private readonly emotePicker = $<HTMLElement>('emote-picker');
+  private readonly emoteMe = $<HTMLElement>('emote-me');
+  private readonly emoteEnemy = $<HTMLElement>('emote-enemy');
+  private emoteTimers: number[] = [];
+  private lastEnemyEmote = -99;
+  /** 皇冠飛到資訊列後才亮起：記錄畫面上目前顯示的皇冠數。 */
+  private shownCrowns: [number, number] = [0, 0];
 
   constructor(private readonly sound: Sound, private readonly host: BattleHost) {
     // 優先使用 3D；裝置不支援 WebGL 時退回 2D 畫面（同一套規則與操作）
@@ -156,6 +173,15 @@ export class Battle {
     $('vs-sub-me').textContent = `平均 ${(deck.reduce((s, id) => s + CARDS[id].cost, 0) / deck.length).toFixed(1)} 能量`;
     crownSlots(this.crownsMe, 3, 0);
     crownSlots(this.crownsEnemy, 3, 0);
+    this.shownCrowns = [0, 0];
+    this.emotePicker.hidden = true;
+    this.emoteMe.hidden = true;
+    this.emoteEnemy.hidden = true;
+    for (const t of this.emoteTimers) clearTimeout(t);
+    this.emoteTimers = [];
+    this.lastEnemyEmote = -99;
+    this.root.querySelectorAll('.crown-fly').forEach((el) => el.remove());
+    if (!this.skipIntro && Math.random() < 0.5) this.enemyEmote('luck', 2.2);
     this.root.hidden = false;
     this.active = true;
     this.intro = this.skipIntro ? 0 : INTRO_VS + INTRO_COUNT * 4;
@@ -163,11 +189,14 @@ export class Battle {
     if (this.skipIntro) this.sound.startMusic();
     this.introStep = -1;
     this.ovVs.hidden = this.skipIntro;
+    this.ovVs.classList.remove('out');
     if (!this.skipIntro) {
-      // 重新觸發 CSS 動畫
-      this.ovVs.style.animation = 'none';
-      void this.ovVs.offsetWidth;
-      this.ovVs.style.animation = '';
+      // 重新觸發進場動畫
+      for (const el of [this.ovVs, ...Array.from(this.ovVs.children)] as HTMLElement[]) {
+        el.style.animation = 'none';
+        void el.offsetWidth;
+        el.style.animation = '';
+      }
       this.sound.play('vs');
     }
     this.layout();
@@ -204,6 +233,15 @@ export class Battle {
 
   get effectCount(): number {
     return this.renderer.effectCount;
+  }
+
+  /** 自動測試用：目前的部署提示狀態。 */
+  debugPreview(): { showZone: boolean; preview: { cardId: string; x: number; y: number; legal: boolean } | null } {
+    return { showZone: this.renderer.showZone, preview: this.renderer.preview };
+  }
+
+  get qualityLevel(): string {
+    return (this.renderer as { qualityLevel?: string }).qualityLevel ?? '2d';
   }
 
   /** 平均每幀毫秒（效能紀錄）。 */
@@ -251,6 +289,8 @@ export class Battle {
   private updateIntro(dt: number): void {
     this.intro = Math.max(0, this.intro - dt);
     const elapsed = INTRO_VS + INTRO_COUNT * 4 - this.intro;
+    if (elapsed < INTRO_VS - 0.3) return;
+    this.ovVs.classList.add('out');
     if (elapsed < INTRO_VS) return;
     this.ovVs.hidden = true;
     const step = Math.min(3, Math.floor((elapsed - INTRO_VS) / INTRO_COUNT));
@@ -276,6 +316,14 @@ export class Battle {
   screenOf(x: number, y: number): [number, number] {
     const r = this.canvas.getBoundingClientRect();
     const [sx, sy] = this.renderer.toScreen(x, y);
+    return [r.left + sx, r.top + sy];
+  }
+
+  /** 場地格座標＋高度（格）→ 視窗座標；2D 畫面忽略高度。 */
+  screenOf3(x: number, y: number, h: number): [number, number] {
+    const r = this.canvas.getBoundingClientRect();
+    const proj = (this.renderer as { project?: (X: number, Y: number, Z: number) => [number, number] }).project;
+    const [sx, sy] = proj ? proj.call(this.renderer, x - ARENA.width / 2, h, y - ARENA.height / 2) : this.renderer.toScreen(x, y);
     return [r.left + sx, r.top + sy];
   }
 
@@ -320,11 +368,11 @@ export class Battle {
           break;
         case 'towerDown': {
           this.sound.play(ev.isKing ? 'kingDown' : 'tower');
-          const g = this.game;
-          crownSlots(this.crownsMe, 3, g.players[0].crowns);
-          crownSlots(this.crownsEnemy, 3, g.players[1].crowns);
+          if (!ev.cascade) this.flyCrowns(ev.team === 1 ? 0 : 1, ev.x, ev.y);
           if (!ev.isKing && !ev.cascade) {
             this.banner(ev.team === 1 ? '拿下一頂皇冠！' : '我方的塔倒了', ev.team === 1 ? '繼續進攻國王塔' : '守住國王塔', ev.team === 1 ? 'gold' : '');
+            // 電腦的反應（像真人一樣偶爾發表情）
+            this.enemyEmote(ev.team === 1 ? (Math.random() < 0.5 ? 'grr' : 'wow') : Math.random() < 0.5 ? 'haha' : 'good', 0.9);
           }
           break;
         }
@@ -368,6 +416,8 @@ export class Battle {
           break;
         case 'end':
           this.sound.stopMusic();
+          if (ev.result.winner === 1) this.enemyEmote('haha', 0.6);
+          else if (ev.result.winner === 0) this.enemyEmote(Math.random() < 0.5 ? 'thanks' : 'wow', 0.6);
           this.endAt = performance.now() + (ev.result.reason === 'king' ? 2200 : 1700);
           this.setSelected(null);
           this.drag = null;
@@ -378,6 +428,91 @@ export class Battle {
           break;
       }
     }
+  }
+
+  // ───────── 皇冠飛行與表情 ─────────
+
+  /** 塔倒下時，皇冠從塔的位置飛到上方資訊列的皇冠格，抵達後才亮起。 */
+  private flyCrowns(team: 0 | 1, x: number, y: number): void {
+    const target = this.game.players[team].crowns;
+    const from = this.screenOf3(x, y, 3);
+    const rootRect = this.root.getBoundingClientRect();
+    const slots = team === 0 ? this.crownsMe : this.crownsEnemy;
+    const delayStep = 140;
+    for (let n = this.shownCrowns[team] + 1; n <= target; n++) {
+      const slot = slots.children[n - 1] as HTMLElement | undefined;
+      const el = document.createElement('div');
+      el.className = `crown-fly ${team === 0 ? 'me' : 'enemy'}`;
+      el.innerHTML = crownSvg();
+      el.style.left = `${from[0] - rootRect.left - 20}px`;
+      el.style.top = `${from[1] - rootRect.top - 16}px`;
+      this.root.appendChild(el);
+      const to = slot?.getBoundingClientRect();
+      const dx = to ? to.left + to.width / 2 - from[0] : 0;
+      const dy = to ? to.top + to.height / 2 - from[1] : -200;
+      const idx = n;
+      const anim = el.animate(
+        [
+          { transform: 'translate(0, 0) scale(0.4)', opacity: 0 },
+          { transform: 'translate(0, -40px) scale(1.6)', opacity: 1, offset: 0.25 },
+          { transform: `translate(${dx}px, ${dy}px) scale(0.45)`, opacity: 1 },
+        ],
+        { duration: 820, delay: (n - this.shownCrowns[team] - 1) * delayStep, easing: 'cubic-bezier(.45,.05,.55,.95)', fill: 'forwards' },
+      );
+      const done = () => {
+        el.remove();
+        if (this.game.players[team].crowns >= idx) {
+          crownSlots(slots, 3, Math.max(this.shownCrownCount(team), idx));
+          this.sound.play('crown');
+        }
+      };
+      anim.onfinish = done;
+      anim.oncancel = done;
+    }
+    this.shownCrowns[team] = target;
+  }
+
+  private shownCrownCount(team: 0 | 1): number {
+    const slots = team === 0 ? this.crownsMe : this.crownsEnemy;
+    return Array.from(slots.children).filter((c) => c.classList.contains('on')).length;
+  }
+
+  private toggleEmotes(): void {
+    if (!this.emotePicker.childElementCount) {
+      for (const e of EMOTES) {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.innerHTML = `<span class="em">${e.em}</span>${e.text}`;
+        b.addEventListener('click', () => {
+          this.emotePicker.hidden = true;
+          this.showEmote(this.emoteMe, e.id);
+          this.sound.play('tap');
+          // 電腦偶爾回應
+          if (Math.random() < 0.35) this.enemyEmote(e.id === 'haha' || e.id === 'grr' ? 'haha' : e.id === 'thanks' ? 'thanks' : 'good', 1.2);
+        });
+        this.emotePicker.appendChild(b);
+      }
+    }
+    this.emotePicker.hidden = !this.emotePicker.hidden;
+  }
+
+  private showEmote(el: HTMLElement, id: string): void {
+    const e = EMOTES.find((x) => x.id === id) ?? EMOTES[0];
+    el.hidden = true;
+    void el.offsetWidth;
+    el.innerHTML = `<span class="em">${e.em}</span>${e.text}`;
+    el.hidden = false;
+    this.emoteTimers.push(window.setTimeout(() => (el.hidden = true), 2200));
+  }
+
+  /** 電腦發表情：同一場最多每 8 秒一次。 */
+  private enemyEmote(id: string, delaySec: number): void {
+    const now = performance.now() / 1000;
+    if (now - this.lastEnemyEmote < 8) return;
+    this.lastEnemyEmote = now;
+    this.emoteTimers.push(window.setTimeout(() => {
+      if (this.active) this.showEmote(this.emoteEnemy, id);
+    }, delaySec * 1000));
   }
 
   private banner(text: string, sub = '', tone = ''): void {
@@ -529,7 +664,8 @@ export class Battle {
     const root = this.root;
     root.addEventListener('pointerdown', (e) => {
       const t = e.target as Element;
-      if (t.closest('.overlay, .hud-pause, .vs')) return;
+      if (t.closest('.overlay, .hud-pause, .vs, .hud-emote, .emote-picker')) return;
+      if (!this.emotePicker.hidden) this.emotePicker.hidden = true;
       if (!this.canInteract() || this.drag) return;
       if (e.pointerType === 'mouse' && e.button !== 0) return;
       const cardEl = t.closest<HTMLElement>('#hand .card');
@@ -635,6 +771,7 @@ export class Battle {
 
   private bindButtons(): void {
     $('btn-pause').addEventListener('click', () => this.pause());
+    $('btn-emote').addEventListener('click', () => this.toggleEmotes());
     $('btn-resume').addEventListener('click', () => this.resume());
     $('btn-restart').addEventListener('click', () => {
       this.sound.unlock();

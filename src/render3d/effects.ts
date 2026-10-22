@@ -205,8 +205,10 @@ export class Effects {
     this.glow.material.uniforms.uScale.value = pxPerUnit;
   }
 
+  /** 進行中的特效數（物件池裡閒置的不算）。 */
   get count(): number {
-    return this.soft.count + this.glow.count + this.rings.length + this.decals.length + this.bolts.length;
+    const active = (list: { t: number; life: number }[]) => list.filter((f) => f.t < f.life).length;
+    return this.soft.count + this.glow.count + active(this.rings) + active(this.decals) + active(this.bolts);
   }
 
   /** 在 (x, y, z) 產生一團粒子。power 大約對應範圍（格）。 */

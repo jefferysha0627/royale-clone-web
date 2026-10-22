@@ -108,10 +108,29 @@ export class Renderer3D implements BattleRenderer {
     s.add(this.arena.group, this.layer, this.fx.group, this.zone.group, this.shadows.mesh);
     this.overlay = new Overlay(overlayCanvas);
     canvas.addEventListener('webglcontextlost', (e) => e.preventDefault());
+    this.warmUp();
+  }
+
+  /** 先把會用到的 shader 編譯好，避免第一次出兵、第一發投射物時卡頓。 */
+  private warmUp(): void {
+    try {
+      const tmp = new Group();
+      const fakeUnit = new UnitView(
+        { id: -1, team: 0, kind: 'troop', unit: 'knight', cardId: 'knight', facing: 0, x: 9, y: 20, px: 9, py: 20 } as unknown as Entity,
+        tmp,
+      );
+      for (const v of ['arrow', 'fireball', 'bomb']) tmp.add(makeProjectileMesh(v));
+      this.stage.scene.add(tmp);
+      this.gl.compile(this.stage.scene, this.cam);
+      this.stage.scene.remove(tmp);
+      fakeUnit.dispose();
+    } catch {
+      // 預先編譯失敗不影響遊戲
+    }
   }
 
   get effectCount(): number {
-    return this.fx.count + this.rain.length + this.flights.size + this.projs.size;
+    return this.fx.count + this.rain.filter((r) => r.t < 1).length + this.flights.size + this.projs.size;
   }
 
   get qualityLevel(): Quality {
@@ -131,7 +150,7 @@ export class Renderer3D implements BattleRenderer {
     this.gl.setPixelRatio(this.dpr);
     this.gl.setSize(cssW, cssH, true);
     // 需要完整看到：寬 18 格（含少許邊）、上緣到對方國王塔頂、下緣到己方最後一排；上方留給名稱與計時器
-    const hudPx = 54;
+    const hudPx = 58;
     const needW = 18.7;
     const upTop = 12.9;
     const upBottom = -ARENA.height / 2 * SIN_E - 0.15;
@@ -150,6 +169,30 @@ export class Renderer3D implements BattleRenderer {
     this.cam.updateProjectionMatrix();
     this.fx.setScale(k * this.dpr);
     this.overlay.resize(cssW, cssH, this.dpr);
+  }
+
+  /** 開發用：查看單位畫面狀態。 */
+  debugUnits(): { unit: string; opacity: number; transparent: boolean; dying: number; emissive: string; y: number }[] {
+    return [...this.units.values()].map((v) => ({
+      unit: v.e.unit, opacity: v.mat.opacity, transparent: v.mat.transparent, dying: v.dyingT, emissive: v.mat.emissive.getHexString(), y: v.inst.mesh.position.y,
+    }));
+  }
+
+  /** 開發用：把鏡頭拉近到某個格子座標（zoom 倍）。 */
+  debugView(x: number, y: number, zoom: number): void {
+    const halfW = this.cssW / (2 * this.k * zoom);
+    const halfH = this.cssH / (2 * this.k * zoom);
+    const X = x - CX;
+    const up = -(y - CZ) * SIN_E;
+    this.left = X - halfW;
+    this.top = up + halfH;
+    this.k *= zoom;
+    this.cam.left = X - halfW;
+    this.cam.right = X + halfW;
+    this.cam.top = up + halfH;
+    this.cam.bottom = up - halfH;
+    this.cam.updateProjectionMatrix();
+    this.fx.setScale(this.k * this.dpr);
   }
 
   toWorld(px: number, py: number): [number, number] {

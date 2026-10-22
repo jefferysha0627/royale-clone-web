@@ -7,10 +7,12 @@ const root = fileURLToPath(new URL('..', import.meta.url));
 const server = await createServer({ root, server: { port: 5198, strictPort: true }, logLevel: 'error' });
 await server.listen();
 const browser = await launchBrowser();
+// 等 3D 場景與卡圖產生
 try {
   const page = await browser.newPage({ viewport: { width: 1200, height: 900 }, deviceScaleFactor: 1 });
   await page.goto('http://localhost:5198/tools/og.html');
-  await page.waitForFunction(() => window.__ogReady === true);
+  await page.waitForFunction(() => window.__ogReady === true, null, { timeout: 30000 });
+  await page.waitForTimeout(300);
   await page.waitForFunction(() => document.getElementById('icon').complete);
   await page.locator('#og').screenshot({ path: `${root}public/og-image.png` });
 
