@@ -47,6 +47,9 @@ async function newPage(vp, extra = {}) {
     if (m.type() === 'error') results.errors.push(`[${vp.name}] console: ${m.text()}`);
   });
   page.on('pageerror', (e) => results.errors.push(`[${vp.name}] pageerror: ${e.message}`));
+  page.on('response', (r) => {
+    if (r.status() >= 400) results.errors.push(`[${vp.name}] HTTP ${r.status()}: ${r.url()}`);
+  });
   page.on('requestfailed', (r) => {
     if (!r.url().startsWith('data:')) results.errors.push(`[${vp.name}] requestfailed: ${r.url()}`);
   });
@@ -509,8 +512,9 @@ if (run('3')) {
 if (run('3')) {
   const vp = VIEWPORTS[2];
   const { ctx, page } = await newPage(vp);
-  // 先開一個別的頁面，模擬從 IG／Threads 點連結進來（返回要能回到那裡）
-  await page.goto(`${BASE}favicon.svg`);
+  // 先開一個別的頁面，模擬從 IG／Threads 點連結進來（返回要能回到那裡）。
+  // 用 about:blank：直接打開 favicon.svg 這種非網頁檔，Chromium 會自動去要 /favicon.ico 而產生無關的 404
+  await page.goto('about:blank');
   await page.goto(`${BASE}?test=1&seed=13`);
   await page.waitForSelector('#screen-home:not([hidden])');
   const len0 = await page.evaluate(() => history.length);
@@ -551,9 +555,9 @@ if (run('3')) {
     lens.push(await page.evaluate(() => history.length));
   }
   check('[390x844] 多場之後瀏覽紀錄不會累積（每場最多一筆）', lens.every((n) => n <= len0 + 1), `開始 ${len0}，各場後 ${lens.join(' / ')}`);
-  // 主畫面按返回：不攔截，正常回到前一個頁面
-  await page.evaluate(() => history.back());
-  const left = await page.waitForURL(/favicon\.svg/, { timeout: 5000 }).then(() => true).catch(() => false);
+  // 主畫面按返回：不攔截，正常回到前一個頁面（會換頁，所以不用 evaluate，交給瀏覽器的返回）
+  await page.goBack({ waitUntil: 'commit' }).catch(() => null);
+  const left = await page.waitForURL((u) => u.href === 'about:blank', { timeout: 5000 }).then(() => true).catch(() => false);
   check('[390x844] 主畫面按返回會正常離開遊戲頁（回到前一頁）', left, page.url());
   await ctx.close();
 }
