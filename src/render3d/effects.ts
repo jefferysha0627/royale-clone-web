@@ -1,6 +1,6 @@
 import {
   AdditiveBlending, BufferAttribute, BufferGeometry, CircleGeometry, Color, CylinderGeometry, DoubleSide, Group, Mesh, MeshBasicMaterial, NormalBlending,
-  Points, RingGeometry, ShaderMaterial, Vector3, type Blending,
+  Points, RingGeometry, ShaderMaterial, SphereGeometry, Vector3, type Blending,
 } from 'three';
 
 // 特效：兩組粒子（一般混合：煙塵碎石；加法混合：火花火焰），加上擴散光環、焦痕、閃電與光束。
@@ -178,6 +178,15 @@ interface BoltFx {
   life: number;
 }
 
+interface FlashFx {
+  mesh: Mesh;
+  t: number;
+  life: number;
+  r0: number;
+  r1: number;
+  a0: number;
+}
+
 const tmpC0 = new Color();
 const tmpC1 = new Color();
 
@@ -191,6 +200,8 @@ export class Effects {
   private rings: RingFx[] = [];
   private decals: DecalFx[] = [];
   private bolts: BoltFx[] = [];
+  private flashes: FlashFx[] = [];
+  private flashGeo = new SphereGeometry(1, 16, 12);
   private ringGeo = new RingGeometry(0.86, 1, 40);
   private discGeo = new CircleGeometry(1, 28);
   private boltGeo = new CylinderGeometry(0.06, 0.06, 1, 4, 1, true);
@@ -208,7 +219,7 @@ export class Effects {
   /** 進行中的特效數（物件池裡閒置的不算）。 */
   get count(): number {
     const active = (list: { t: number; life: number }[]) => list.filter((f) => f.t < f.life).length;
-    return this.soft.count + this.glow.count + active(this.rings) + active(this.decals) + active(this.bolts);
+    return this.soft.count + this.glow.count + active(this.rings) + active(this.decals) + active(this.bolts) + active(this.flashes);
   }
 
   /** 在 (x, y, z) 產生一團粒子。power 大約對應範圍（格）。 */
@@ -400,6 +411,28 @@ export class Effects {
     (fx.mesh.material as MeshBasicMaterial).color.set(color);
   }
 
+  /** 爆炸瞬間的閃光：發光球快速膨脹後淡出（火球、火箭、炸彈、塔倒塌）。 */
+  flash(x: number, y: number, z: number, r0: number, r1: number, color: string, life = 0.28, alpha = 0.9): void {
+    let fx = this.flashes.find((f) => f.t >= f.life);
+    if (!fx) {
+      if (this.flashes.length >= 16) return;
+      const mesh = new Mesh(this.flashGeo, new MeshBasicMaterial({ transparent: true, depthWrite: false, blending: AdditiveBlending }));
+      mesh.renderOrder = 8;
+      this.group.add(mesh);
+      fx = { mesh, t: 0, life, r0, r1, a0: alpha };
+      this.flashes.push(fx);
+    }
+    fx.t = 0;
+    fx.life = life;
+    fx.r0 = r0;
+    fx.r1 = r1;
+    fx.a0 = alpha;
+    fx.mesh.visible = true;
+    fx.mesh.position.set(x, y, z);
+    fx.mesh.scale.setScalar(r0);
+    (fx.mesh.material as MeshBasicMaterial).color.set(color);
+  }
+
   /** 從高空劈到 (x, z) 的鋸齒閃電。 */
   bolt(x: number, z: number, color = '#bfe8ff'): void {
     const segs = 5;
@@ -458,6 +491,14 @@ export class Effects {
       (f.mesh.material as MeshBasicMaterial).opacity = 0.3 * (k < 0.7 ? 1 : 1 - (k - 0.7) / 0.3);
       if (f.t >= f.life) f.mesh.visible = false;
     }
+    for (const f of this.flashes) {
+      if (f.t >= f.life) continue;
+      f.t += dt;
+      const k = Math.min(1, f.t / f.life);
+      f.mesh.scale.setScalar(f.r0 + (f.r1 - f.r0) * (1 - (1 - k) * (1 - k) * (1 - k)));
+      (f.mesh.material as MeshBasicMaterial).opacity = f.a0 * (1 - k) * (1 - k);
+      if (f.t >= f.life) f.mesh.visible = false;
+    }
     for (const f of this.bolts) {
       if (f.t >= f.life) continue;
       f.t += dt;
@@ -469,7 +510,7 @@ export class Effects {
   clear(): void {
     this.soft.clear();
     this.glow.clear();
-    for (const f of [...this.rings, ...this.decals, ...this.bolts]) {
+    for (const f of [...this.rings, ...this.decals, ...this.bolts, ...this.flashes]) {
       f.t = f.life;
       f.mesh.visible = false;
     }

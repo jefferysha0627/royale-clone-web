@@ -233,8 +233,11 @@ function addMount(k: Kit, m: MountSpec, team: TeamPal): { body: number; saddleY:
   k.bone = body;
   k.blob(m.height * 0.62, m.height * 0.55, m.len, { at: [0, bodyY, 0], color: m.color }, 12);
   k.blob(m.height * 0.5, m.height * 0.3, m.len * 0.8, { at: [0, bodyY - m.height * 0.14, 0.02], color: m.color2 }, 10);
-  // 隊伍色鞍布
+  // 背上的深色毛（狼）
+  if (m.kind === 'wolf') k.blob(m.height * 0.42, m.height * 0.2, m.len * 0.85, { at: [0, bodyY + m.height * 0.2, -0.05], color: m.mane }, 10);
+  // 隊伍色鞍布（邊緣金色流蘇）
   k.blob(m.height * 0.68, m.height * 0.2, m.len * 0.45, { at: [0, bodyY + m.height * 0.2, -0.02], color: team.main }, 10);
+  for (const sx of [1, -1]) k.box(0.02, m.height * 0.08, m.len * 0.4, { at: [sx * m.height * 0.33, bodyY + m.height * 0.1, -0.02], color: '#d9b04a' });
   for (let i = 0; i < legs.length; i++) {
     const sx = i % 2 === 0 ? 1 : -1;
     const z = i < 2 ? m.len * 0.32 : -m.len * 0.32;
@@ -242,20 +245,37 @@ function addMount(k: Kit, m: MountSpec, team: TeamPal): { body: number; saddleY:
     k.blob(0.13, 0.08, 0.16, { at: [sx * 0.17, 0.04, z + 0.02], color: m.kind === 'horse' ? '#3a2a1e' : m.color2, bone: legs[i] }, 6);
   }
   k.bone = tail;
-  if (m.kind === 'wolf') k.blob(0.16, 0.16, 0.5, { at: [0, legH + m.height * 0.35, -m.len * 0.7], rot: [0.5, 0, 0], color: m.color }, 8);
+  if (m.kind === 'wolf') {
+    // 蓬鬆上翹的尾巴，尾尖淺色
+    k.blob(0.2, 0.2, 0.55, { at: [0, legH + m.height * 0.42, -m.len * 0.72], rot: [0.75, 0, 0], color: m.color }, 10);
+    k.blob(0.13, 0.13, 0.22, { at: [0, legH + m.height * 0.68, -m.len * 0.86], rot: [0.9, 0, 0], color: m.color2 }, 8);
+  }
   else k.blob(0.12, 0.45, 0.14, { at: [0, legH + m.height * 0.12, -m.len * 0.58], rot: [-0.3, 0, 0], color: m.mane }, 8);
   k.bone = head;
   const hz = m.len * 0.55;
   const hy = legH + m.height * 0.55;
   if (m.kind === 'wolf') {
-    k.sphere(0.2, { at: [0, hy, hz], color: m.color }, 12);
-    k.blob(0.18, 0.15, 0.28, { at: [0, hy - 0.05, hz + 0.2], color: m.color2 }, 10);
-    k.sphere(0.05, { at: [0, hy - 0.02, hz + 0.34], color: '#1b1b22' }, 6);
+    // 頸部的蓬鬆毛領
+    k.blob(0.42, 0.34, 0.3, { at: [0, hy - 0.1, hz - 0.18], color: m.color2 }, 12);
+    k.sphere(0.22, { at: [0, hy, hz], color: m.color }, 14);
+    // 長吻部、張開的嘴與尖牙
+    k.blob(0.19, 0.13, 0.32, { at: [0, hy - 0.04, hz + 0.22], color: m.color2 }, 12);
+    k.blob(0.15, 0.06, 0.24, { at: [0, hy - 0.14, hz + 0.2], rot: [0.25, 0, 0], color: shade(m.color2, -0.1) }, 10);
+    k.blob(0.13, 0.04, 0.2, { at: [0, hy - 0.1, hz + 0.21], color: '#7a2a2a' }, 8);
+    for (const sx of [1, -1]) k.cone(0.022, 0.07, { at: [sx * 0.06, hy - 0.08, hz + 0.3], rot: [Math.PI, 0, 0], color: '#f4f1e8' }, 4);
+    k.sphere(0.055, { at: [0, hy + 0.0, hz + 0.39], color: '#1b1b22' }, 8);
     for (const sx of [1, -1]) {
-      k.cone(0.07, 0.18, { at: [sx * 0.1, hy + 0.2, hz - 0.03], rot: [-0.2, 0, -sx * 0.2], color: m.color }, 5);
-      k.sphere(0.035, { at: [sx * 0.08, hy + 0.05, hz + 0.17], color: '#ffe066' }, 6);
+      // 立起的大耳朵（內側粉色）
+      k.cone(0.085, 0.24, { at: [sx * 0.11, hy + 0.24, hz - 0.04], rot: [-0.15, 0, -sx * 0.25], color: m.color }, 5);
+      k.cone(0.045, 0.14, { at: [sx * 0.11, hy + 0.22, hz - 0.0], rot: [-0.15, 0, -sx * 0.25], color: '#d9a0a0' }, 5);
+      // 黃色眼睛與粗眉
+      k.sphere(0.04, { at: [sx * 0.085, hy + 0.06, hz + 0.18], color: '#ffd23a' }, 8);
+      k.sphere(0.018, { at: [sx * 0.087, hy + 0.06, hz + 0.21], color: '#1b1b22' }, 6);
+      k.box(0.08, 0.025, 0.03, { at: [sx * 0.085, hy + 0.11, hz + 0.19], rot: [0, 0, sx * 0.35], color: shade(m.color, -0.35) });
     }
-    k.torus(0.15, 0.035, { at: [0, hy - 0.12, hz - 0.08], rot: [Math.PI / 2 - 0.3, 0, 0], color: team.main }, 12);
+    // 隊伍色項圈與金屬環
+    k.torus(0.17, 0.04, { at: [0, hy - 0.13, hz - 0.1], rot: [Math.PI / 2 - 0.3, 0, 0], color: team.main }, 14);
+    k.sphere(0.035, { at: [0, hy - 0.2, hz + 0.06], color: '#d9b04a' }, 6);
   } else {
     k.blob(0.18, 0.4, 0.2, { at: [0, hy - 0.05, hz - 0.08], rot: [0.5, 0, 0], color: m.color }, 10);
     k.blob(0.2, 0.2, 0.42, { at: [0, hy + 0.1, hz + 0.12], rot: [0.35, 0, 0], color: m.color }, 10);
@@ -272,7 +292,7 @@ function addMount(k: Kit, m: MountSpec, team: TeamPal): { body: number; saddleY:
 export function buildWolfRider(team: TeamPal): ModelAsset {
   const k = new Kit();
   k.addBone('root', -1, [0, 0, 0]);
-  const { body, saddleY } = addMount(k, { len: 1.0, height: 0.58, color: '#5d5148', color2: '#cbb9a3', mane: '#3a322c', kind: 'wolf' }, team);
+  const { body, saddleY } = addMount(k, { len: 1.1, height: 0.62, color: '#7d7066', color2: '#d8c8b2', mane: '#4a4038', kind: 'wolf' }, team);
   const rider: HumanoidSpec = {
     height: 0.92, skin: '#7cbf4a', ears: 'pointy', nose: 'long', face: 'angry', torso: '#7a5230', torso2: '#3a2a1e', legs: '#5a3a1e', boots: '#3a2a1e',
     hat: 'band', hatColor2: team.main, weapon: 'mace', pads: true,

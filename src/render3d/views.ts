@@ -157,6 +157,7 @@ export class TowerView {
   down = false;
   readonly height: number;
   private lastAttackSeen = -99;
+  private collapseT = 1; // 倒塌動畫進度（0→1），1 = 沒有在倒塌
 
   constructor(readonly e: Entity, private readonly parent: Object3D) {
     this.mat = toonMaterial({ rim: 0.22 });
@@ -174,6 +175,7 @@ export class TowerView {
     const e = this.e;
     if (!e.alive) {
       if (!this.down) this.collapse();
+      this.animateCollapse(dt);
       return;
     }
     const st = this.st;
@@ -199,13 +201,28 @@ export class TowerView {
 
   collapse(): void {
     this.down = true;
-    this.inst.mesh.visible = false;
+    this.collapseT = 0;
     const asset = getAsset(this.e.unit === 'king' ? 'rubble-king' : 'rubble-princess', this.e.team);
     this.rubble = new Mesh(asset.geometry, new MeshLambertMaterial({ vertexColors: true }));
     this.rubble.position.copy(this.inst.mesh.position);
+    this.rubble.scale.setScalar(0.3);
     this.rubble.castShadow = true;
     this.rubble.receiveShadow = true;
     this.parent.add(this.rubble);
+  }
+
+  /** 倒塌：塔身一邊抖動一邊往下陷、壓扁，瓦礫堆同時長出來。 */
+  private animateCollapse(dt: number): void {
+    if (this.collapseT >= 1) return;
+    this.collapseT = Math.min(1, this.collapseT + dt / 0.6);
+    const k = this.collapseT;
+    const sink = k * k * (3 - 2 * k);
+    const m = this.inst.mesh;
+    m.scale.set(1 + sink * 0.1, Math.max(0.02, 1 - sink * 0.96), 1 + sink * 0.1);
+    m.position.y = -sink * 0.25;
+    m.rotation.z = Math.sin(k * 46) * 0.05 * (1 - k);
+    if (k >= 1) m.visible = false;
+    this.rubble?.scale.setScalar(0.3 + 0.7 * Math.min(1, k * 1.4));
   }
 
   dispose(): void {

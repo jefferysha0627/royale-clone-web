@@ -99,8 +99,9 @@ export class Renderer3D implements BattleRenderer {
   private bombMat = new MeshLambertMaterial({ vertexColors: true, emissive: '#000000' });
   private fireballGeo = new SphereGeometry(0.5, 14, 10);
   private fireballCoreGeo = new SphereGeometry(0.3, 10, 8);
-  private fireballMat = new MeshBasicMaterial({ color: '#ff9a3a' });
+  private fireballMat = new MeshBasicMaterial({ color: '#ff8a2a' });
   private fireballCoreMat = new MeshBasicMaterial({ color: '#fff2a8' });
+  private fireballGlowMat = new MeshBasicMaterial({ color: '#ff5a1a', transparent: true, opacity: 0.45, blending: AdditiveBlending, depthWrite: false });
 
   constructor(canvas: HTMLCanvasElement, overlayCanvas: HTMLCanvasElement) {
     const coarse = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
@@ -401,6 +402,7 @@ export class Renderer3D implements BattleRenderer {
           const X = toX(ev.x);
           const Z = toZ(ev.y);
           const p = ev.isKing ? 1.6 : 1.2;
+          fx.flash(X, 1.6, Z, 0.8, 3.0 * p, '#ffe2a0', 0.42);
           fx.burst('fire', X, 1.6, Z, 1.6 * p, 36);
           fx.burst('debris', X, 1.2, Z, 1.4 * p, 36);
           fx.burst('smoke', X, 1, Z, 1.6 * p, 12);
@@ -424,6 +426,7 @@ export class Renderer3D implements BattleRenderer {
           const X = toX(ev.x);
           const Z = toZ(ev.y);
           if (ev.visual === 'bomb') {
+            fx.flash(X, 0.5, Z, 0.3, ev.radius * 0.95, '#ffc65a', 0.26);
             fx.burst('fire', X, 0.4, Z, ev.radius * 0.8, 40);
             fx.burst('smoke', X, 0.4, Z, ev.radius * 0.7, 18);
             fx.burst('debris', X, 0.3, Z, ev.radius * 0.5, 12);
@@ -461,8 +464,9 @@ export class Renderer3D implements BattleRenderer {
     const Z = toZ(y);
     switch (cardId) {
       case 'fireball':
-        fx.burst('fire', X, 0.5, Z, radius * 0.75, 60);
-        fx.burst('smoke', X, 0.6, Z, radius * 0.6, 16);
+        fx.flash(X, 0.6, Z, 0.4, radius * 1.05, '#ffb347', 0.3);
+        fx.burst('fire', X, 0.5, Z, radius * 0.75, 70);
+        fx.burst('smoke', X, 0.6, Z, radius * 0.6, 18);
         fx.burst('spark', X, 0.5, Z, 1.5, 16);
         fx.ring(X, Z, 0.3, radius, '#ffb347', 0.45);
         fx.decal(X, Z, radius * 0.75, '#1f1a14', 4);
@@ -470,6 +474,7 @@ export class Renderer3D implements BattleRenderer {
         this.stop(0.05);
         break;
       case 'rocket':
+        fx.flash(X, 0.7, Z, 0.5, radius * 1.35, '#ffd36b', 0.36);
         fx.burst('fire', X, 0.5, Z, radius * 1.1, 80);
         fx.burst('smoke', X, 0.6, Z, radius, 24);
         fx.burst('debris', X, 0.4, Z, radius * 0.6, 18);
@@ -734,6 +739,11 @@ export class Renderer3D implements BattleRenderer {
         if (s.cardId === 'fireball') {
           const m = new Mesh(this.fireballGeo, this.fireballMat);
           m.add(new Mesh(this.fireballCoreGeo, this.fireballCoreMat));
+          // 外圍火焰光暈（加法混合，飛行時會脈動）
+          const glow = new Mesh(this.fireballGeo, this.fireballGlowMat);
+          glow.scale.setScalar(1.75);
+          glow.name = 'glow';
+          m.add(glow);
           meshes.push(m);
         } else if (s.cardId === 'rocket') meshes.push(this.projMesh('rocket'));
         else if (s.cardId === 'goblin_barrel') meshes.push(this.projMesh('barrel'));
@@ -765,8 +775,12 @@ export class Renderer3D implements BattleRenderer {
         else m.lookAt(ahead.x + (off?.[0] ?? 0) * k, ahead.y + (off?.[1] ?? 0), ahead.z + (off?.[2] ?? 0) * k);
       }
       if (s.cardId === 'fireball') {
-        this.fx.trail('fire', pos.x, pos.y, pos.z);
-        this.fx.trail('fire', pos.x, pos.y, pos.z);
+        for (let i = 0; i < 3; i++) this.fx.trail('fire', pos.x, pos.y, pos.z);
+        this.fx.trail('smoke', pos.x, pos.y + 0.1, pos.z);
+        if (Math.random() < 0.5) this.fx.trail('spark', pos.x, pos.y, pos.z);
+        const glow = f.meshes[0].getObjectByName('glow');
+        if (glow) glow.scale.setScalar(1.6 + Math.sin(this.time * 30) * 0.18);
+        f.meshes[0].rotation.z += dt * 6;
       } else if (s.cardId === 'rocket') {
         this.fx.trail('smoke', pos.x, pos.y, pos.z);
         this.fx.trail('fire', pos.x, pos.y, pos.z);

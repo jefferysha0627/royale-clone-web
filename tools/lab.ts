@@ -31,6 +31,14 @@ const S: Record<string, { at: [number, number]; setup: () => void }> = {
   riders: { at: [9, 15], setup: () => { put(0, 'wolf_rider', 3.5, 18.5); put(0, 'lancer', 13.5, 21.5); put(1, 'cannon', 9, 10); } },
   spawners: { at: [9, 20], setup: () => { put(0, 'witch', 9.5, 21.5); put(0, 'tombstone', 12, 22); put(0, 'ice_spirit', 6.5, 18.5); put(0, 'fire_spirit', 7.5, 18.5); put(1, 'knight', 6.5, 13.5); put(1, 'goblins', 9.5, 13.5); } },
   towers: { at: [9, 16], setup: () => { put(0, 'iron_swordsman', 3.5, 17.5); put(0, 'bomber', 14.5, 18.5); put(0, 'spear_goblins', 14.5, 20.5); } },
+  collapse: {
+    at: [3.5, 8],
+    setup: () => {
+      const t = game.towers(1).find((e) => e.unit === 'princess' && e.lane === 0)!;
+      t.hp = 120;
+      put(0, 'fireball', 3.5, 6.5);
+    },
+  },
   stress: {
     at: [9, 16],
     setup: () => {
