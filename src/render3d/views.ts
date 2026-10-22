@@ -112,7 +112,11 @@ export class UnitView {
     if (this.dyingT >= 0) {
       this.dyingT += dt;
       const k = Math.min(1, this.dyingT / 0.55);
-      m.rotation.set(-1.3 * ease(k * 1.4), this.yaw, 0);
+      // 倒地：先被打得微微彈起，再往後、往一側倒下（左右依單位編號錯開，不會整排同一個方向）
+      const side = this.e.id % 2 ? 1 : -1;
+      const fall = ease(k * 1.4);
+      m.rotation.set(-1.15 * fall, this.yaw, side * 0.55 * fall, 'YXZ');
+      lift += Math.sin(Math.min(1, k * 2.5) * Math.PI) * 0.22;
       lift -= k * 0.35 + (this.hover > 0 ? this.hover * ease(k) : 0);
       this.mat.transparent = true;
       this.mat.opacity = 1 - ease((k - 0.35) / 0.65);

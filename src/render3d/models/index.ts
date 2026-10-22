@@ -27,7 +27,7 @@ const BONE = '#efe8d8';
 const HUMANOIDS: Record<string, (t: TeamPal) => HumanoidSpec> = {
   knight: () => ({
     height: 1.3, build: 1.1, skin: SKIN, face: 'dot', hat: 'helmet', hatColor: '#c9d1dc', plume: true, torso: '#9aa6b5', torso2: '#6b4426', legs: '#5a5f6b',
-    boots: '#3a3f4a', arms: '#9aa6b5', hands: '#c9d1dc', pads: true, cape: true, weapon: 'sword', offhand: 'shield',
+    boots: '#3a3f4a', arms: '#9aa6b5', hands: '#c9d1dc', pads: true, cape: true, tabard: true, weapon: 'sword', offhand: 'shield',
   }),
   archer: () => ({
     height: 1.1, skin: SKIN, face: 'dot', hair: { style: 'bob', color: '#d9894a' }, hat: 'hood', hatColor: '#3f7a4a', torso: '#4f8a5a', torso2: '#7a5230',
@@ -36,7 +36,7 @@ const HUMANOIDS: Record<string, (t: TeamPal) => HumanoidSpec> = {
   giant: (t) => ({
     height: 2.15, build: 1.3, headScale: 0.62, torsoScale: 1.3, legScale: 1.15, skin: '#e0a878', face: 'angry', nose: 'ball', ears: 'round',
     beard: { color: '#3a2a1e', size: 1.1 }, hair: { style: 'tuft', color: '#3a2a1e' }, torso: '#8a6a4a', torso2: t.main, legs: '#6b5a40', boots: '#4a3a2a',
-    arms: '#e0a878', hands: '#e0a878', belly: true,
+    arms: '#e0a878', hands: '#e0a878', belly: true, strap: '#5a3a1e', bracers: '#6b4a2a',
   }),
   goblin: () => ({
     height: 0.85, skin: GOBLIN, ears: 'pointy', nose: 'long', face: 'angry', torso: '#8a6a3a', torso2: '#5a3a1e', legs: '#5a4a2a', boots: '#3a2a1e',
@@ -63,7 +63,7 @@ const HUMANOIDS: Record<string, (t: TeamPal) => HumanoidSpec> = {
   }),
   axe_dwarf: () => ({
     height: 1.05, build: 1.4, skin: SKIN, face: 'angry', beard: { color: '#d9692a', size: 1.3 }, mustache: '#c45a1e', hat: 'winged', hatColor: '#b8bec8',
-    torso: '#8a5a3a', torso2: '#3a2a1e', legs: '#5a4a3a', boots: '#3a2a1e', arms: SKIN, pads: true, weapon: 'axe2', belly: true,
+    torso: '#8a5a3a', torso2: '#3a2a1e', legs: '#5a4a3a', boots: '#3a2a1e', arms: SKIN, pads: true, weapon: 'axe2', belly: true, bracers: '#6b6f78',
   }),
   bomber: () => ({
     height: 0.9, build: 1.05, skin: '#e8b890', face: 'dot', nose: 'long', beard: { color: '#f4f1e8', size: 0.7 }, hat: 'goggles', torso: '#d9822a',
@@ -71,7 +71,7 @@ const HUMANOIDS: Record<string, (t: TeamPal) => HumanoidSpec> = {
   }),
   barbarian: () => ({
     height: 1.25, build: 1.15, skin: '#e8b07a', face: 'angry', hair: { style: 'braids', color: '#c9a24a' }, beard: { color: '#c9a24a' }, hat: 'horned',
-    hatColor: '#8a8f99', torso: '#7a5230', arms: '#e8b07a', torso2: '#3a2a1e', legs: '#6b5a40', boots: '#4a3a2a', weapon: 'club',
+    hatColor: '#8a8f99', torso: '#7a5230', arms: '#e8b07a', torso2: '#3a2a1e', legs: '#6b5a40', boots: '#4a3a2a', weapon: 'club', bracers: '#5a3a1e',
   }),
   witch: () => ({
     height: 1.2, skin: '#cfe0c0', face: 'dot', eyeColor: '#5a1f7a', hair: { style: 'long', color: '#2a1a3a' }, hat: 'witch', hatColor: '#4a2a6a',

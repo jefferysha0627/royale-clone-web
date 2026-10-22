@@ -37,6 +37,9 @@ export interface HumanoidSpec {
   scarf?: boolean; // 圍巾（隊伍色）
   cape?: boolean; // 披風（隊伍色）
   sash?: boolean; // 斜背帶（隊伍色）
+  strap?: string; // 皮革背帶（反方向斜背，附金屬扣）
+  bracers?: string; // 護腕
+  tabard?: boolean; // 胸前罩袍（隊伍色，中間有菱形徽記）
   plume?: boolean; // 頭盔羽飾（隊伍色）
   weapon?: Weapon;
   offhand?: 'none' | 'shield' | 'bow' | 'buckler' | 'lantern';
@@ -89,7 +92,12 @@ export function addHumanoid(k: Kit, s: HumanoidSpec, team: { main: string; dark:
       k.blob(0.16 * B, 0.12 * H, 0.22 * B, { at: [lx + sx * 0.16 * B, hipY - legLen * 0.75, oz + 0.12], color: s.boots, bone });
     } else {
       k.capsule(limbR, legLen * 0.55, { at: [lx, hipY - legLen * 0.45, oz], color: s.legs, bone });
-      k.blob(0.17 * B, 0.12 * H, 0.24 * B, { at: [lx, oy + 0.055 * H, oz + 0.03], color: s.boots, bone });
+      k.blob(0.17 * B, 0.12 * H, 0.24 * B, { at: [lx, oy + 0.055 * H, oz + 0.03], color: s.boots, bone }, 12);
+      if (!s.bones && !s.robe) {
+        // 鞋底與靴口：讓腳的輪廓更清楚
+        k.blob(0.18 * B, 0.035 * H, 0.255 * B, { at: [lx, oy + 0.014 * H, oz + 0.035], color: shade(s.boots, -0.4), bone }, 10);
+        k.torus(0.068 * B + limbR * 0.5, 0.022 * H, { at: [lx, oy + 0.115 * H, oz + 0.01], rot: [Math.PI / 2, 0, 0], color: shade(s.boots, 0.18), bone }, 10);
+      }
     }
   }
 
@@ -106,11 +114,28 @@ export function addHumanoid(k: Kit, s: HumanoidSpec, team: { main: string; dark:
   } else {
     k.blob(0.5 * B, torsoH * 1.08, 0.4 * B, { at: [ox, torsoCY, oz], color: s.torso }, 12);
     if (s.belly) k.blob(0.4 * B, torsoH * 0.7, 0.3 * B, { at: [ox, torsoCY - 0.03, oz + 0.09 * B], color: s.torso }, 10);
-    if (s.torso2) k.torus(0.235 * B, 0.035 * H, { at: [ox, hipY + 0.05 * H, oz], rot: [Math.PI / 2, 0, 0], scale: [1, 0.85, 1], color: s.torso2 }, 14);
+    if (s.torso2) {
+      k.torus(0.235 * B, 0.035 * H, { at: [ox, hipY + 0.05 * H, oz], rot: [Math.PI / 2, 0, 0], scale: [1, 0.85, 1], color: s.torso2 }, 14);
+      // 皮帶扣
+      k.box(0.075 * B, 0.06 * H, 0.03, { at: [ox, hipY + 0.05 * H, oz + 0.2 * B + 0.03 * H], color: '#f2c94c' });
+      k.box(0.04 * B, 0.03 * H, 0.032, { at: [ox, hipY + 0.05 * H, oz + 0.2 * B + 0.033 * H], color: shade(s.torso2, -0.3) });
+    }
+    // 領口：比衣服深一點的圈，頭和身體的交界比較清楚
+    if (!s.scarf && !s.robe) k.torus(0.1 * B + 0.02, 0.028 * H, { at: [ox, neckY - 0.03 * H, oz], rot: [Math.PI / 2, 0, 0], color: shade(s.torso, -0.22) }, 12);
     if (s.apron) k.cone(0.29 * B, 0.22 * H, { at: [ox, hipY - 0.02, oz], rot: [Math.PI, 0, 0], scale: [1, 1, 0.85], color: s.apron }, 12);
     if (s.robe) k.cyl(0.2 * B, 0.3 * B, legLen + 0.06, { at: [ox, oy + (legLen + 0.06) / 2, oz], color: s.apron ?? s.torso }, 12);
   }
   if (s.sash) k.box(0.1 * B, torsoH * 1.05, 0.42 * B, { at: [ox, torsoCY, oz], rot: [0, 0, 0.7], color: team.main });
+  if (s.strap) {
+    k.box(0.055 * B, torsoH * 1.08, 0.43 * B, { at: [ox, torsoCY, oz], rot: [0, 0, -0.62], color: s.strap });
+    k.box(0.07 * B, 0.07 * B, 0.03, { at: [ox - 0.02 * B, torsoCY + 0.02, oz + 0.215 * B], rot: [0, 0, -0.62], color: '#d9b04a' });
+  }
+  if (s.tabard) {
+    // 貼著胸口的隊伍色罩袍，下緣剪成尖角，中間金色菱形
+    k.blob(0.3 * B, torsoH * 0.92, 0.07 * B, { at: [ox, torsoCY - 0.01, oz + 0.175 * B], color: team.main }, 12);
+    k.cone(0.15 * B, 0.12 * H, { at: [ox, hipY - 0.02 * H, oz + 0.19 * B], rot: [Math.PI, 0, 0], scale: [1, 1, 0.3], color: team.main }, 3);
+    k.box(0.08 * B, 0.08 * B, 0.03, { at: [ox, torsoCY + torsoH * 0.08, oz + 0.215 * B], rot: [0, 0, Math.PI / 4], color: '#f2c94c' });
+  }
   if (s.scarf) {
     k.torus(0.11 * B + 0.04, 0.045 * H, { at: [ox, neckY - 0.03, oz], rot: [Math.PI / 2, 0, 0], color: team.main }, 12);
     k.box(0.08 * H, 0.18 * H, 0.03, { at: [ox + 0.06, neckY - 0.12, oz - 0.13 * B], rot: [0.3, 0, 0.2], color: team.main });
@@ -124,8 +149,11 @@ export function addHumanoid(k: Kit, s: HumanoidSpec, team: { main: string; dark:
   for (const [bone, sx] of [[armL, 1], [armR, -1]] as const) {
     const ax = ox + sx * shoulderX;
     k.capsule(limbR * 0.95, armLen * 0.6, { at: [ax + sx * 0.02, shoulderY - armLen * 0.45, oz], rot: [0, 0, sx * 0.12], color: s.bones ? s.torso : s.arms ?? s.torso, bone });
-    k.sphere(s.bones ? 0.05 * B : 0.085 * B, { at: [ax + sx * 0.04, shoulderY - armLen * 0.95, oz + 0.01], color: s.hands ?? s.skin, bone }, 8);
+    k.sphere(s.bones ? 0.05 * B : 0.085 * B, { at: [ax + sx * 0.04, shoulderY - armLen * 0.95, oz + 0.01], color: s.hands ?? s.skin, bone }, 10);
+    // 手套的大拇指
+    if (!s.bones) k.sphere(0.04 * B, { at: [ax + sx * 0.0, shoulderY - armLen * 0.9, oz + 0.075 * B], color: s.hands ?? s.skin, bone }, 6);
     if (s.pads) k.sphere((s.bones ? 0.07 : 0.12) * B, { at: [ax + sx * 0.015, shoulderY + 0.01, oz], scale: [1.1, 0.75, 1.05], color: team.main, bone }, 10);
+    if (s.bracers) k.cyl(limbR * 1.28, limbR * 1.12, armLen * 0.3, { at: [ax + sx * 0.035, shoulderY - armLen * 0.74, oz], rot: [0, 0, sx * 0.12], color: s.bracers, bone }, 10);
   }
   const handR: V3 = [ox - shoulderX - 0.04, shoulderY - armLen * 0.95, oz + 0.01];
   const handL: V3 = [ox + shoulderX + 0.04, shoulderY - armLen * 0.95, oz + 0.01];
@@ -140,7 +168,7 @@ export function addHumanoid(k: Kit, s: HumanoidSpec, team: { main: string; dark:
     k.sphere(headR, { at: [ox, hy, oz], scale: [0.95, 0.9, 0.95], color: s.skin }, 14);
     k.blob(headR * 1.2, headR * 0.55, headR * 1.05, { at: [ox, hy - headR * 0.62, oz + headR * 0.12], color: s.skin }, 10);
   } else {
-    k.sphere(headR, { at: [ox, hy, oz], color: s.skin }, 16);
+    k.sphere(headR, { at: [ox, hy, oz], color: s.skin }, 20);
   }
   const fz = oz + headR * 0.86;
   const eyeY = hy + headR * 0.05;
@@ -184,6 +212,16 @@ export function addHumanoid(k: Kit, s: HumanoidSpec, team: { main: string; dark:
     } else {
       // 微笑：半圓弧
       k.torus(headR * 0.15, headR * 0.035, { at: [ox, my + headR * 0.07, mz], rot: [0, 0, Math.PI], color: '#5a2a2a' }, 8, Math.PI);
+    }
+  }
+  // 一般人臉預設小圓耳（帽子會蓋住兩側的就不畫）、臉頰淡淡的紅暈
+  const coversSides = ['helmet', 'iron', 'hood', 'wizard', 'witch', 'skull'].includes(s.hat ?? 'none');
+  if (s.ears === undefined && (face === 'dot' || face === 'angry' || face === 'sleepy') && !coversSides) {
+    for (const sx of [1, -1]) k.sphere(headR * 0.17, { at: [ox + sx * headR * 0.96, hy - headR * 0.05, oz - headR * 0.05], scale: [0.5, 1, 0.8], color: shade(s.skin, -0.05) }, 8);
+  }
+  if (face === 'dot' || face === 'sleepy') {
+    for (const sx of [1, -1]) {
+      k.sphere(headR * 0.13, { at: [ox + sx * eyeX * 1.15, eyeY - headR * 0.22, oz + headR * 0.88], scale: [1.2, 0.7, 0.35], color: mix(s.skin, '#ff6f73', 0.38) }, 8);
     }
   }
   const nose = s.nose ?? 'ball';
@@ -415,6 +453,14 @@ function addOffhand(k: Kit, o: NonNullable<HumanoidSpec['offhand']>, h: V3, armL
 }
 
 /** 調亮（amt>0）或調暗（amt<0）hex 色。 */
+/** 兩個顏色依比例混合。 */
+export function mix(a: string, b: string, t: number): string {
+  const pa = parseInt(a.slice(1), 16);
+  const pb = parseInt(b.slice(1), 16);
+  const ch = (shift: number) => Math.round(((pa >> shift) & 255) * (1 - t) + ((pb >> shift) & 255) * t);
+  return `#${((ch(16) << 16) | (ch(8) << 8) | ch(0)).toString(16).padStart(6, '0')}`;
+}
+
 export function shade(hex: string, amt: number): string {
   const n = parseInt(hex.slice(1), 16);
   let r = (n >> 16) & 255;

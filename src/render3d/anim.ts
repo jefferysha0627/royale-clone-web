@@ -75,21 +75,32 @@ function biped(inst: ModelInstance, p: AnimProfile, s: AnimState, seated = false
     const ri = inst.bones.indexOf(hips);
     const restY = inst.rest[ri].y;
     hips.position.y = restY + (moving ? Math.abs(Math.cos(w)) * 0.05 : 0) - s.flinch * 0.03;
+    // 站著時重心左右輕輕擺動
+    hips.rotation.z = moving ? Math.sin(w) * 0.05 : Math.sin(s.t * 0.9) * 0.025;
   }
   if (!seated) {
     rot(b.legL, sw * 0.75 * stride);
     rot(b.legR, -sw * 0.75 * stride);
   }
-  rot(b.spine, (moving ? 0.12 : 0) + breathe - s.flinch * 0.3, moving ? sw * 0.08 : 0);
+  const k = strike(s);
+  const attacking = s.windup >= 0 || s.sinceHit < 0.3;
+  // 近戰出手時身體跟著扭轉：蓄力往後轉、揮出時往前帶並前傾，有收招的慣性
+  const melee = p.attack === 'swing' || p.attack === 'chop' || p.attack === 'stab' || p.attack === 'punch' || p.attack === 'slam' || p.attack === 'spin';
+  const twist = attacking && melee ? (k < 0 ? 0.38 * -k : -0.3 * k) : 0;
+  const lean = attacking && melee ? (k < 0 ? -0.1 * -k : 0.18 * k) : 0;
+  rot(b.spine, (moving ? 0.12 : 0) + breathe - s.flinch * 0.3 + lean, (moving ? sw * 0.08 : 0) + twist);
+  // 走路落地時上半身微微壓扁、彈起時拉長（卡通彈性）
+  if (b.spine) {
+    const sq = moving ? 0.045 * (1 - Math.abs(Math.cos(w))) - 0.015 : s.flinch * 0.05;
+    b.spine.scale.set(1 + sq * 0.5, 1 - sq, 1 + sq * 0.5);
+  }
   // 頭微微上仰，讓斜俯視的鏡頭看得到臉（Q 版角色的「看鏡頭」姿態）
-  rot(b.head, -0.22 - breathe * 0.5 + s.flinch * 0.2, 0, Math.sin(s.t * 1.3) * 0.04);
+  rot(b.head, -0.22 - breathe * 0.5 + s.flinch * 0.2 + lean * 0.4, -twist * 0.4, Math.sin(s.t * 1.3) * 0.04);
   let aL = -sw * 0.55 + 0.05;
   let aR = sw * 0.55 + 0.05;
   let zL = -0.08;
   let zR = 0.08;
   let yR = 0;
-  const k = strike(s);
-  const attacking = s.windup >= 0 || s.sinceHit < 0.3;
   switch (p.attack) {
     case 'swing':
       if (attacking) {

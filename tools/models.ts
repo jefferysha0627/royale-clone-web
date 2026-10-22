@@ -28,7 +28,7 @@ ground.rotation.x = -Math.PI / 2;
 ground.receiveShadow = true;
 scene.add(ground);
 
-const cols = towers ? 3 : 7;
+const cols = towers ? 3 : Math.min(7, (only ?? units).length);
 const gap = towers ? 5.5 : 2.6;
 const items: { inst: ReturnType<typeof instantiate>; prof: ReturnType<typeof profileOf>; st: ReturnType<typeof newAnimState>; label: HTMLElement; pos: Vector3 }[] = [];
 const list = towers ? ['princess', 'king', 'rubble-princess'] : units;
