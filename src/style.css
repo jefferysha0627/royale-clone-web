@@ -701,3 +701,27 @@ button { cursor: pointer; touch-action: manipulation; }
   .banner, .crown.pop, .hand .card.deny { animation-duration: .01s; }
   .card { transition: none; }
 }
+
+/* 手機橫拿時的提示（遊戲以直向畫面設計） */
+.rotate-hint {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 24px;
+  background: rgba(8, 14, 20, .94);
+  color: #fff;
+  text-align: center;
+}
+.rotate-hint[hidden] { display: none; }
+.rotate-hint b { font-size: 20px; }
+.rotate-hint span { font-size: 14px; color: var(--muted); }
+.rotate-phone { width: 40px; height: 66px; border: 4px solid #fff; border-radius: 10px; animation: rotate-phone 1.8s ease-in-out infinite; }
+@keyframes rotate-phone {
+  0%, 25% { transform: rotate(-90deg); }
+  60%, 100% { transform: rotate(0deg); }
+}

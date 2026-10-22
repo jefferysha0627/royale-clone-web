@@ -479,6 +479,31 @@ if (run('3')) {
   await ctx.close();
 }
 
+// ───────── 3a. 手機橫拿：提示轉直向並暫停，轉回後可繼續 ─────────
+if (run('3')) {
+  const vp = { name: 'mobile-844x390-landscape', viewport: { width: 844, height: 390 }, touch: true, dsf: 2 };
+  const { ctx, page, cdp } = await newPage(vp);
+  await page.goto(`${BASE}?test=1&seed=12`);
+  await page.evaluate(() => window.__btd.skipIntro(true));
+  await page.click('#btn-play');
+  if (await page.isVisible('#btn-howto-ok')) await page.click('#btn-howto-ok');
+  await page.waitForSelector('#screen-battle:not([hidden])');
+  await sleep(600);
+  const hintShown = await page.isVisible('#rotate-hint');
+  const t0 = (await state(page)).timeLeft;
+  await sleep(1200);
+  const t1 = (await state(page)).timeLeft;
+  await shot(page, `${vp.name}-01-rotate-hint`);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await sleep(700);
+  const hintGone = await page.isHidden('#rotate-hint');
+  await tap(page, cdp, await page.locator('#btn-resume').boundingBox().then((b) => [b.x + b.width / 2, b.y + b.height / 2]));
+  await sleep(1200);
+  const t2 = (await state(page)).timeLeft;
+  check('[844x390] 手機橫拿時提示轉直向並暫停，轉回直向後按繼續可接著玩', hintShown && Math.abs(t1 - t0) < 0.01 && hintGone && t2 < t1 - 0.5, `提示 ${hintShown}→${!hintGone}，暫停中時間 ${t0.toFixed(2)}→${t1.toFixed(2)}，繼續後 ${t2.toFixed(2)}`);
+  await ctx.close();
+}
+
 // ───────── 3b. 沒有 Web Audio 時仍可開戰；3c. 2D 備援畫面 ─────────
 for (const variant of run('3') ? ['noaudio', 'render2d'] : []) {
   const vp = VIEWPORTS[3];

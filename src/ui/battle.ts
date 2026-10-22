@@ -133,6 +133,9 @@ export class Battle {
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'hidden') this.autoPause();
     });
+    // 手機橫拿：手牌會擋住大半場地，暫停並提示轉回直向
+    this.landscape = typeof window.matchMedia === 'function' ? window.matchMedia('(orientation: landscape) and (max-height: 520px) and (pointer: coarse)') : null;
+    this.landscape?.addEventListener?.('change', () => this.checkOrientation());
     window.addEventListener('pagehide', () => this.autoPause());
   }
 
@@ -202,6 +205,7 @@ export class Battle {
     this.layout();
     this.renderHand();
     this.updateHud();
+    this.checkOrientation();
     cancelAnimationFrame(this.raf);
     this.last = performance.now();
     this.raf = requestAnimationFrame(this.frame);
@@ -211,7 +215,17 @@ export class Battle {
     this.active = false;
     cancelAnimationFrame(this.raf);
     this.root.hidden = true;
+    $('rotate-hint').hidden = true;
     this.sound.stopMusic();
+  }
+
+  private landscape: MediaQueryList | null = null;
+
+  /** 對戰中手機橫拿時顯示提示並暫停；轉回直向後提示消失，由玩家按「繼續」。 */
+  private checkOrientation(): void {
+    const sideways = !!this.landscape?.matches && this.active;
+    $('rotate-hint').hidden = !sideways;
+    if (sideways) this.pause('手機橫拿時畫面太小，轉回直向後再繼續。');
   }
 
   /** 以方法讀取，避免 TypeScript 對 game.phase 的窄化誤判。 */
