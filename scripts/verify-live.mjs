@@ -6,7 +6,9 @@ import { launchBrowser } from './browser.mjs';
 
 const URL_ = process.argv[2];
 const LIVE = process.argv.includes('--live');
-if (!URL_ || !URL_.startsWith('https://') || !URL_.endsWith('/')) {
+// 本機預覽（http://localhost）只用來驗證此腳本本身，正式驗證必須是 https 公開網址
+const LOCAL = /^http:\/\/localhost:\d+\/$/.test(URL_ ?? '');
+if (!URL_ || (!URL_.startsWith('https://') && !LOCAL) || !URL_.endsWith('/')) {
   console.error('用法：node scripts/verify-live.mjs https://網址/ [--live]');
   process.exit(1);
 }
@@ -37,7 +39,7 @@ const ogImage = meta('og:image');
 const ogUrl = meta('og:url');
 const canonical = html.match(/<link rel="canonical" href="([^"]*)"/)?.[1];
 results.meta = { title: html.match(/<title>([^<]*)<\/title>/)?.[1], ogTitle: meta('og:title'), ogImage, ogUrl, canonical, description: meta('description') };
-check('og:image、og:url、canonical 都是此網站的絕對 HTTPS 網址', ogImage === `${URL_}og-image.png` && ogUrl === URL_ && canonical === URL_, JSON.stringify({ ogImage, ogUrl, canonical }));
+if (!LOCAL) check('og:image、og:url、canonical 都是此網站的絕對 HTTPS 網址', ogImage === `${URL_}og-image.png` && ogUrl === URL_ && canonical === URL_, JSON.stringify({ ogImage, ogUrl, canonical }));
 check('標題與分享資訊使用新名稱並標示非官方', /皇室戰爭克隆/.test(results.meta.title ?? '') && /非官方/.test(results.meta.ogTitle ?? '') && /Supercell/.test(results.meta.description ?? ''), results.meta.title);
 const refs = [...html.matchAll(/(?:src|href)="(\.\/[^"]+|assets\/[^"]+|[a-z-]+\.(?:svg|png))"/g)].map((m) => m[1]);
 for (const ref of new Set([...refs, 'og-image.png', 'favicon.svg', 'apple-touch-icon.png'])) {
@@ -73,7 +75,12 @@ const cardAt = async (page, i) => {
   const b = await page.locator(`#hand .card[data-index="${i}"]`).boundingBox();
   return [b.x + b.width / 2, b.y + b.height / 2];
 };
-const cost = (page, i) => page.locator(`#hand .card[data-index="${i}"] .cost b`).textContent().then(Number);
+const cost = (page, i) => page.evaluate((i) => {
+  const id = window.__btd.game().players[0].hand[i];
+  return id ? Number(document.querySelector(`#hand .card[data-index="${i}"] .cost b`)?.textContent ?? 99) : 99;
+}, i);
+const SPELLS = ['fireball', 'arrows', 'zap', 'rocket', 'log', 'poison', 'goblin_barrel'];
+const BUILDINGS = ['cannon', 'inferno', 'tombstone'];
 const at = (page, x, y) => page.evaluate(([x, y]) => window.__btd.battle.screenOf(x, y), [x, y]);
 async function drag(page, cdp, from, to) {
   if (cdp) {
@@ -110,21 +117,27 @@ async function playthrough(label, viewport, touch, live) {
   await page.click('#btn-play');
   await page.click('#btn-howto-ok');
   await page.waitForSelector('#screen-battle:not([hidden])');
+  await page.waitForFunction(() => window.__btd.battle.intro <= 0, null, { timeout: 15000 });
   await sleep(300);
   const audio = await page.evaluate(() => window.__btd.sound.state);
   check(`[${label}] 點開始後音訊啟用`, audio === 'running', audio);
+  const kind = await page.evaluate(() => window.__btd.battle.rendererKind);
+  check(`[${label}] 使用 3D（WebGL）畫面`, kind === '3d', kind);
   let plays = 0;
   const t0 = Date.now();
   let lane = 0;
-  while (Date.now() - t0 < (live ? 300000 : 25000)) {
+  while (Date.now() - t0 < (live ? 420000 : 25000)) {
     const s = await state(page);
     if (s.phase === 'ended') break;
     for (let i = 0; i < 4; i++) {
       const c = await cost(page, i);
       if (c > s.elixir) continue;
       const id = s.hand[i];
+      if (!id) continue;
       const x = lane ? 14.5 : 3.5;
-      const target = ['fireball', 'arrows', 'zap'].includes(id) ? [x, 6.5] : id === 'cannon' ? [9, 22] : [x + (lane ? -1 : 1), 20];
+      const target = SPELLS.includes(id)
+        ? id === 'log' ? [x, 18.5] : [x, 7.5]
+        : BUILDINGS.includes(id) ? [9, 21] : ['golem', 'giant'].includes(id) ? [x, 30.5] : [x + (lane ? -1 : 1), 20.5];
       const before = s.played;
       await drag(page, cdp, await cardAt(page, i), await at(page, ...target));
       if ((await state(page)).played === before + 1) plays++;
@@ -135,8 +148,9 @@ async function playthrough(label, viewport, touch, live) {
     await sleep(live ? 900 : 1200);
   }
   if (live) await page.screenshot({ path: `${outDir}${label}-battle.png` });
-  if (!live) await page.evaluate(() => window.__btd.autoplay(400));
+  if (!live) await page.evaluate(() => window.__btd.autoplay(600));
   await page.waitForSelector('#ov-result:not([hidden])', { timeout: 15000 });
+  await sleep(1800);
   const s = await state(page);
   await page.screenshot({ path: `${outDir}${label}-result.png` });
   check(`[${label}] 真實${touch ? '觸控' : '滑鼠'}出牌 ${plays} 次並打完一場（${live ? '即時' : '出牌後快轉'}）`, plays >= 3 && s.phase === 'ended', JSON.stringify(s.result));

@@ -522,6 +522,13 @@ export class Renderer3D implements BattleRenderer {
         }
         const target = e.alive && e.targetId >= 0 ? game.get(e.targetId) : undefined;
         tv.update(animDt, game.time, target ? tmpV.set(toX(target.x), 0, toZ(target.y)) : null);
+        // 受損狀態：半血以下冒煙，四分之一以下起火
+        if (e.alive && dt > 0) {
+          const frac = e.hp / e.maxHp;
+          const h = e.unit === 'king' ? 3.4 : 2.4;
+          if (frac < 0.5 && Math.random() < dt * (frac < 0.25 ? 9 : 4)) this.fx.trail('smoke', toX(e.x) + (Math.random() - 0.5) * 1.6, h, toZ(e.y) + (Math.random() - 0.5) * 1.2);
+          if (frac < 0.25 && Math.random() < dt * 10) this.fx.trail('fire', toX(e.x) + (Math.random() - 0.5) * 1.4, h - 0.3, toZ(e.y) + (Math.random() - 0.5) * 1.0);
+        }
         continue;
       }
       if (!e.alive) continue;
