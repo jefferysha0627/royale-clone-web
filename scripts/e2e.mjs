@@ -1,6 +1,7 @@
 // 真實瀏覽器驗證（v2）：以 production build 在 Chromium 中用真的滑鼠／觸控輸入操作。
 // 用法：npm run build && npm run e2e            （完整，含一場即時對戰，約 8 分鐘）
 //       npm run build && npm run e2e -- --quick （略過即時整場對戰）
+//       npm run build && npm run e2e -- --only=6 （只跑第 6 節即時對戰；部分執行的結果另存 e2e-results-only-6.json）
 // 結果寫入上一層的 verification/v2/（e2e-results.json、screenshots/）。
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -12,6 +13,8 @@ const outDir = fileURLToPath(new URL('../../verification/v2/', import.meta.url))
 const shotDir = `${outDir}screenshots/`;
 mkdirSync(shotDir, { recursive: true });
 const QUICK = process.argv.includes('--quick');
+const ONLY = process.argv.find((a) => a.startsWith('--only='))?.slice(7).split(',');
+const run = (section) => !ONLY || ONLY.includes(section);
 const PORT = 4179;
 const BASE = `http://localhost:${PORT}/`;
 
@@ -58,6 +61,7 @@ const state = (page) =>
       elixir: p.elixir, hand: [...p.hand], next: p.queue[0], played: p.cardsPlayed, spent: p.elixirSpent,
       time: g.time, timeLeft: g.timeLeft, phase: g.phase, crowns: [p.crowns, g.players[1].crowns],
       troops: g.entities.filter((e) => e.kind !== 'tower').length, entities: g.entities.length, result: g.result,
+      foes: g.entities.filter((e) => e.team === 1 && e.kind !== 'tower' && e.alive).map((e) => [e.x, e.y]),
       intro: window.__btd.battle.intro,
     };
   });
@@ -159,7 +163,7 @@ const measureFps = (page, ms = 4000) =>
 
 // ───────── 1. 各尺寸：首頁、教學、開場、出牌、非法部署、能量不足、取消、暫停、背景切換 ─────────
 
-for (const vp of VIEWPORTS) {
+for (const vp of run('1') ? VIEWPORTS : []) {
   const tag = vp.name;
   const vr = (results.viewports[tag] = {});
   const { ctx, page, cdp } = await newPage(vp);
@@ -334,7 +338,7 @@ for (const vp of VIEWPORTS) {
 }
 
 // ───────── 2. 桌面：快轉打完多場、結算、再戰、分享 ─────────
-{
+if (run('2')) {
   const vp = VIEWPORTS[0];
   const { ctx, page } = await newPage(vp, { permissions: ['clipboard-read', 'clipboard-write'] });
   await page.goto(`${BASE}?test=1&seed=21`);
@@ -388,8 +392,12 @@ for (const vp of VIEWPORTS) {
   results.gpuAcrossMatches = gpuCounts;
   check(
     '[desktop] 連續多場 GPU 幾何／貼圖數沒有持續增加',
-    gpuCounts.length > 2 && gpuCounts[gpuCounts.length - 1].textures <= gpuCounts[1].textures + 2 && gpuCounts[gpuCounts.length - 1].geometries <= gpuCounts[1].geometries + 6,
-    gpuCounts.map((g) => `${g.geometries}g/${g.textures}t`).join(' → '),
+    // 單位模型與投射物的共用幾何會隨「出現過的種類」增加（有上限、不算洩漏），所以比較 geometries − shared
+    // 每個存活單位有一張骨架貼圖（結算時場上單位數不同），所以比較 textures − boneTextures
+    gpuCounts.length > 2 &&
+      gpuCounts[gpuCounts.length - 1].textures - gpuCounts[gpuCounts.length - 1].boneTextures <= gpuCounts[1].textures - gpuCounts[1].boneTextures + 2 &&
+      gpuCounts[gpuCounts.length - 1].geometries - gpuCounts[gpuCounts.length - 1].shared <= gpuCounts[1].geometries - gpuCounts[1].shared + 4,
+    gpuCounts.map((g) => `${g.geometries}g(共用 ${g.shared})/${g.textures}t(骨架 ${g.boneTextures})`).join(' → '),
   );
   check('[desktop] 連續多場 DOM 節點數沒有持續增加', domCounts[domCounts.length - 1] - domCounts[0] <= 5 && Math.max(...domCounts) - Math.min(...domCounts) <= 8, domCounts.join(' → '));
   const mem = await page.evaluate(() => {
@@ -418,7 +426,7 @@ for (const vp of VIEWPORTS) {
 }
 
 // ───────── 3. 分享備援與牌組編輯 ─────────
-{
+if (run('3')) {
   const vp = VIEWPORTS[1];
   const { ctx, page } = await newPage(vp);
   await page.addInitScript(() => {
@@ -459,7 +467,8 @@ for (const vp of VIEWPORTS) {
   await page.click('.tile[data-card="wolf_rider"]');
   await page.click('#btn-info-use');
   const swapHint = await page.locator('#deck-hint').textContent();
-  await page.click('#deck-slots .card[data-card="knight"]');
+  // 替換模式下牌組卡會持續搖晃（刻意的提示動畫），Playwright 的「穩定」判定永遠等不到，所以強制點擊
+  await page.click('#deck-slots .card[data-card="knight"]', { force: true });
   const deckNow = await page.$$eval('#deck-slots .card', (els) => els.map((e) => e.dataset.card));
   check('[360x640] 牌組已滿時可選卡替換', swapHint.includes('換成') && deckNow.includes('wolf_rider') && !deckNow.includes('knight') && deckNow.length === 8, deckNow.join(','));
   await page.click('#btn-deck-done');
@@ -471,7 +480,7 @@ for (const vp of VIEWPORTS) {
 }
 
 // ───────── 3b. 沒有 Web Audio 時仍可開戰；3c. 2D 備援畫面 ─────────
-for (const variant of ['noaudio', 'render2d']) {
+for (const variant of run('3') ? ['noaudio', 'render2d'] : []) {
   const vp = VIEWPORTS[3];
   const { ctx, page, cdp } = await newPage(vp);
   if (variant === 'noaudio') {
@@ -503,7 +512,7 @@ for (const variant of ['noaudio', 'render2d']) {
 }
 
 // ───────── 4. 載入：模擬 4 Mbps／150 ms、冷快取 ─────────
-{
+if (run('4')) {
   const vp = VIEWPORTS[2];
   const { ctx, page } = await newPage(vp);
   const cdp = await ctx.newCDPSession(page);
@@ -539,7 +548,7 @@ for (const variant of ['noaudio', 'render2d']) {
 }
 
 // ───────── 4b. 主程式載入失敗：顯示提示與重新載入 ─────────
-{
+if (run('4')) {
   const ctx = await browser.newContext({ viewport: VIEWPORTS[1].viewport, isMobile: true, hasTouch: true });
   const page = await ctx.newPage();
   await page.route('**/assets/*.js', (route) => route.abort());
@@ -555,7 +564,7 @@ for (const variant of ['noaudio', 'render2d']) {
 }
 
 // ───────── 5. CPU 降速 4 倍（近似中階手機的 JS 負擔）下的 FPS ─────────
-{
+if (run('5')) {
   const vp = VIEWPORTS[2];
   const { ctx, page } = await newPage(vp);
   const cdp = await ctx.newCDPSession(page);
@@ -584,7 +593,7 @@ for (const variant of ['noaudio', 'render2d']) {
 }
 
 // ───────── 6. 即時打完一整場（390×844 觸控，全部用真實觸控輸入出牌） ─────────
-if (!QUICK) {
+if (!QUICK && run('6')) {
   const vp = VIEWPORTS[2];
   const { ctx, page, cdp } = await newPage(vp);
   await page.goto(`${BASE}?test=1&seed=5`);
@@ -608,7 +617,31 @@ if (!QUICK) {
         fpsSamples.push(await measureFps(page, 1500));
       }
     }
-    if (s.elixir >= 6.5) {
+    // 敵方部隊過河時先防守：在被攻擊那一路的側塔前放部隊或建築
+    const threat = s.foes.filter(([, y]) => y > 15.5);
+    if (threat.length && s.elixir >= 3) {
+      const tx = threat.reduce((sum, [x]) => sum + x, 0) / threat.length < 9 ? 3.5 : 14.5;
+      let best = -1;
+      let bestCost = 99;
+      for (let i = 0; i < 4; i++) {
+        const id = s.hand[i];
+        const c = await cardCost(page, i);
+        if (id && !SPELLS.includes(id) && c <= s.elixir && Math.abs(c - 4) < Math.abs(bestCost - 4)) {
+          best = i;
+          bestCost = c;
+        }
+      }
+      if (best >= 0) {
+        const id = s.hand[best];
+        const target = ['cannon', 'inferno', 'tombstone'].includes(id) ? [tx < 9 ? 6 : 12, 22] : [tx + (tx < 9 ? 1 : -1), 22.5];
+        const before = s.played;
+        await drag(page, cdp, await cardBox(page, best), await screenOf(page, ...target));
+        if ((await state(page)).played === before + 1) plays++;
+        await sleep(600);
+        continue;
+      }
+    }
+    if (s.elixir >= 7) {
       // 出能負擔、費用最高的卡；法術丟對方側塔附近，建築放中央，坦克放後方，其他放橋前
       let best = -1;
       let bestCost = -1;
@@ -651,8 +684,9 @@ if (!QUICK) {
 check('全程沒有 console error／pageerror／載入失敗', results.errors.length === 0, results.errors.slice(0, 5).join('；'));
 results.finishedAt = new Date().toISOString();
 results.summary = { total: results.checks.length, failed: failures };
-writeFileSync(`${outDir}e2e-results.json`, JSON.stringify(results, null, 2));
-console.log(`\n${results.checks.length - failures}/${results.checks.length} 通過，結果寫入 verification/v2/e2e-results.json`);
+const outName = ONLY ? `e2e-results-only-${ONLY.join('-')}.json` : 'e2e-results.json';
+writeFileSync(`${outDir}${outName}`, JSON.stringify(results, null, 2));
+console.log(`\n${results.checks.length - failures}/${results.checks.length} 通過，結果寫入 verification/v2/${outName}`);
 await browser.close();
 await new Promise((r) => server.httpServer.close(r));
 process.exit(failures ? 1 : 0);

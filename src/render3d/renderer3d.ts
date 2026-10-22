@@ -1,6 +1,6 @@
 import {
   AdditiveBlending, CircleGeometry, CylinderGeometry, DoubleSide, Group, Mesh, MeshBasicMaterial, MeshLambertMaterial, OrthographicCamera, RingGeometry,
-  SphereGeometry, Vector3, type WebGLRenderer,
+  SphereGeometry, Vector3, type BufferGeometry, type Object3D, type SkinnedMesh, type WebGLRenderer,
 } from 'three';
 import { ARENA, CARDS, Game, UNITS, type Entity, type GameEvent } from '../sim';
 import type { BattleRenderer, DeployPreview } from '../render/types';
@@ -21,6 +21,8 @@ interface ProjVis {
   sh: number;
   total: number;
   last: Vector3;
+  ox: number; // 起點相對塔中心的偏移（國王塔左右砲口），隨飛行進度淡出
+  oz: number;
 }
 
 interface FlightVis {
@@ -71,6 +73,7 @@ export class Renderer3D implements BattleRenderer {
   private units = new Map<number, UnitView>();
   private towers = new Map<number, TowerView>();
   private projs = new Map<number, ProjVis>();
+  private shared = new Set<BufferGeometry>();
   private flights = new Map<number, FlightVis>();
   private areas = new Map<number, Group>();
   private logs = new Map<number, Mesh>();
@@ -133,14 +136,39 @@ export class Renderer3D implements BattleRenderer {
     }
   }
 
+  /** 建立投射物網格，並記下它用到的共用幾何（GPU 統計用）。 */
+  private projMesh(kind: string): Mesh {
+    const m = makeProjectileMesh(kind);
+    this.noteShared(m);
+    return m;
+  }
+
+  /** 記下物件用到的共用常駐幾何（單位模型、投射物）：它們不會隨單位消失而釋放，統計洩漏時要扣掉。 */
+  private noteShared(o: Object3D): void {
+    o.traverse((c) => {
+      const g = (c as Mesh).geometry;
+      if (g?.userData.shared) this.shared.add(g);
+    });
+  }
+
   get effectCount(): number {
     return this.fx.count + this.rain.filter((r) => r.t < 1).length + this.flights.size + this.projs.size;
   }
 
   /** GPU 資源數量（多場穩定性測試用）。 */
-  get gpuStats(): { geometries: number; textures: number; programs: number; calls: number; triangles: number } {
+  /** shared：已上傳過的共用常駐幾何數（單位模型、投射物，種類有上限）；geometries − shared 才是會隨場數累積的部分。 */
+  /** boneTextures：場上蒙皮網格的骨架貼圖數（每個存活單位一張，隨場上單位數變動）。 */
+  get gpuStats(): { geometries: number; shared: number; textures: number; boneTextures: number; programs: number; calls: number; triangles: number } {
+    this.noteShared(this.stage.scene);
+    let boneTextures = 0;
+    this.stage.scene.traverse((c) => {
+      if ((c as SkinnedMesh).isSkinnedMesh && (c as SkinnedMesh).skeleton?.boneTexture) boneTextures++;
+    });
     const i = this.gl.info;
-    return { geometries: i.memory.geometries, textures: i.memory.textures, programs: i.programs?.length ?? 0, calls: i.render.calls, triangles: i.render.triangles };
+    return {
+      geometries: i.memory.geometries, shared: this.shared.size, textures: i.memory.textures, boneTextures, programs: i.programs?.length ?? 0,
+      calls: i.render.calls, triangles: i.render.triangles,
+    };
   }
 
   get qualityLevel(): Quality {
@@ -162,7 +190,7 @@ export class Renderer3D implements BattleRenderer {
     // 需要完整看到：寬 18 格（含少許邊）、上緣到對方國王塔頂、下緣到己方最後一排；上方留給名稱與計時器
     const hudPx = 58;
     const needW = 18.7;
-    const upTop = 12.9;
+    const upTop = 13.3;
     const upBottom = -ARENA.height / 2 * SIN_E - 0.15;
     const needH = upTop - upBottom;
     const k = Math.min(cssW / needW, (cssH - hudPx) / needH);
@@ -484,7 +512,7 @@ export class Renderer3D implements BattleRenderer {
       let ra = this.rain.find((q) => q.t >= 1);
       if (!ra) {
         if (this.rain.length > 60) break;
-        const mesh = makeProjectileMesh('arrow');
+        const mesh = this.projMesh('arrow');
         this.layer.add(mesh);
         ra = { mesh, t: 1, x: 0, z: 0, dx: 0 };
         this.rain.push(ra);
@@ -518,14 +546,16 @@ export class Renderer3D implements BattleRenderer {
         let tv = this.towers.get(e.id);
         if (!tv) {
           tv = new TowerView(e, this.layer);
+          this.noteShared(tv.inst.mesh);
           this.towers.set(e.id, tv);
         }
         const target = e.alive && e.targetId >= 0 ? game.get(e.targetId) : undefined;
         tv.update(animDt, game.time, target ? tmpV.set(toX(target.x), 0, toZ(target.y)) : null);
+        if (tv.rubble) this.shared.add(tv.rubble.geometry);
         // 受損狀態：半血以下冒煙，四分之一以下起火
         if (e.alive && dt > 0) {
           const frac = e.hp / e.maxHp;
-          const h = e.unit === 'king' ? 3.4 : 2.4;
+          const h = e.unit === 'king' ? 3.3 : 2.9;
           if (frac < 0.5 && Math.random() < dt * (frac < 0.25 ? 9 : 4)) this.fx.trail('smoke', toX(e.x) + (Math.random() - 0.5) * 1.6, h, toZ(e.y) + (Math.random() - 0.5) * 1.2);
           if (frac < 0.25 && Math.random() < dt * 10) this.fx.trail('fire', toX(e.x) + (Math.random() - 0.5) * 1.4, h - 0.3, toZ(e.y) + (Math.random() - 0.5) * 1.0);
         }
@@ -536,6 +566,7 @@ export class Renderer3D implements BattleRenderer {
       let v = this.units.get(e.id);
       if (!v) {
         v = new UnitView(e, this.layer);
+        this.noteShared(v.inst.mesh);
         const src = this.pendingSpawn.get(e.id);
         if (src === 'card' || src === 'barrel') v.dropT = 0;
         else if (src === 'spawner' || src === 'death') v.popT = 0;
@@ -640,8 +671,8 @@ export class Renderer3D implements BattleRenderer {
   }
 
   private heightOfSource(unit: string): number {
-    if (unit === 'princess') return 2.6;
-    if (unit === 'king') return 3.1;
+    if (unit === 'princess') return 3.6;
+    if (unit === 'king') return 2.95;
     const u = UNITS[unit];
     if (!u) return 0.8;
     if (u.stats.flying) return (unit === 'baby_dragon' ? 1.4 : 1.0) + 0.5;
@@ -655,10 +686,19 @@ export class Renderer3D implements BattleRenderer {
       live.add(p.id);
       let v = this.projs.get(p.id);
       if (!v) {
-        const mesh = makeProjectileMesh(p.visual);
+        const mesh = this.projMesh(p.visual);
         this.layer.add(mesh);
         const total = Math.max(0.1, Math.hypot(p.tx - p.sx, p.ty - p.sy));
-        v = { mesh, sx: p.sx, sz: p.sy, sh: this.heightOfSource(p.source), total, last: new Vector3(toX(p.x), 1, toZ(p.y)) };
+        // 國王塔有左右兩座砲台：從靠目標那一側的砲口飛出（模型 ±1.38、砲口往前 1.88；己方塔模型轉了 180°）
+        let ox = 0;
+        let oz = 0;
+        if (p.source === 'king') {
+          const facing = p.team === 1 ? 1 : -1;
+          const side = (p.tx - p.sx) * facing >= 0 ? 1 : -1;
+          ox = side * 1.38 * facing;
+          oz = 1.88 * facing;
+        }
+        v = { mesh, sx: p.sx, sz: p.sy, sh: this.heightOfSource(p.source), total, last: new Vector3(toX(p.x) + ox, 1, toZ(p.y) + oz), ox, oz };
         this.projs.set(p.id, v);
       }
       const target = game.get(p.targetId);
@@ -666,7 +706,7 @@ export class Renderer3D implements BattleRenderer {
       const done = Math.hypot(p.x - p.sx, p.y - p.sy);
       const f = Math.min(1, done / Math.max(0.1, done + Math.hypot(p.tx - p.x, p.ty - p.y)));
       const h = v.sh + (th - v.sh) * f + p.arc * 4 * f * (1 - f);
-      const pos = new Vector3(toX(p.x), h, toZ(p.y));
+      const pos = new Vector3(toX(p.x) + v.ox * (1 - f), h, toZ(p.y) + v.oz * (1 - f));
       const dir = pos.clone().sub(v.last);
       v.mesh.position.copy(pos);
       if (dir.lengthSq() > 1e-6) v.mesh.lookAt(pos.clone().add(dir));
@@ -695,11 +735,11 @@ export class Renderer3D implements BattleRenderer {
           const m = new Mesh(this.fireballGeo, this.fireballMat);
           m.add(new Mesh(this.fireballCoreGeo, this.fireballCoreMat));
           meshes.push(m);
-        } else if (s.cardId === 'rocket') meshes.push(makeProjectileMesh('rocket'));
-        else if (s.cardId === 'goblin_barrel') meshes.push(makeProjectileMesh('barrel'));
+        } else if (s.cardId === 'rocket') meshes.push(this.projMesh('rocket'));
+        else if (s.cardId === 'goblin_barrel') meshes.push(this.projMesh('barrel'));
         else if (s.cardId === 'arrows') {
           for (let i = 0; i < 10; i++) {
-            const m = makeProjectileMesh('arrow');
+            const m = this.projMesh('arrow');
             m.userData.off = [(Math.random() - 0.5) * 2.6, (Math.random() - 0.5) * 0.8, (Math.random() - 0.5) * 2.2];
             meshes.push(m);
           }
@@ -775,7 +815,7 @@ export class Renderer3D implements BattleRenderer {
       liveR.add(r.id);
       let m = this.logs.get(r.id);
       if (!m) {
-        m = makeProjectileMesh('log');
+        m = this.projMesh('log');
         this.layer.add(m);
         this.logs.set(r.id, m);
       }
@@ -796,7 +836,7 @@ export class Renderer3D implements BattleRenderer {
       liveB.add(b.id);
       let m = this.bombs.get(b.id);
       if (!m) {
-        m = makeProjectileMesh('gsbomb');
+        m = this.projMesh('gsbomb');
         m.material = this.bombMat.clone();
         m.scale.setScalar(b.unit === 'bomb_blimp' ? 0.6 : 1);
         this.layer.add(m);

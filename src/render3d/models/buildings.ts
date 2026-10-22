@@ -78,88 +78,210 @@ export function buildTombstone(team: TeamPal): ModelAsset {
 
 // ───────── 防禦塔 ─────────
 
-/** 側塔：3×3 石塔、隊伍色屋簷，塔頂一名原創弩手守衛。 */
+const GOLD = '#f2b233';
+const GOLD_D = '#c98a1a';
+
+/** 上窄下寬的塔身：w 為底寬，taper 為頂寬比例；回傳某高度的半寬。 */
+function towerBody(k: Kit, w: number, y0: number, h: number, taper: number, color: string, z = 0): (y: number) => number {
+  k.frustum(w, h, w, taper, { at: [0, y0 + h / 2, z], color });
+  return (y: number) => (w / 2) * (1 - (1 - taper) * Math.min(1, Math.max(0, (y - y0) / h)));
+}
+
+/** 石磚層：每層一道淺溝，四角交錯的角石。 */
+function masonry(k: Kit, half: (y: number) => number, ys: number[], courseH: number, z = 0): void {
+  ys.forEach((y, i) => {
+    const hw = half(y) + 0.015;
+    k.box(hw * 2, 0.045, hw * 2, { at: [0, y, z], color: STONE_D });
+    // 角石：長短交錯，比牆面略突出
+    const cy = y + courseH / 2;
+    const ch = half(cy);
+    const long = i % 2 === 0;
+    for (const [sx, sz] of [[1, 1], [1, -1], [-1, 1], [-1, -1]]) {
+      k.box(long ? 0.5 : 0.32, courseH - 0.06, long ? 0.32 : 0.5, {
+        at: [sx * (ch - (long ? 0.2 : 0.11)), cy, z + sz * (ch - (long ? 0.11 : 0.2))], color: STONE_L,
+      });
+    }
+  });
+}
+
+/** 塔頂外挑的胸牆：托石、牆、城垛。 */
+function parapet(k: Kit, hw: number, y: number, merlons: number, wallH: number, z = 0): void {
+  const n = merlons * 2 + 1;
+  // 托石
+  for (let i = 0; i < n; i++) {
+    const t = -hw + 0.18 + (i * (hw * 2 - 0.36)) / (n - 1);
+    for (const s of [-1, 1]) {
+      k.box(0.16, 0.2, 0.2, { at: [t, y - 0.1, z + s * (hw - 0.04)], color: STONE_D });
+      k.box(0.2, 0.2, 0.16, { at: [s * (hw - 0.04), y - 0.1, z + t], color: STONE_D });
+    }
+  }
+  k.box(hw * 2 + 0.12, 0.12, hw * 2 + 0.12, { at: [0, y + 0.06, z], color: STONE_D });
+  for (const s of [-1, 1]) {
+    k.box(hw * 2 + 0.1, wallH, 0.24, { at: [0, y + 0.12 + wallH / 2, z + s * (hw - 0.07)], color: STONE });
+    k.box(0.24, wallH, hw * 2 + 0.1, { at: [s * (hw - 0.07), y + 0.12 + wallH / 2, z], color: STONE });
+  }
+  // 城垛（每邊 merlons 個，含四角）
+  const top = y + 0.12 + wallH;
+  const step = (hw * 2 - 0.3) / (merlons - 1);
+  for (let i = 0; i < merlons; i++) {
+    const t = -hw + 0.15 + i * step;
+    for (const s of [-1, 1]) {
+      k.box(0.3, 0.26, 0.28, { at: [t, top + 0.13, z + s * (hw - 0.07)], color: STONE_L });
+      if (i > 0 && i < merlons - 1) k.box(0.28, 0.26, 0.3, { at: [s * (hw - 0.07), top + 0.13, z + t], color: STONE_L });
+    }
+  }
+}
+
+/** 隊伍色長旗：從 y 往下垂 h，下緣剪成燕尾。 */
+function banner(k: Kit, x: number, y: number, z: number, w: number, h: number, color: string, trim: string, face: 1 | -1): void {
+  k.box(w + 0.12, 0.08, 0.1, { at: [x, y, z], color: WOOD_D });
+  k.box(w, h, 0.05, { at: [x, y - h / 2, z + face * 0.02], color });
+  k.box(w, 0.06, 0.06, { at: [x, y - 0.12, z + face * 0.03], color: trim });
+  for (const sx of [-1, 1]) {
+    k.cone(w / 4, 0.28, { at: [x + sx * (w / 4), y - h - 0.13, z + face * 0.02], rot: [Math.PI, 0, 0], scale: [1, 1, 0.2], color }, 3);
+  }
+}
+
+/** 原創的太陽紋章（金色圓盤＋八道光芒），貼在牆面或旗面上。 */
+function sunBadge(k: Kit, x: number, y: number, z: number, size: number): void {
+  k.cyl(0.17 * size, 0.17 * size, 0.06, { at: [x, y, z], rot: [Math.PI / 2, 0, 0], color: GOLD }, 12);
+  k.cyl(0.09 * size, 0.09 * size, 0.07, { at: [x, y, z + 0.01], rot: [Math.PI / 2, 0, 0], color: '#fff2b0' }, 10);
+  for (let i = 0; i < 8; i++) {
+    const a = (i / 8) * Math.PI * 2;
+    const r = (i % 2 ? 0.24 : 0.29) * size;
+    k.cone(0.055 * size, (i % 2 ? 0.1 : 0.15) * size, { at: [x + Math.sin(a) * r, y + Math.cos(a) * r, z], rot: [0, 0, -a], scale: [1, 1, 0.3], color: GOLD_D }, 3);
+  }
+}
+
+/** 圓形砲台：外圈城垛，頂部開口（大砲另外綁在砲台骨頭上）。 */
+function bastion(k: Kit, x: number, z: number, r: number, h: number): void {
+  k.cyl(r * 0.94, r, h, { at: [x, 0.3 + h / 2, z], color: STONE_L }, 14);
+  for (const y of [0.9, 1.5, 2.1]) if (y < h) k.cyl(r * 0.99, r * 0.99, 0.05, { at: [x, y, z], color: STONE_D }, 14);
+  k.cyl(r * 1.1, r * 0.98, 0.16, { at: [x, 0.3 + h + 0.02, z], color: STONE_D }, 14);
+  for (let i = 0; i < 7; i++) {
+    const a = (i / 7) * Math.PI * 2 + 0.2;
+    k.box(0.24, 0.26, 0.2, { at: [x + Math.sin(a) * r * 0.98, 0.3 + h + 0.23, z + Math.cos(a) * r * 0.98], rot: [0, a, 0], color: STONE });
+  }
+}
+
+/** 側塔：3×3 暖色砂岩瞭望塔，上窄下寬、外挑托石城垛；正面燕尾長旗配太陽紋章，背面拱門與隊伍色雨遮；塔頂一名放大的原創弩手守衛。 */
 export function buildPrincessTower(team: TeamPal): ModelAsset {
   const k = new Kit();
   const root = k.addBone('root', -1, [0, 0, 0]);
-  const top = k.addBone('top', root, [0, 2.15, 0]);
+  const FLOOR = 2.86;
+  const top = k.addBone('top', root, [0, FLOOR, 0]);
   k.bone = root;
-  // 台座與塔身
-  k.box(3.0, 0.3, 3.0, { at: [0, 0.15, 0], color: STONE_D });
-  k.box(2.7, 1.55, 2.7, { at: [0, 1.0, 0], color: STONE });
-  // 石磚紋路（橫條）
-  for (const y of [0.55, 1.0, 1.45]) k.box(2.74, 0.05, 2.74, { at: [0, y, 0], color: STONE_D });
-  // 四角柱
-  for (const [sx, sz] of [[1, 1], [1, -1], [-1, 1], [-1, -1]]) {
-    k.box(0.5, 1.9, 0.5, { at: [sx * 1.27, 1.0, sz * 1.27], color: STONE_L });
-    k.cone(0.42, 0.55, { at: [sx * 1.27, 2.22, sz * 1.27], rot: [0, Math.PI / 4, 0], color: team.main }, 4);
-  }
-  // 正面拱門與隊伍色布幔
-  k.box(0.8, 0.95, 0.1, { at: [0, 0.78, 1.36], color: '#4a3a2e' });
-  k.cyl(0.4, 0.4, 0.1, { at: [0, 1.25, 1.36], rot: [Math.PI / 2, 0, 0], color: '#4a3a2e' }, 12);
-  k.box(0.7, 0.9, 0.06, { at: [0.85, 1.25, 1.39], color: team.main });
-  k.box(0.7, 0.9, 0.06, { at: [-0.85, 1.25, 1.39], color: team.main });
-  k.cone(0.35, 0.25, { at: [0.85, 0.7, 1.39], rot: [Math.PI, 0, 0], scale: [1, 1, 0.15], color: team.main }, 3);
-  k.cone(0.35, 0.25, { at: [-0.85, 0.7, 1.39], rot: [Math.PI, 0, 0], scale: [1, 1, 0.15], color: team.main }, 3);
-  // 頂部平台與城垛
-  k.box(2.9, 0.22, 2.9, { at: [0, 1.88, 0], color: STONE_D });
-  for (let i = 0; i < 4; i++) {
-    for (const s of [-1, 1]) {
-      const t = -0.75 + i * 0.5;
-      k.box(0.3, 0.28, 0.24, { at: [t, 2.1, s * 1.3], color: STONE_L });
-      k.box(0.24, 0.28, 0.3, { at: [s * 1.3, 2.1, t], color: STONE_L });
-    }
-  }
-  // 守衛（原創弩手）
+  k.box(2.95, 0.18, 2.95, { at: [0, 0.09, 0], color: STONE_D });
+  k.box(2.72, 0.14, 2.72, { at: [0, 0.25, 0], color: STONE });
+  const half = towerBody(k, 2.5, 0.32, 2.36, 0.87, STONE);
+  masonry(k, half, [0.76, 1.2, 1.64, 2.08, 2.52], 0.44);
+  parapet(k, 1.18, 2.68, 3, 0.3);
+  k.box(2.05, 0.06, 2.05, { at: [0, FLOOR - 0.02, 0], color: '#8f8576' });
+  for (const t of [-0.5, 0, 0.5]) k.box(2.0, 0.065, 0.03, { at: [0, FLOOR - 0.01, t], color: '#7a7264' });
+  // 正面（面向對手）：燕尾長旗＋太陽紋章、兩側箭孔
+  const zf = half(1.6) + 0.01;
+  banner(k, 0, 2.56, zf, 0.78, 1.3, team.main, GOLD, 1);
+  sunBadge(k, 0, 1.75, zf + 0.06, 1.2);
+  for (const sx of [-1, 1]) k.box(0.1, 0.42, 0.06, { at: [sx * 0.76, 1.6, half(1.6) + 0.01], color: '#2e2620' });
+  // 背面（己方看得到）：拱形木門、門楣隊伍色盾徽、兩側小長旗、上方窗
+  const zb = -(half(0.8) + 0.01);
+  k.box(0.74, 0.86, 0.08, { at: [0, 0.75, zb], color: WOOD });
+  k.cyl(0.37, 0.37, 0.08, { at: [0, 1.18, zb], rot: [Math.PI / 2, 0, 0], color: WOOD }, 12);
+  k.box(0.06, 1.15, 0.1, { at: [0, 0.86, zb - 0.02], color: WOOD_D });
+  for (const y of [0.55, 0.98]) k.box(0.76, 0.06, 0.1, { at: [0, y, zb - 0.02], color: '#4a4a52' });
+  k.torus(0.41, 0.06, { at: [0, 1.18, zb - 0.02], color: STONE_L }, 12, Math.PI);
+  const zs = -(half(1.75) + 0.01);
+  k.cyl(0.2, 0.2, 0.06, { at: [0, 1.75, zs - 0.02], rot: [Math.PI / 2, 0, 0], color: team.main }, 10);
+  k.cone(0.2, 0.22, { at: [0, 1.58, zs - 0.02], rot: [Math.PI, 0, 0], scale: [1, 1, 0.3], color: team.main }, 3);
+  k.sphere(0.07, { at: [0, 1.76, zs - 0.06], color: GOLD }, 6);
+  for (const sx of [-1, 1]) banner(k, sx * 0.78, 2.56, -(half(2.2) + 0.01), 0.36, 0.7, team.main, GOLD, -1);
+  k.box(0.3, 0.34, 0.06, { at: [0, 2.3, -(half(2.3) + 0.01)], color: '#2e2620' });
+  // 側面箭孔
+  for (const sx of [-1, 1]) k.box(0.06, 0.42, 0.1, { at: [sx * (half(1.6) + 0.01), 1.6, 0], color: '#2e2620' });
+  // 塔頂後方的隊伍色三角旗
+  k.cyl(0.035, 0.035, 1.25, { at: [0.72, FLOOR + 0.62, -0.72], color: WOOD_D }, 6);
+  k.cone(0.22, 0.6, { at: [0.72 + 0.3, FLOOR + 1.08, -0.72], rot: [0, 0, -Math.PI / 2], scale: [1, 1, 0.12], color: team.main }, 3);
+  k.sphere(0.06, { at: [0.72, FLOOR + 1.27, -0.72], color: GOLD }, 6);
+  // 守衛（原創弩手：大頭、兜帽、隊伍色斗篷）
   const guard: HumanoidSpec = {
-    height: 0.9, skin: '#f2c9a0', face: 'dot', hair: { style: 'bob', color: '#6b3f22' }, torso: team.main, torso2: '#f2b233', legs: '#5a4a3a', boots: '#3a2a1e',
-    hat: 'cap', hatColor: team.dark, hatColor2: '#f4f1e8', weapon: 'crossbow',
+    height: 1.38, build: 1.12, headScale: 1.12, skin: '#f2c9a0', face: 'dot', hair: { style: 'bob', color: '#6b3f22' }, hat: 'hood', hatColor: team.main,
+    torso: team.main, torso2: GOLD_D, legs: '#5a4a3a', boots: '#3a2a1e', arms: team.dark, cape: true, weapon: 'crossbow',
   };
-  addHumanoid(k, guard, team, top, [0, 2.0, 0.1]);
-  return k.build(3.2);
+  addHumanoid(k, guard, team, top, [0, FLOOR, 0.12]);
+  return k.build(4.3);
 }
 
-/** 國王塔：4×4 城堡，正面金色王冠徽章，塔頂大砲與原創指揮官（喚醒前在打盹）。 */
+/** 國王塔：4×4 原創城堡——中央主堡（指揮官站在頂上）、前方兩座圓形砲台各架一門砲、後方兩座尖頂角樓，正面城牆有城門與長旗。 */
 export function buildKingTower(team: TeamPal): ModelAsset {
   const k = new Kit();
   const root = k.addBone('root', -1, [0, 0, 0]);
-  const cannonBone = k.addBone('cannon', root, [0, 2.75, 0.3]);
+  const FLOOR = 3.0;
+  const BX = 1.38;
+  const BZ = 1.12;
+  const BH = 2.2;
+  const cannonL = k.addBone('cannon', root, [BX, 0.3 + BH + 0.2, BZ]);
+  const cannonR = k.addBone('cannon2', root, [-BX, 0.3 + BH + 0.2, BZ]);
   k.bone = root;
-  k.box(4.0, 0.35, 4.0, { at: [0, 0.17, 0], color: STONE_D });
-  k.box(3.7, 2.05, 3.7, { at: [0, 1.3, 0], color: STONE });
-  for (const y of [0.7, 1.25, 1.8]) k.box(3.74, 0.06, 3.74, { at: [0, y, 0], color: STONE_D });
-  for (const [sx, sz] of [[1, 1], [1, -1], [-1, 1], [-1, -1]]) {
-    k.cyl(0.45, 0.5, 2.6, { at: [sx * 1.75, 1.3, sz * 1.75], color: STONE_L }, 10);
-    k.cone(0.55, 0.75, { at: [sx * 1.75, 2.95, sz * 1.75], color: team.main }, 10);
-    k.sphere(0.1, { at: [sx * 1.75, 3.38, sz * 1.75], color: '#f2b233' }, 6);
+  k.box(4.05, 0.18, 4.05, { at: [0, 0.09, 0], color: STONE_D });
+  k.box(3.85, 0.14, 3.85, { at: [0, 0.25, 0], color: STONE });
+  // 後方尖頂角樓
+  for (const sx of [-1, 1]) {
+    const x = sx * 1.52;
+    const z = -1.5;
+    k.cyl(0.4, 0.46, 3.25, { at: [x, 0.3 + 1.62, z], color: STONE_L }, 12);
+    for (const y of [1.1, 2.0, 2.9]) k.cyl(0.445, 0.445, 0.05, { at: [x, y, z], color: STONE_D }, 12);
+    k.cyl(0.52, 0.48, 0.14, { at: [x, 3.6, z], color: STONE_D }, 12);
+    k.cone(0.58, 0.95, { at: [x, 4.14, z], color: team.main }, 12);
+    k.cone(0.6, 0.14, { at: [x, 3.72, z], color: team.dark }, 12);
+    k.sphere(0.1, { at: [x, 4.66, z], color: GOLD }, 6);
   }
-  // 正面隊伍色布幔與王冠徽章
-  k.box(1.5, 1.4, 0.08, { at: [0, 1.35, 1.88], color: team.main });
-  k.cone(0.75, 0.45, { at: [0, 0.48, 1.88], rot: [Math.PI, 0, 0], scale: [1, 1, 0.1], color: team.main }, 3);
-  k.box(0.8, 0.28, 0.12, { at: [0, 1.25, 1.95], color: '#f2b233' });
-  for (const sx of [-0.3, 0, 0.3]) k.cone(0.12, 0.3, { at: [sx, 1.5, 1.95], color: '#f2b233' }, 4);
-  k.box(1.6, 0.12, 0.12, { at: [0, 2.08, 1.9], color: '#f2b233' });
-  // 頂部平台與城垛
-  k.box(3.9, 0.25, 3.9, { at: [0, 2.42, 0], color: STONE_D });
-  for (let i = 0; i < 5; i++) {
-    for (const s of [-1, 1]) {
-      const t = -1.2 + i * 0.6;
-      k.box(0.36, 0.34, 0.3, { at: [t, 2.7, s * 1.78], color: STONE_L });
-      k.box(0.3, 0.34, 0.36, { at: [s * 1.78, 2.7, t], color: STONE_L });
-    }
+  // 中央主堡（往後退，讓出前方砲台）
+  const KZ = -0.3;
+  const half = towerBody(k, 2.55, 0.32, 2.5, 0.9, STONE, KZ);
+  masonry(k, half, [0.8, 1.28, 1.76, 2.24], 0.48, KZ);
+  parapet(k, 1.24, 2.82, 4, 0.24, KZ);
+  k.box(2.2, 0.06, 2.2, { at: [0, FLOOR - 0.02, KZ], color: '#9a7a52' });
+  // 前方矮城牆與城門（兩座砲台之間）
+  const wz = BZ + 0.08;
+  k.box(1.9, 1.45, 0.4, { at: [0, 0.3 + 0.72, wz], color: STONE });
+  for (let i = 0; i < 4; i++) k.box(0.28, 0.22, 0.4, { at: [-0.69 + i * 0.46, 0.3 + 1.45 + 0.11, wz], color: STONE_L });
+  k.box(0.84, 0.9, 0.06, { at: [0, 0.75, wz + 0.2], color: '#3a2a20' });
+  k.cyl(0.42, 0.42, 0.06, { at: [0, 1.2, wz + 0.2], rot: [Math.PI / 2, 0, 0], color: '#3a2a20' }, 12);
+  for (let i = 0; i < 5; i++) k.box(0.05, 1.22, 0.05, { at: [-0.3 + i * 0.15, 0.9, wz + 0.24], color: '#5d636e' });
+  for (const y of [0.58, 1.0]) k.box(0.8, 0.05, 0.05, { at: [0, y, wz + 0.24], color: '#5d636e' });
+  // 主堡正面長旗與太陽紋章（在城牆上方露出）
+  const zf = KZ + half(2.2) + 0.01;
+  banner(k, 0, 2.72, zf, 1.05, 0.72, team.main, GOLD, 1);
+  sunBadge(k, 0, 2.28, zf + 0.06, 1.2);
+  // 主堡背面（己方看得到）：城門、隊伍色長旗
+  const zb = KZ - (half(0.95) + 0.01);
+  k.box(1.0, 1.1, 0.08, { at: [0, 0.87, zb], color: WOOD });
+  k.cyl(0.5, 0.5, 0.08, { at: [0, 1.42, zb], rot: [Math.PI / 2, 0, 0], color: WOOD }, 14);
+  k.box(0.06, 1.6, 0.1, { at: [0, 1.12, zb - 0.02], color: WOOD_D });
+  for (const y of [0.6, 1.16]) k.box(1.02, 0.07, 0.1, { at: [0, y, zb - 0.02], color: '#4a4a52' });
+  k.torus(0.54, 0.06, { at: [0, 1.42, zb - 0.02], color: STONE_L }, 14, Math.PI);
+  banner(k, 0, 2.72, KZ - (half(2.4) + 0.01), 0.85, 0.5, team.main, GOLD, -1);
+  // 前方兩座砲台
+  for (const sx of [-1, 1]) bastion(k, sx * BX, BZ, 0.56, BH);
+  // 兩門砲（喚醒時抬起、朝目標轉；靠目標那一側的砲開火）
+  for (const [bone, sx] of [[cannonL, 1], [cannonR, -1]] as const) {
+    k.bone = bone;
+    const x = sx * BX;
+    const y = 0.3 + BH + 0.2;
+    k.cyl(0.32, 0.36, 0.16, { at: [x, y - 0.06, BZ], color: WOOD_D }, 10);
+    k.cyl(0.17, 0.23, 0.95, { at: [x, y + 0.16, BZ + 0.3], rot: [Math.PI / 2 - 0.1, 0, 0], color: '#3a3530' }, 12);
+    k.torus(0.19, 0.05, { at: [x, y + 0.21, BZ + 0.76], rot: [-0.1, 0, 0], color: '#b87333' }, 12);
+    k.sphere(0.22, { at: [x, y + 0.12, BZ - 0.12], color: '#3a3530' }, 10);
   }
-  // 大砲（喚醒時抬起）
-  k.bone = cannonBone;
-  k.cyl(0.42, 0.5, 0.3, { at: [0, 2.7, 0.3], color: '#5a3a1e' }, 10);
-  k.cyl(0.24, 0.32, 1.25, { at: [0, 2.95, 0.8], rot: [Math.PI / 2 - 0.12, 0, 0], color: '#30343b' }, 12);
-  k.torus(0.26, 0.06, { at: [0, 3.02, 1.38], rot: [-0.12, 0, 0], color: '#f2b233' }, 12);
-  // 指揮官（原創角色：圓盔、八字鬍、隊伍色披風）
+  k.bone = root;
+  // 指揮官（原創角色：白色長鬍、王族軟帽、隊伍色披風、金色權杖）
   const lord: HumanoidSpec = {
-    height: 1.25, build: 1.2, headScale: 1.05, skin: '#f1c39a', face: 'sleepy', nose: 'ball', mustache: '#e8e2d2', beard: { color: '#e8e2d2', size: 0.7 },
-    torso: '#f2b233', torso2: team.dark, legs: '#5a4a3a', boots: '#3a2a1e', hat: 'crest', hatColor: '#d9a52b', hatColor2: team.main, cape: true, belly: true,
+    height: 1.7, build: 1.25, headScale: 1.12, skin: '#f1c39a', face: 'sleepy', nose: 'ball', mustache: '#f4f1e8', beard: { color: '#f4f1e8', size: 1.0 },
+    torso: team.dark, torso2: GOLD, apron: team.main, legs: '#4a3a3a', boots: '#3a2a1e', arms: team.main, hands: '#f4f1e8', hat: 'royal', hatColor2: team.main,
+    cape: true, belly: true, weapon: 'scepter', pads: true,
   };
-  addHumanoid(k, lord, team, root, [0, 2.52, -0.75]);
-  return k.build(4.0);
+  addHumanoid(k, lord, team, root, [0, FLOOR, KZ + 0.15]);
+  return k.build(4.75);
 }
 
 /** 倒塌後的瓦礫堆。 */

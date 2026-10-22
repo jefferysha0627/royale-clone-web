@@ -166,6 +166,8 @@ export function getAsset(unit: string, team: 0 | 1): ModelAsset {
   let a = cache.get(key);
   if (!a) {
     a = buildAsset(unit, team);
+    // 共用、常駐的幾何（不隨單位消失而釋放）；GPU 資源統計時要和真正的洩漏分開
+    a.geometry.userData.shared = true;
     cache.set(key, a);
   }
   return a;

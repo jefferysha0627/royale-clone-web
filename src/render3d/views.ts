@@ -42,7 +42,7 @@ export class UnitView {
     this.inst = instantiate(asset, this.mat);
     this.yaw = yawOf(e.facing);
     this.hover = this.prof.hover ?? 0;
-    this.scale = e.kind === 'troop' ? (this.height < 1.1 ? 1.4 : this.height > 1.8 ? 1.12 : 1.3) : 1;
+    this.scale = e.kind === 'troop' ? (this.height < 1.1 ? 1.6 : this.height > 1.8 ? 1.26 : 1.48) : 1;
     parent.add(this.inst.mesh);
     if (e.kind === 'building') {
       // 建築固定朝向敵方
@@ -268,6 +268,7 @@ function projGeometry(kind: string): BufferGeometry {
       k.sphere(0.16, { color: '#ffffff' }, 8);
   }
   g = k.build(1).geometry;
+  g.userData.shared = true;
   projGeoCache.set(kind, g);
   return g;
 }
@@ -282,6 +283,7 @@ const GLOW: Record<string, { color: string; r: number; trail: 'fire' | 'magic' |
 };
 
 const glowGeo = new SphereGeometry(1, 10, 8);
+glowGeo.userData.shared = true;
 const sharedLambert = new MeshLambertMaterial({ vertexColors: true });
 const glowMats = new Map<string, MeshBasicMaterial>();
 

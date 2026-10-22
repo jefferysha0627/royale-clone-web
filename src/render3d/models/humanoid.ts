@@ -5,9 +5,9 @@ import { Kit, type ModelAsset, type V3 } from '../kit';
 // 所有角色外觀皆為本作原創的通用奇幻造型。
 
 export type Hat =
-  | 'none' | 'helmet' | 'horned' | 'wizard' | 'hood' | 'cap' | 'band' | 'iron' | 'winged' | 'skull' | 'bandana' | 'witch' | 'crest' | 'goggles';
+  | 'none' | 'helmet' | 'horned' | 'wizard' | 'hood' | 'cap' | 'band' | 'iron' | 'winged' | 'skull' | 'bandana' | 'witch' | 'crest' | 'goggles' | 'royal';
 export type Weapon =
-  | 'none' | 'sword' | 'greatsword' | 'axe2' | 'club' | 'spear' | 'musket' | 'staff' | 'skullstaff' | 'bow' | 'bomb' | 'lance' | 'mace' | 'crossbow' | 'cleaver';
+  | 'none' | 'sword' | 'greatsword' | 'axe2' | 'club' | 'spear' | 'musket' | 'staff' | 'skullstaff' | 'bow' | 'bomb' | 'lance' | 'mace' | 'crossbow' | 'cleaver' | 'scepter';
 export type Face = 'dot' | 'angry' | 'skull' | 'visor' | 'glow' | 'sleepy';
 
 export interface HumanoidSpec {
@@ -162,6 +162,30 @@ export function addHumanoid(k: Kit, s: HumanoidSpec, team: { main: string; dark:
       if (face === 'angry') k.box(headR * 0.36, headR * 0.08, 0.04, { at: [ox + sx * eyeX, eyeY + headR * 0.22, fz + 0.01], rot: [0, 0, sx * -0.42], color: s.hair?.color ?? '#3a2a1e' });
     }
   }
+  // 眉毛與嘴巴：Q 版角色的表情主要靠這兩個（有大鬍子的角色嘴巴被蓋住就不畫）
+  if (face === 'dot' || face === 'sleepy') {
+    const browCol = s.hair?.color ?? s.beard?.color ?? shade(s.skin, -0.55);
+    for (const sx of [1, -1]) {
+      k.box(headR * 0.3, headR * 0.07, 0.035, {
+        at: [ox + sx * eyeX, eyeY + headR * (face === 'sleepy' ? 0.17 : 0.27), oz + headR * 0.9], rot: [-0.35, 0, sx * (face === 'sleepy' ? 0.28 : -0.12)], color: browCol,
+      });
+    }
+  }
+  if (face !== 'skull' && face !== 'visor' && face !== 'glow' && !(s.beard && (s.beard.size ?? 1) >= 0.7)) {
+    const my = eyeY - headR * (s.mustache ? 0.5 : 0.44);
+    // 嘴巴貼在球面上：臉的下半部球面比眼睛那一圈更靠後，不能直接用 fz
+    const mz = oz + headR * 0.95;
+    if (face === 'angry') {
+      // 咬牙：深色嘴型＋一排白牙
+      k.box(headR * 0.42, headR * 0.15, 0.03, { at: [ox, my, mz], color: '#3a1a1a' });
+      k.box(headR * 0.36, headR * 0.06, 0.035, { at: [ox, my + headR * 0.025, mz + 0.004], color: '#f4f1e8' });
+    } else if (face === 'sleepy') {
+      k.sphere(headR * 0.08, { at: [ox, my, mz], scale: [1, 0.8, 0.5], color: '#5a2a2a' }, 6);
+    } else {
+      // 微笑：半圓弧
+      k.torus(headR * 0.15, headR * 0.035, { at: [ox, my + headR * 0.07, mz], rot: [0, 0, Math.PI], color: '#5a2a2a' }, 8, Math.PI);
+    }
+  }
   const nose = s.nose ?? 'ball';
   if (face !== 'skull' && face !== 'visor') {
     if (nose === 'ball') k.sphere(headR * 0.15, { at: [ox, eyeY - headR * 0.2, fz + headR * 0.08], color: shade(s.skin, -0.12) }, 8);
@@ -260,6 +284,14 @@ function addHat(k: Kit, hat: Hat, s: HumanoidSpec, ox: number, hy: number, oz: n
     case 'skull':
       k.shell(r * 1.06, { at: [ox, hy + r * 0.08, oz - r * 0.05], rot: [-0.45, 0, 0], color: c }, Math.PI * 0.45);
       break;
+    case 'royal':
+      // 原創的王族軟帽：白色毛皮帽緣、隊伍色天鵝絨帽頂、金色細環與寶石（不是尖齒王冠）
+      k.torus(r * 0.98, r * 0.17, { at: [ox, hy + r * 0.62, oz - r * 0.05], rot: [Math.PI / 2 - 0.2, 0, 0], color: '#f4f1e8' }, 16);
+      k.sphere(r * 0.92, { at: [ox, hy + r * 1.02, oz - r * 0.12], scale: [1, 0.72, 1], color: c2 }, 14);
+      k.torus(r * 0.86, r * 0.05, { at: [ox, hy + r * 0.82, oz - r * 0.08], rot: [Math.PI / 2 - 0.2, 0, 0], color: '#f2b233' }, 16);
+      k.sphere(r * 0.17, { at: [ox, hy + r * 1.55, oz - r * 0.2], color: '#f2b233' }, 8);
+      k.gem(r * 0.15, { at: [ox, hy + r * 0.78, oz + r * 0.86], color: '#7fd6ff' });
+      break;
     case 'goggles':
       k.torus(r * 0.98, r * 0.09, { at: [ox, hy + r * 0.32, oz], rot: [Math.PI / 2 - 0.2, 0, 0], color: '#4a3a2a' }, 16);
       for (const sx of [1, -1]) k.cyl(r * 0.22, r * 0.22, r * 0.18, { at: [ox + sx * r * 0.32, hy + r * 0.45, oz + r * 0.85], rot: [Math.PI / 2 - 0.3, 0, 0], color: '#c9a24a' }, 10);
@@ -338,6 +370,12 @@ function addWeapon(k: Kit, w: Weapon, h: V3, armR: number, H: number, team: { ma
       k.sphere(0.14 * H, { at: [x, y + 0.08 * H, z + 0.08], color: '#2a2c33', bone: armR }, 10);
       k.cyl(0.02 * H, 0.02 * H, 0.08 * H, { at: [x, y + 0.24 * H, z + 0.08], color: '#c9a24a', bone: armR }, 5);
       k.sphere(0.035 * H, { at: [x, y + 0.29 * H, z + 0.08], color: '#ffd36b', bone: armR }, 6);
+      break;
+    case 'scepter':
+      k.cyl(0.028 * H, 0.028 * H, 0.62 * H, { at: [x, y + 0.24 * H, z + 0.05], color: gold, bone: armR }, 6);
+      k.sphere(0.085 * H, { at: [x, y + 0.6 * H, z + 0.05], color: gold, bone: armR }, 10);
+      k.gem(0.07 * H, { at: [x, y + 0.71 * H, z + 0.05], color: team.light, bone: armR });
+      k.torus(0.07 * H, 0.018 * H, { at: [x, y + 0.5 * H, z + 0.05], rot: [Math.PI / 2, 0, 0], color: gold, bone: armR }, 10);
       break;
     case 'mace':
       k.cyl(0.03 * H, 0.03 * H, 0.42 * H, { at: [x, y + 0.18 * H, z + 0.05], color: wood, bone: armR }, 6);

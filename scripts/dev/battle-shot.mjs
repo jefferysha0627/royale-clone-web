@@ -19,6 +19,7 @@ try {
     page.on('pageerror', (e) => errors.push(e.message));
     await page.goto(`http://localhost:5199/?test=1&seed=${seed}${extra}`);
     await page.waitForSelector('#btn-play');
+    await page.evaluate(() => window.__btd.skipIntro(true));
     await page.click('#btn-play');
     if (await page.isVisible('#btn-howto-ok')) await page.click('#btn-howto-ok');
     await page.waitForTimeout(800);
@@ -28,7 +29,7 @@ try {
       for (let i = 0; i < Number(s) * 2; i++) {
         b.autoplay(0.5);
         const g = b.game();
-        if (g.entities.filter((e) => e.alive && e.kind !== 'tower').length >= 9 || g.phase === 'ended') break;
+        if (g.entities.filter((e) => e.alive && e.kind !== 'tower').length >= 14 || g.phase === 'ended') break;
       }
     }, secs);
     await page.waitForTimeout(1200);

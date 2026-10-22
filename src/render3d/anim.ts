@@ -282,19 +282,21 @@ function princessTower(inst: ModelInstance, s: AnimState): void {
 
 function kingTower(inst: ModelInstance, s: AnimState): void {
   const b = inst.byName;
-  // 喚醒：大砲從下垂慢慢抬起並轉向目標；指揮官起身
+  // 喚醒：兩門砲從下垂慢慢抬起並轉向目標，靠目標那一側的砲開火後座；指揮官起身、舉權杖下令
   const wake = s.active ? ease(Math.min(1, s.wakeT / 1.6)) : 0;
-  if (b.cannon) {
-    b.cannon.rotation.y = s.aimYaw * wake;
-    const ri = inst.bones.indexOf(b.cannon);
-    const recoil = s.sinceHit < 0.3 ? (1 - s.sinceHit / 0.3) * 0.25 : 0;
-    b.cannon.position.y = inst.rest[ri].y - (1 - wake) * 0.35;
-    b.cannon.position.z = inst.rest[ri].z - recoil;
-    b.cannon.rotation.x = (1 - wake) * 0.35;
+  const side = s.aimYaw >= 0 ? 1 : -1;
+  for (const [bone, sx] of [[b.cannon, 1], [b.cannon2, -1]] as const) {
+    if (!bone) continue;
+    const ri = inst.bones.indexOf(bone);
+    const recoil = sx === side && s.sinceHit < 0.3 ? (1 - s.sinceHit / 0.3) * 0.22 : 0;
+    bone.rotation.set((1 - wake) * 0.35, s.aimYaw * wake, 0);
+    bone.position.y = inst.rest[ri].y - (1 - wake) * 0.12;
+    bone.position.z = inst.rest[ri].z - recoil;
   }
   if (b.hips) b.hips.rotation.y = s.aimYaw * wake * 0.6;
-  rot(b.head, s.active ? Math.sin(s.t * 1.7) * 0.05 : 0.35 + Math.sin(s.t * 1.2) * 0.05, 0, s.active ? 0 : 0.2);
-  rot(b.armL, s.active ? -0.4 - (s.sinceHit < 0.3 ? 0.6 : 0) : 0.1, 0, -0.3);
-  rot(b.armR, s.active ? -0.2 : 0.1, 0, 0.3);
-  rot(b.spine, s.active ? Math.sin(s.t * 2) * 0.03 : 0.25 + Math.sin(s.t * 1.2) * 0.04);
+  const command = s.active && s.sinceHit < 0.45;
+  rot(b.head, s.active ? Math.sin(s.t * 1.7) * 0.05 - 0.12 : 0.35 + Math.sin(s.t * 1.2) * 0.05, 0, s.active ? 0 : 0.2);
+  rot(b.armR, s.active ? (command ? -2.5 : -0.4) : 0.1, 0, command ? 0.35 : 0.2);
+  rot(b.armL, s.active ? -0.25 : 0.1, 0, -0.3);
+  rot(b.spine, s.active ? Math.sin(s.t * 2) * 0.03 - (command ? 0.08 : 0) : 0.25 + Math.sin(s.t * 1.2) * 0.04);
 }

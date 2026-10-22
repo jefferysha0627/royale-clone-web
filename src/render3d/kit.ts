@@ -111,6 +111,17 @@ export class Kit {
     return this.add(new BoxGeometry(w, h, d), o);
   }
 
+  /** 上窄下寬的方台（塔身用）：底面 w×d，頂面縮成 taper 倍。 */
+  frustum(w: number, h: number, d: number, taper: number, o: PartOpts): this {
+    const g = new BoxGeometry(w, h, d);
+    const pos = g.attributes.position;
+    for (let i = 0; i < pos.count; i++) {
+      if (pos.getY(i) > 0) pos.setXYZ(i, pos.getX(i) * taper, pos.getY(i), pos.getZ(i) * taper);
+    }
+    g.computeVertexNormals();
+    return this.add(g, o);
+  }
+
   /** 圓角方塊：以縮放過的低面數球近似（卡通感較方塊柔和）。 */
   blob(w: number, h: number, d: number, o: PartOpts, seg = 10): this {
     const s = o.scale ?? [1, 1, 1];

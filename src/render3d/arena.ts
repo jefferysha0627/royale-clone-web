@@ -237,15 +237,58 @@ export class ArenaView {
         }
       }
     }
-    // 後方石牆（上下兩端）與旗幟
-    for (const sz of [1, -1]) {
-      const wz = sz * (ARENA.height / 2 + 0.35);
+    // 上方（對手後方）：城垛高牆、兩端角樓、隊伍色三角旗，牆後一排樹與遠丘；高牆在場地後面，不會擋到場上單位
+    {
+      const wz = -(ARENA.height / 2 + 0.6);
+      k.box(W + 14, 0.1, 9, { at: [0, -0.06, wz - 4.2], color: '#447f39' });
+      k.box(W + 2.4, 1.15, 0.8, { at: [0, 0.57, wz], color: '#b8ad98' });
+      k.box(W + 2.6, 0.14, 0.92, { at: [0, 1.2, wz], color: '#cfc5b0' });
+      for (let i = 0; i < 21; i++) k.box(0.5, 0.34, 0.8, { at: [-W / 2 - 0.9 + i * 0.99, 1.43, wz], color: i % 2 ? '#c4b9a3' : '#cbc1ab' });
+      for (let i = 0; i < 10; i++) k.box(1.6, 0.05, 0.82, { at: [-W / 2 + 0.2 + i * 2, 0.42 + (i % 2) * 0.36, wz], color: '#a39883' });
+      for (const fx of [-6.5, -2.2, 2.2, 6.5]) {
+        k.cyl(0.05, 0.05, 1.5, { at: [fx, 1.9, wz], color: '#6b4426' }, 5);
+        k.cone(0.2, 0.75, { at: [fx + 0.36, 2.42, wz], rot: [0, 0, -Math.PI / 2], scale: [1, 1, 0.15], color: '#de3b33' }, 3);
+        k.sphere(0.06, { at: [fx, 2.66, wz], color: '#f2b233' }, 5);
+      }
+      for (const sx of [-1, 1]) {
+        const tx = sx * (W / 2 + 1.0);
+        k.cyl(0.95, 1.05, 2.3, { at: [tx, 1.15, wz - 0.2], color: '#c4b9a3' }, 12);
+        for (const y of [0.7, 1.4]) k.cyl(1.02, 1.02, 0.06, { at: [tx, y, wz - 0.2], color: '#a39883' }, 12);
+        k.cyl(1.1, 1.0, 0.18, { at: [tx, 2.38, wz - 0.2], color: '#a39883' }, 12);
+        k.cone(1.2, 1.5, { at: [tx, 3.22, wz - 0.2], color: '#b8423a' }, 12);
+        k.sphere(0.12, { at: [tx, 4.0, wz - 0.2], color: '#f2b233' }, 6);
+        k.box(0.3, 0.45, 0.06, { at: [tx, 1.55, wz + 0.82], color: '#3a2e26' });
+      }
+      // 牆後的樹與遠丘
+      for (let i = 0; i < 16; i++) {
+        const x = -W / 2 - 3 + i * 1.6 + (r() - 0.5) * 0.9;
+        const z = wz - 1.4 - r() * 2.6;
+        const s = 0.95 + r() * 0.55;
+        k.cyl(0.15 * s, 0.22 * s, 1.0 * s, { at: [x, 0.5 * s, z], color: '#6b4426' }, 6);
+        k.sphere(0.95 * s, { at: [x, 1.5 * s, z], scale: [1, 0.9, 1], color: i % 3 === 0 ? '#3c8a37' : '#47963d' }, 9);
+        k.sphere(0.62 * s, { at: [x + 0.3 * s, 2.05 * s, z + 0.15 * s], color: '#58a848' }, 8);
+      }
+      for (let i = 0; i < 6; i++) {
+        k.sphere(3.2, { at: [-W / 2 - 2 + i * 4.4, -1.2, wz - 6.5 - (i % 2) * 1.2], scale: [1.4, 0.75, 1], color: i % 2 ? '#3f7d36' : '#46883c' }, 12);
+      }
+    }
+    // 下方（己方後方）：矮石牆、花台與灌木（保持低矮，避免擋住己方最後一排）
+    {
+      const wz = ARENA.height / 2 + 0.35;
       k.box(W + 1.2, 0.6, 0.5, { at: [0, 0.3, wz], color: '#a49e90' });
       k.box(W + 1.2, 0.12, 0.6, { at: [0, 0.62, wz], color: '#c2bcad' });
-      k.box(W + 14, 0.1, 6, { at: [0, -0.06, sz * (ARENA.height / 2 + 3.4)], color: '#3f7a35' });
+      k.box(W + 14, 0.1, 6, { at: [0, -0.06, wz + 3.05], color: '#3f7a35' });
+      for (let i = 0; i < 6; i++) {
+        const x = -W / 2 + 1.2 + i * 3.1;
+        k.box(2.2, 0.32, 0.6, { at: [x, 0.16, wz + 0.75], color: '#8a5a2e' });
+        k.box(2.1, 0.1, 0.5, { at: [x, 0.34, wz + 0.75], color: '#5a3a1e' });
+        for (let j = 0; j < 6; j++) {
+          k.sphere(0.13, { at: [x - 0.85 + j * 0.34, 0.45, wz + 0.72 + (j % 2) * 0.1], color: ['#ff8fb0', '#ffd36b', '#ffffff', '#ff6b5a'][(i + j) % 4] }, 6);
+        }
+      }
       for (const fx of [-7, 7]) {
         k.cyl(0.06, 0.06, 2.2, { at: [fx, 1.1, wz], color: '#6b4426' }, 5);
-        k.box(0.04, 0.7, 0.9, { at: [fx, 1.75, wz + 0.45 * -sz], color: sz > 0 ? '#2f74e8' : '#de3b33' });
+        k.box(0.04, 0.7, 0.9, { at: [fx, 1.75, wz - 0.45], color: '#2f74e8' });
       }
     }
     const decor = new Mesh(k.build(1).geometry, new MeshLambertMaterial({ vertexColors: true }));
