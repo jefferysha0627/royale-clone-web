@@ -356,11 +356,12 @@ function statRows(c: CardDef): [string, string][] {
       rows.push(['對塔傷害', String(Math.round(s.damage * s.towerPct) * waves * (s.kind === 'area' ? s.duration! : 1))]);
     }
     rows.push(['範圍', s.kind === 'roll' ? `寬 ${(s.radius * 2).toFixed(1)}・長 ${s.rollRange} 格` : `半徑 ${s.radius} 格`]);
-    if (s.stun) rows.push(['暈眩', `${s.stun} 秒`]);
+    if (s.stun) rows.push([s.freeze ? '冰凍' : '暈眩', `${s.stun} 秒`]);
+    if (s.rage) rows.push(['加速', `移動與攻擊 +${Math.round((s.rage.mul - 1) * 100)}%，離開後再 ${s.rage.linger} 秒`]);
     if (s.duration) rows.push(['持續', `${s.duration} 秒`]);
     if (s.slow) rows.push(['緩速', `${Math.round(s.slow * 100)}%`]);
     if (s.pushback) rows.push(['擊退', `${s.pushback} 格`]);
-    rows.push(['目標', s.hitsAir ? '空中與地面' : '只打地面']);
+    rows.push(['目標', s.rage ? '己方部隊與建築' : s.hitsAir ? '空中與地面' : '只打地面']);
     return rows;
   }
   const u = UNITS[c.unit!].stats;
@@ -370,7 +371,7 @@ function statRows(c: CardDef): [string, string][] {
   if (u.damage > 0 && !u.kamikaze) rows.push(['攻擊間隔', `${u.hitSpeed} 秒`]);
   if (u.damage > 0) rows.push(['射程', u.range >= 2 ? `${u.range} 格` : `近戰（${u.range}）`]);
   if (u.speed > 0) rows.push(['移動速度', speedName(u.speed)]);
-  rows.push(['目標', u.targets === 'buildings' ? '只打建築' : u.targets === 'ground' ? '地面' : '空中與地面']);
+  if (u.damage > 0 || u.ramp) rows.push(['目標', u.targets === 'buildings' ? '只打建築' : u.targets === 'ground' ? '地面' : '空中與地面']);
   rows.push(['部署時間', `${u.deployTime} 秒`]);
   if ((c.count ?? 1) > 1) rows.push(['數量', `×${c.count}`]);
   if (u.lifetime) rows.push(['存在時間', `${u.lifetime} 秒`]);
@@ -380,6 +381,9 @@ function statRows(c: CardDef): [string, string][] {
   if (u.deathSpawn) rows.push(['死亡時', `${UNITS[u.deathSpawn.unit].name} ×${u.deathSpawn.count}`]);
   if (u.projectile?.freeze) rows.push(['冰凍', `${u.projectile.freeze} 秒`]);
   if (u.jumpsRiver) rows.push(['特性', '可跳過河']);
+  if (u.towerMul !== undefined) rows.push(['對塔傷害', String(Math.round(u.damage * u.towerMul))]);
+  if (u.tunnelSpeed) rows.push(['特性', '可部署到場上任何地方（從地底鑽過去）']);
+  if (u.elixirGen) rows.push(['產生能量', `每 ${u.elixirGen.interval} 秒 +${u.elixirGen.amount}，倒下時 +${u.elixirGen.onDeath}`]);
   return rows;
 }
 

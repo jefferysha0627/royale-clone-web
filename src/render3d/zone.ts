@@ -94,7 +94,9 @@ export class ZoneView {
     const card = CARDS[cardId];
     const statics = game.entities.filter((e) => e.alive && e.half > 0).map((e) => e.id).join(',');
     const towersDown = game.towers(team === 0 ? 1 : 0).filter((t) => !t.alive).length;
-    const key = `${team}|${card.kind}|${statics}|${towersDown}`;
+    // 會鑽地的部隊可放到對方半場，禁區和一般部隊不同，要分開快取
+    const rule = card.unit && UNITS[card.unit].stats.tunnelSpeed ? 'tunnel' : card.kind;
+    const key = `${team}|${rule}|${statics}|${towersDown}`;
     if (key === this.key) return;
     this.key = key;
     const probe = card.kind === 'building' ? 'knight' : cardId;
