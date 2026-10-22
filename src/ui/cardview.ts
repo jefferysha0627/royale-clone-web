@@ -1,16 +1,24 @@
 import { iconSvg } from '../art/icons';
-import { CARDS, type CardDef } from '../sim';
+import { CARDS, UNITS, type CardDef } from '../sim';
 
 /** 卡牌分類標籤，用於牌組編輯畫面。 */
 export function cardTags(c: CardDef): string[] {
-  if (c.kind === 'spell') return c.spell?.stun ? ['法術', '暈眩'] : ['法術'];
-  const u = c.unit!;
+  if (c.kind === 'spell') {
+    const s = c.spell!;
+    const tags = ['法術'];
+    if (s.stun) tags.push('暈眩');
+    if (s.pushback) tags.push('擊退');
+    if (s.kind === 'area') tags.push('持續');
+    if (s.spawn) tags.push('召喚');
+    return tags;
+  }
+  const u = UNITS[c.unit!].stats;
   const tags: string[] = [];
   if (c.kind === 'building') tags.push('建築');
   else if (u.flying) tags.push('飛行');
   else if (u.targets === 'buildings') tags.push('只打建築');
-  else tags.push(u.projectileSpeed ? '遠程' : '近戰');
-  if (u.splash) tags.push('範圍');
+  else tags.push(u.projectile && !u.kamikaze ? '遠程' : '近戰');
+  if (u.splash || u.projectile?.splash) tags.push('範圍');
   if (c.kind !== 'building' && u.targets === 'air-ground' && !u.flying) tags.push('可打空中');
   if ((c.count ?? 1) > 1) tags.push(`×${c.count}`);
   return tags;

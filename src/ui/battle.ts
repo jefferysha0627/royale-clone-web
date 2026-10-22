@@ -1,4 +1,5 @@
-import { Renderer } from '../render/renderer';
+import { Renderer2D } from '../render/renderer2d';
+import type { BattleRenderer } from '../render/types';
 import { AI_DECKS, AI_LEVELS, AiController, ARENA, CARDS, DT, Game, Rng, type AiLevel, type GameEvent, type MatchResult } from '../sim';
 import type { Sound } from './audio';
 import { fillCard } from './cardview';
@@ -40,7 +41,7 @@ const REASON_TEXT: Record<MatchResult['reason'], (winner: 0 | 1 | null) => strin
 export class Battle {
   game!: Game;
   private ai!: AiController;
-  private readonly renderer: Renderer;
+  private readonly renderer: BattleRenderer;
   private raf = 0;
   private active = false;
   paused = false;
@@ -83,7 +84,7 @@ export class Battle {
   private readonly ovResult = $<HTMLElement>('ov-result');
 
   constructor(private readonly sound: Sound, private readonly host: BattleHost) {
-    this.renderer = new Renderer(this.canvas);
+    this.renderer = new Renderer2D(this.canvas);
     this.bindInput();
     this.bindButtons();
     const ro = typeof ResizeObserver === 'function' ? new ResizeObserver(() => this.layout()) : null;
@@ -102,7 +103,7 @@ export class Battle {
     this.level = level;
     this.seed = seed ?? Math.floor(Math.random() * 2 ** 31);
     const pick = new Rng(this.seed ^ 0x5bd1e995);
-    this.game = new Game({ seed: this.seed, decks: [this.deck, [...pick.pick(AI_DECKS)]] });
+    this.game = new Game({ seed: this.seed, decks: [this.deck, [...pick.pick(AI_DECKS).cards]] });
     this.ai = new AiController(this.game, 1, this.game.rng.fork(), AI_LEVELS[level]);
     this.renderer.reset();
     this.selected = null;
@@ -206,7 +207,7 @@ export class Battle {
 
   private handleEvents(events: GameEvent[]): void {
     if (events.length === 0) return;
-    this.renderer.pushEvents(events);
+    this.renderer.pushEvents(events, this.game);
     for (const ev of events) {
       switch (ev.type) {
         case 'deploy':
@@ -230,9 +231,9 @@ export class Battle {
         case 'spell':
           this.sound.play('spell');
           break;
-        case 'doubleElixir':
+        case 'elixirRate':
           this.sound.play('phase');
-          this.banner('能量加倍！', '最後 60 秒');
+          this.banner(ev.mult === 3 ? '能量三倍！' : '能量加倍！', ev.mult === 3 ? '最後 60 秒' : '');
           break;
         case 'phase':
           if (ev.phase === 'overtime') {
@@ -278,7 +279,7 @@ export class Battle {
     const key = `${p.hand.join(',')}|${p.queue[0]}`;
     if (key === this.handKey) return;
     this.handKey = key;
-    p.hand.forEach((id, i) => fillCard(this.cards[i], id));
+    p.hand.forEach((id, i) => fillCard(this.cards[i], id ?? undefined));
     fillCard(this.nextCard, p.queue[0]);
   }
 
@@ -290,8 +291,10 @@ export class Battle {
     this.elixirFill.style.width = `${(el / 10) * 100}%`;
     const whole = Math.floor(el + 1e-6);
     for (let i = 0; i < 4; i++) {
-      const card = CARDS[p.hand[i]];
+      const id = p.hand[i];
       const c = this.cards[i];
+      if (!id) continue;
+      const card = CARDS[id];
       const short = card.cost > el + 1e-6;
       c.classList.toggle('unaffordable', short);
       const fill = c.lastElementChild as HTMLElement | null;
@@ -319,7 +322,7 @@ export class Battle {
     this.selected = i;
     this.cards.forEach((c, k) => c.classList.toggle('selected', k === i));
     this.renderer.showZone = i !== null;
-    this.renderer.selectedCard = i !== null ? this.game.players[0].hand[i] : null;
+    this.renderer.selectedCard = i !== null ? this.game.players[0].hand[i] ?? null : null;
     if (i === null) this.renderer.preview = null;
   }
 
@@ -334,8 +337,7 @@ export class Battle {
     const r = this.canvas.getBoundingClientRect();
     const [wx, wy] = this.renderer.toWorld(clientX - r.left, clientY - r.top);
     if (wx < 0 || wx > ARENA.width || wy < 0 || wy > ARENA.height) return null;
-    const snap = (v: number, max: number) => Math.max(0.5, Math.min(max - 0.5, Math.round(v * 2) / 2));
-    return [snap(wx, ARENA.width), snap(wy, ARENA.height)];
+    return [wx, wy];
   }
 
   private updatePreview(index: number, clientX: number, clientY: number): void {
@@ -345,7 +347,8 @@ export class Battle {
       this.renderer.preview = null;
       return;
     }
-    this.renderer.preview = { cardId, x: pos[0], y: pos[1], legal: this.game.canDeployAt(0, cardId, pos[0], pos[1]) };
+    const [sx, sy] = this.game.snap(cardId, pos[0], pos[1]);
+    this.renderer.preview = { cardId, x: sx, y: sy, legal: this.game.canDeployAt(0, cardId, sx, sy) };
   }
 
   private tryDeploy(index: number, clientX: number, clientY: number): boolean {
@@ -357,6 +360,7 @@ export class Battle {
   /** 玩家在場地格座標 (x, y) 出第 index 張手牌。 */
   deployAt(index: number, x: number, y: number): boolean {
     const cardId = this.game.players[0].hand[index];
+    if (!cardId) return false;
     const res = this.game.deploy(0, index, x, y);
     if (res.ok) {
       this.setSelected(null);

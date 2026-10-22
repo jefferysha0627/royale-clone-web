@@ -1,5 +1,5 @@
 import { ARENA, DT, MATCH } from './config';
-import { CARDS, canHitAir, type CardDef } from './cards';
+import { CARDS, UNITS, canHitAir, type CardDef, type UnitStats } from './cards';
 import { Game, viewY, type Entity, type Team } from './game';
 import type { Rng } from './rng';
 
@@ -28,8 +28,12 @@ interface HandCard {
   card: CardDef;
 }
 
+function statsOf(card: CardDef): UnitStats | undefined {
+  return card.unit ? UNITS[card.unit].stats : undefined;
+}
+
 /**
- * 電腦對手：只透過 Game.deploy() 出牌，與玩家遵循相同的能量、手牌與部署區規則。
+ * 電腦對手：只透過 Game.deploy() 出牌，與玩家遵循相同的能量、手牌與部署規則。
  * 以「隊伍自身視角」思考（己方在下方），再換算回世界座標。
  */
 export class AiController {
@@ -45,7 +49,7 @@ export class AiController {
   }
 
   update(): void {
-    if (this.game.phase === 'ended') return;
+    if (!this.game.playing) return;
     this.thinkTimer -= DT;
     if (this.thinkTimer > 0) return;
     this.thinkTimer = this.opts.reaction * this.rng.range(0.7, 1.3);
@@ -62,7 +66,11 @@ export class AiController {
 
   private hand(): HandCard[] {
     const p = this.game.players[this.team];
-    return p.hand.map((id, index) => ({ index, card: CARDS[id] })).filter((h) => h.card.cost <= p.elixir);
+    const out: HandCard[] = [];
+    p.hand.forEach((id, index) => {
+      if (id && CARDS[id].cost <= p.elixir) out.push({ index, card: CARDS[id] });
+    });
+    return out;
   }
 
   private chance(p: number): boolean {
@@ -75,12 +83,12 @@ export class AiController {
       vy += this.rng.range(-this.opts.noise, this.opts.noise) * 0.6;
     }
     // 依序嘗試附近位置，找到合法點才出牌
-    const offsets: [number, number][] = [[0, 0], [0, 1], [1, 0], [-1, 0], [0, 2], [1.5, 1], [-1.5, 1], [0, 3]];
+    const offsets: [number, number][] = [[0, 0], [0, 1], [1, 0], [-1, 0], [0, 2], [1.5, 1], [-1.5, 1], [0, 3], [2, 2], [-2, 2]];
     for (const [ox, oy] of offsets) {
       const px = Math.max(1, Math.min(ARENA.width - 1, x + ox));
-      const py = viewY(this.team, vy + oy);
-      if (!this.game.canDeployAt(this.team, h.card.id, px, py)) continue;
-      return this.game.deploy(this.team, h.index, px, py).ok;
+      const [sx, sy] = this.game.snap(h.card.id, px, viewY(this.team, vy + oy));
+      if (!this.game.canDeployAt(this.team, h.card.id, sx, sy)) continue;
+      return this.game.deploy(this.team, h.index, sx, sy).ok;
     }
     return false;
   }
@@ -113,7 +121,7 @@ export class AiController {
     const cluster = this.bestCluster(threats, 2.5);
     if (cluster.count >= 3 || (cluster.count >= 2 && cluster.hp >= 600)) {
       const spell = hand
-        .filter((h) => h.card.kind === 'spell')
+        .filter((h) => h.card.kind === 'spell' && h.card.spell!.damage > 0)
         .find((h) => threats.filter((t) => Math.hypot(t.x - cluster.x, t.y - cluster.y) <= h.card.spell!.radius).length >= 2);
       if (spell && this.game.deploy(this.team, spell.index, cluster.x, cluster.y).ok) return true;
     }
@@ -124,16 +132,17 @@ export class AiController {
     if (this.vy(lead.y) < this.opts.patience && !buildingHunter) return false;
     const swarm = cluster.count >= 3;
 
-    const candidates = hand.filter((h) => h.card.kind !== 'spell' && h.card.unit!.targets !== 'buildings');
+    const candidates = hand.filter((h) => h.card.kind !== 'spell' && statsOf(h.card)!.targets !== 'buildings');
     if (candidates.length === 0) return false;
     const score = (h: HandCard): number => {
       const c = h.card;
-      const u = c.unit!;
-      let s = u.hp / 400 + (u.damage / u.hitSpeed) / 100;
+      const u = statsOf(c)!;
+      const n = c.count ?? 1;
+      let s = (u.hp * n) / 800 + ((u.damage || u.ramp?.damages[1] || 0) * n) / u.hitSpeed / 120;
       if (flying && !canHitAir(c)) s -= 10;
-      if (swarm && u.splash) s += 4;
+      if (swarm && (u.splash || u.projectile?.splash)) s += 4;
       if (buildingHunter && c.kind === 'building') s += 5;
-      if (buildingHunter && (c.count ?? 1) >= 3) s += 2;
+      if (buildingHunter && n >= 3) s += 2;
       s -= c.cost * 0.4;
       return s + this.rng.range(0, 0.5);
     };
@@ -146,10 +155,10 @@ export class AiController {
     let vy: number;
     if (pick.card.kind === 'building') {
       x = ARENA.width / 2 + (lead.x < ARENA.width / 2 ? -1 : 1);
-      vy = 23;
+      vy = 22;
     } else {
-      const ranged = !!pick.card.unit!.projectileSpeed;
-      vy = Math.min(27.5, Math.max(19, leadVy + (ranged ? 4 : 2)));
+      const ranged = !!statsOf(pick.card)!.projectile;
+      vy = Math.min(27.5, Math.max(18.5, leadVy + (ranged ? 4 : 2)));
     }
     return this.tryDeploy(pick, x, vy);
   }
@@ -173,7 +182,8 @@ export class AiController {
     for (const h of this.hand()) {
       if (h.card.kind !== 'spell') continue;
       const s = h.card.spell!;
-      const dmg = Math.round(s.damage * s.towerDamagePct);
+      const dmg = Math.round(s.damage * s.towerPct) * (s.waves ?? 1);
+      if (dmg <= 0) continue;
       const tower = this.game.towers(this.enemy).find((t) => t.alive && t.hp <= dmg);
       if (tower && this.game.deploy(this.team, h.index, tower.x, tower.y).ok) return true;
     }
@@ -181,7 +191,7 @@ export class AiController {
   }
 
   private targetLane(): number {
-    const towers = this.game.towers(this.enemy).filter((t) => t.cardId === 'princess');
+    const towers = this.game.towers(this.enemy).filter((t) => t.unit === 'princess');
     const down = towers.find((t) => !t.alive);
     if (down) return down.lane;
     const [a, b] = towers;
@@ -198,14 +208,19 @@ export class AiController {
     if (hand.length === 0) return false;
     const lane = this.targetLane();
     const x = this.laneX(lane);
-    const tank = hand.find((h) => h.card.id === 'golem');
+    const tank = hand.find((h) => h.card.kind === 'troop' && statsOf(h.card)!.hp >= 3000);
     if (tank) return this.tryDeploy(tank, x, 30.5);
-    const hunter = hand.find((h) => h.card.id === 'raider');
+    const hunter = hand.find((h) => h.card.kind === 'troop' && statsOf(h.card)!.targets === 'buildings');
     if (hunter) return this.tryDeploy(hunter, x, 18);
-    const troops = hand.filter((h) => h.card.kind === 'troop').sort((a, b) => b.card.unit!.hp - a.card.unit!.hp);
+    const barrel = hand.find((h) => h.card.spell?.kind === 'barrel');
+    if (barrel) {
+      const t = this.game.towers(this.enemy).find((o) => o.alive && o.unit === 'princess' && o.lane === lane);
+      if (t && this.game.deploy(this.team, barrel.index, t.x, t.y + (this.team === 0 ? 1.5 : -1.5)).ok) return true;
+    }
+    const troops = hand.filter((h) => h.card.kind === 'troop').sort((a, b) => statsOf(b.card)!.hp * (b.card.count ?? 1) - statsOf(a.card)!.hp * (a.card.count ?? 1));
     if (troops.length === 0) return false;
     const pick = troops[0];
-    return this.tryDeploy(pick, x, pick.card.unit!.projectileSpeed ? 21 : 19);
+    return this.tryDeploy(pick, x, statsOf(pick.card)!.projectile ? 21 : 19);
   }
 
   /** 己方坦克推進中，或防守後的部隊正要過河反攻時，在後方補支援。 */
@@ -220,10 +235,10 @@ export class AiController {
     }
     if (!tank) return false;
     const p = g.players[this.team];
-    const supports = this.hand().filter((h) => h.card.kind === 'troop' && h.card.unit!.targets !== 'buildings' && h.card.unit!.hp < 1400);
+    const supports = this.hand().filter((h) => h.card.kind === 'troop' && statsOf(h.card)!.targets !== 'buildings' && statsOf(h.card)!.hp < 1400);
     const pick = supports.find((h) => p.elixir - h.card.cost >= 1);
     if (!pick) return false;
-    return this.tryDeploy(pick, tank.x, Math.max(18, this.vy(tank.y) + 2));
+    return this.tryDeploy(pick, tank.x, Math.max(18.5, this.vy(tank.y) + 2));
   }
 
   private dumpCheapest(): void {
@@ -233,6 +248,6 @@ export class AiController {
     const pick = hand[0];
     if (!pick) return;
     const lane = this.rng.int(2);
-    this.tryDeploy(pick, this.laneX(lane), pick.card.kind === 'building' ? 23 : 28);
+    this.tryDeploy(pick, this.laneX(lane), pick.card.kind === 'building' ? 22 : 28.5);
   }
 }

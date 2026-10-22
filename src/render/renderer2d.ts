@@ -1,7 +1,8 @@
-import { drawIcon } from '../art/icons';
-import { ARENA, CARDS, Game, type Entity, type GameEvent, type Team } from '../sim';
+import { drawIcon, ICONS } from '../art/icons';
+import { ARENA, CARDS, UNITS, Game, type Entity, type GameEvent, type Team } from '../sim';
+import type { BattleRenderer, DeployPreview } from './types';
 
-// 自製向量畫風：全部以 Canvas 繪製，不使用外部圖檔。
+// WebGL 不可用時的 2D 備援畫面：全部以 Canvas 繪製，不使用外部圖檔。
 /** 單位外觀比碰撞半徑大一些，手機小螢幕才看得清楚（不影響戰鬥判定）。 */
 const UNIT_VISUAL_SCALE = 1.3;
 const TEAM_COLORS: Record<Team, { main: string; dark: string; light: string }> = {
@@ -22,14 +23,26 @@ interface Effect {
   text?: string;
 }
 
-export interface DeployPreview {
-  cardId: string;
-  x: number;
-  y: number;
-  legal: boolean;
+/** 單位的單字圖示（沒有向量圖示的單位用卡牌字）。 */
+const UNIT_GLYPH: Record<string, string> = {};
+for (const c of Object.values(CARDS)) if (c.unit && !UNIT_GLYPH[c.unit]) UNIT_GLYPH[c.unit] = c.glyph;
+UNIT_GLYPH.golemite = '石';
+
+function drawGlyph(ctx: CanvasRenderingContext2D, id: string, x: number, y: number, size: number): void {
+  if (ICONS[id]) {
+    drawIcon(ctx, id, x, y, size);
+    return;
+  }
+  const glyph = UNIT_GLYPH[id] ?? CARDS[id]?.glyph ?? '?';
+  ctx.fillStyle = '#ffffff';
+  ctx.font = `900 ${Math.round(size * 0.55)}px system-ui, sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(glyph, x, y + size * 0.03);
 }
 
-export class Renderer {
+export class Renderer2D implements BattleRenderer {
+  readonly kind = '2d' as const;
   private ctx: CanvasRenderingContext2D;
   private scale = 20;
   private ox = 0;
@@ -84,7 +97,7 @@ export class Renderer {
     this.zoneRects = [];
   }
 
-  pushEvents(events: GameEvent[]): void {
+  pushEvents(events: GameEvent[], _game?: Game): void {
     for (const ev of events) {
       switch (ev.type) {
         case 'deploy':
@@ -95,7 +108,7 @@ export class Renderer {
           if (ev.isTower && ev.amount >= 150) this.effects.push({ kind: 'text', x: ev.x, y: ev.y - 1.5, r: 0, t: 0, life: 0.7, color: '#ffffff', text: `-${Math.round(ev.amount)}` });
           break;
         case 'attack':
-          if (!ev.ranged && ev.cardId !== 'king' && ev.cardId !== 'princess') {
+          if (!ev.ranged && ev.unit !== 'king' && ev.unit !== 'princess') {
             this.effects.push({ kind: 'bolt', x: ev.x, y: ev.y, x2: ev.tx, y2: ev.ty, r: 0, t: 0, life: 0.12, color: '#ffffff' });
           }
           break;
@@ -221,11 +234,11 @@ export class Renderer {
     for (const t of towers) this.drawTower(t);
     const ground = game.entities.filter((e) => e.kind !== 'tower' && !e.stats.flying && e.alive).sort((a, b) => a.y - b.y);
     for (const e of ground) this.drawUnit(e, ...lerp(e));
-    for (const p of game.projectiles) this.drawProjectile(p.x, p.y, p.tx, p.ty, p.sourceCard, p.team);
+    for (const p of game.projectiles) this.drawProjectile(p.x, p.y, p.tx, p.ty, p.source, p.team);
     const air = game.entities.filter((e) => e.stats.flying && e.alive).sort((a, b) => a.y - b.y);
     for (const e of air) this.drawUnit(e, ...lerp(e));
     for (const s of game.spells) this.drawIncomingSpell(s.fromX, s.fromY, s.x, s.y, 1 - s.delay / Math.max(0.0001, s.totalDelay), s.cardId);
-    for (const t of towers) if (t.alive) this.drawBar(t.x, t.y - t.stats.radius - 0.55, t.hp / t.maxHp, t.team, t.stats.radius * 1.6, Math.ceil(t.hp));
+    for (const t of towers) if (t.alive) this.drawBar(t.x, t.y - t.half - 0.55, t.hp / t.maxHp, t.team, t.half * 1.6, Math.ceil(t.hp));
     this.drawEffects(dt);
     if (this.preview) this.drawPreview(this.preview);
   }
@@ -235,17 +248,19 @@ export class Renderer {
     if (!card || card.kind === 'spell') return;
     // 不可部署區只會在塔倒下或建築出現／消失時改變，依此快取
     const statics = game.entities.filter((e) => e.alive && (e.kind === 'tower' || e.kind === 'building')).map((e) => e.id);
-    const key = `${team}|${card.kind}|${card.unit?.radius ?? 0}|${statics.join(',')}`;
+    const key = `${team}|${card.kind}|${card.unit ?? ''}|${statics.join(',')}`;
     if (key !== this.zoneKey) {
       this.zoneKey = key;
       this.zoneRects = [];
-      for (let y = 0.25; y < ARENA.height; y += 0.5) {
+      // 以格子為單位標出不可部署的格（建築也以部隊的格子規則近似顯示）
+      const probe = card.kind === 'building' ? 'knight' : cardId;
+      for (let y = 0.5; y < ARENA.height; y += 1) {
         let runStart = -1;
-        for (let x = 0.25; x <= ARENA.width + 0.25; x += 0.5) {
-          const bad = x < ARENA.width && !game.canDeployAt(team, cardId, x, y);
+        for (let x = 0.5; x <= ARENA.width + 0.5; x += 1) {
+          const bad = x < ARENA.width && !game.canDeployAt(team, probe, x, y);
           if (bad && runStart < 0) runStart = x;
           if ((!bad || x >= ARENA.width) && runStart >= 0) {
-            this.zoneRects.push([runStart - 0.25, y - 0.25, x - runStart, 0.5]);
+            this.zoneRects.push([runStart - 0.5, y - 0.5, x - runStart, 1]);
             runStart = -1;
           }
         }
@@ -261,7 +276,7 @@ export class Renderer {
     const ctx = this.ctx;
     const s = this.scale;
     const c = TEAM_COLORS[t.team];
-    const r = t.stats.radius * s;
+    const r = t.half * s;
     const x = this.sx(t.x);
     const y = this.sy(t.y);
     if (!t.alive) {
@@ -290,7 +305,7 @@ export class Renderer {
     ctx.stroke();
     // 城垛
     ctx.fillStyle = '#d3cdc2';
-    const n = t.cardId === 'king' ? 5 : 4;
+    const n = t.unit === 'king' ? 5 : 4;
     for (let i = 0; i < n; i++) {
       const bw = (r * 2) / (n * 2 - 1);
       ctx.fillRect(x - r + i * bw * 2, y - r * 1.05, bw, r * 0.3);
@@ -301,11 +316,11 @@ export class Renderer {
     ctx.roundRect(x - r * 0.65, y - r * 0.55, r * 1.3, r * 1.2, r * 0.2);
     ctx.fill();
     ctx.fillStyle = '#fff';
-    ctx.font = `bold ${Math.round(r * (t.cardId === 'king' ? 0.75 : 0.7))}px system-ui, sans-serif`;
+    ctx.font = `bold ${Math.round(r * (t.unit === 'king' ? 0.75 : 0.7))}px system-ui, sans-serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(t.cardId === 'king' ? '♛' : '◆', x, y + r * 0.05);
-    if (t.cardId === 'king' && !t.active) {
+    ctx.fillText(t.unit === 'king' ? '♛' : '◆', x, y + r * 0.05);
+    if (t.unit === 'king' && !t.active) {
       ctx.fillStyle = 'rgba(0,0,0,0.35)';
       ctx.beginPath();
       ctx.roundRect(x - r * 0.65, y - r * 0.55, r * 1.3, r * 1.2, r * 0.2);
@@ -340,7 +355,7 @@ export class Renderer {
     const ctx = this.ctx;
     const s = this.scale;
     const c = TEAM_COLORS[e.team];
-    const r = e.stats.radius * s * (e.kind === 'building' ? 1 : UNIT_VISUAL_SCALE);
+    const r = (e.kind === 'building' ? e.half : e.stats.radius * UNIT_VISUAL_SCALE) * s;
     const x = this.sx(wx);
     const lift = e.stats.flying ? s * 0.7 : 0;
     const y = this.sy(wy) - lift;
@@ -362,7 +377,7 @@ export class Renderer {
       ctx.stroke();
       ctx.fillStyle = c.main;
       ctx.fillRect(x - r, y + r * 0.55, r * 2, r * 0.45);
-      drawIcon(ctx, e.cardId, x, y - r * 0.1, r * 1.9);
+      drawGlyph(ctx, e.unit, x, y - r * 0.1, r * 1.9);
     } else {
       // 隊伍色底盤，飛行單位多一對翅膀輪廓
       if (e.stats.flying) {
@@ -382,7 +397,7 @@ export class Renderer {
       ctx.arc(x, y, r, 0, Math.PI * 2);
       ctx.fill();
       ctx.stroke();
-      drawIcon(ctx, e.cardId, x, y, r * 1.75);
+      drawGlyph(ctx, e.unit, x, y, r * 1.75);
     }
     ctx.globalAlpha = 1;
 
@@ -408,7 +423,7 @@ export class Renderer {
     const s = this.scale;
     const px = this.sx(x);
     const py = this.sy(y);
-    const fire = card === 'firemage' || card === 'dragon';
+    const fire = card === 'wizard' || card === 'baby_dragon' || card === 'fire_spirit';
     if (fire) {
       ctx.fillStyle = '#ff8a2a';
       ctx.beginPath();
@@ -509,9 +524,10 @@ export class Renderer {
     const ctx = this.ctx;
     const s = this.scale;
     const card = CARDS[p.cardId];
+    const unit = card.unit ? UNITS[card.unit].stats : undefined;
     const x = this.sx(p.x);
     const y = this.sy(p.y);
-    const r = (card.kind === 'spell' ? card.spell!.radius : Math.max(0.6, card.unit!.radius * ((card.count ?? 1) > 1 ? 2 : 1.3))) * s;
+    const r = (card.kind === 'spell' ? card.spell!.radius : Math.max(0.6, (unit!.half ?? unit!.radius) * ((card.count ?? 1) > 1 ? 2 : 1.3))) * s;
     ctx.fillStyle = p.legal ? 'rgba(255,255,255,0.25)' : 'rgba(255,60,60,0.3)';
     ctx.strokeStyle = p.legal ? '#ffffff' : '#ff4040';
     ctx.lineWidth = 2;
@@ -521,7 +537,7 @@ export class Renderer {
     ctx.stroke();
     if (p.legal) {
       ctx.globalAlpha = 0.85;
-      drawIcon(ctx, p.cardId, x, y, s * 1.6);
+      drawGlyph(ctx, card.unit ?? p.cardId, x, y, s * 1.6);
       ctx.globalAlpha = 1;
     } else {
       ctx.fillStyle = '#ffdddd';
