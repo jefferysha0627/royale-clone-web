@@ -8,6 +8,8 @@ import { TEAM_RGB } from './coords';
 import { instantiate, Kit } from './kit';
 import { toonMaterial } from './materials';
 import { getAsset, profileOf } from './models';
+import { commanderSpec } from './models/buildings';
+import { buildHumanoid, type Face } from './models/humanoid';
 
 // 卡面圖：用遊戲內同一套原創 3D 模型即時渲染成小插畫（主題色背景＋光暈＋地面影子），不需要下載任何圖檔。
 // 在閒置時間分批產生，完成前卡面先顯示文字圖示。
@@ -109,9 +111,25 @@ function groundTexture(color: string): CanvasTexture {
 
 type Listener = () => void;
 
+// 表情貼圖：國王塔上的原創指揮官做出不同表情（取代系統表情符號，各平台看起來一致）
+export const EMOTE_POSES: Record<string, { face: Face; arm: number }> = {
+  good: { face: 'happy', arm: -2.6 },
+  haha: { face: 'laugh', arm: -0.6 },
+  wow: { face: 'wow', arm: -1.2 },
+  thanks: { face: 'happy', arm: -1.5 },
+  grr: { face: 'angry', arm: -2.3 },
+  luck: { face: 'wink', arm: -2.0 },
+};
+
 class PortraitStore {
   private urls = new Map<string, string>();
+  private emotes = new Map<string, string>();
   private heroUrl: string | undefined;
+
+  /** 表情貼圖（id、隊伍）；還沒產生好時回傳 undefined。 */
+  emote(id: string, team: 0 | 1): string | undefined {
+    return this.emotes.get(`${id}|${team}`);
+  }
 
   /** 主畫面插圖（原創角色與塔的小場景）。 */
   hero(): string | undefined {
@@ -194,6 +212,46 @@ class PortraitStore {
       }
       disposeTree(subject);
     };
+    const emoteJobs: [string, 0 | 1][] = [];
+    for (const team of [0, 1] as const) for (const id of Object.keys(EMOTE_POSES)) emoteJobs.push([id, team]);
+    const renderEmote = (id: string, team: 0 | 1) => {
+      const pose = EMOTE_POSES[id];
+      const pal = TEAM_RGB[team];
+      const asset = buildHumanoid(commanderSpec(pal, pose.face, 0.55), pal);
+      const inst = instantiate(asset, toonMaterial({ rim: 0.5 }));
+      const st = newAnimState();
+      st.t = 0.2;
+      animate(inst, profileOf('knight'), st, 0.016);
+      inst.byName.armR?.rotation.set(pose.arm, 0, 0.25);
+      inst.byName.head?.rotation.set(-0.12, team === 0 ? -0.15 : 0.15, id === 'wow' ? 0.12 : 0);
+      inst.mesh.rotation.y = team === 0 ? 0.25 : -0.25;
+      const g = new Group();
+      g.add(inst.mesh);
+      scene.add(g);
+      const EW = 128;
+      r.setSize(EW, EW, false);
+      g.updateMatrixWorld(true);
+      const box = new Box3().setFromObject(g);
+      const size = box.getSize(new Vector3());
+      const center = new Vector3((box.min.x + box.max.x) / 2, box.min.y + size.y * 0.72, (box.min.z + box.max.z) / 2);
+      const view = size.y * 0.62;
+      cam.left = -view / 2;
+      cam.right = view / 2;
+      cam.top = view / 2;
+      cam.bottom = -view / 2;
+      cam.position.copy(center).addScaledVector(new Vector3(0, 0.25, 1).normalize(), 20);
+      cam.lookAt(center);
+      cam.updateProjectionMatrix();
+      r.setClearColor(0x000000, 0);
+      r.clear();
+      r.render(scene, cam);
+      this.emotes.set(`${id}|${team}`, r.domElement.toDataURL('image/png'));
+      scene.remove(g);
+      disposeTree(g);
+      asset.geometry.dispose();
+      inst.mesh.skeleton.dispose();
+      r.setSize(W, H, false);
+    };
     const step = () => {
       const t0 = performance.now();
       while (queue.length && performance.now() - t0 < 24) {
@@ -204,6 +262,14 @@ class PortraitStore {
           // 單張失敗就保留文字圖示
         }
       }
+      while (!queue.length && emoteJobs.length && performance.now() - t0 < 24) {
+        const [id, team] = emoteJobs.shift()!;
+        try {
+          renderEmote(id, team);
+        } catch {
+          // 表情貼圖失敗就用系統表情符號
+        }
+      }
       if (!this.heroUrl && queue.length < Object.keys(CARDS).length - 8) {
         try {
           this.heroUrl = renderHero(r, scene);
@@ -212,7 +278,7 @@ class PortraitStore {
         }
       }
       for (const fn of this.listeners) fn();
-      if (queue.length) setTimeout(step, 16);
+      if (queue.length || emoteJobs.length) setTimeout(step, 16);
       else {
         r.dispose();
         r.forceContextLoss();

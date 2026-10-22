@@ -8,7 +8,7 @@ export type Hat =
   | 'none' | 'helmet' | 'horned' | 'wizard' | 'hood' | 'cap' | 'band' | 'iron' | 'winged' | 'skull' | 'bandana' | 'witch' | 'crest' | 'goggles' | 'royal' | 'hardhat';
 export type Weapon =
   | 'none' | 'sword' | 'greatsword' | 'axe2' | 'club' | 'spear' | 'musket' | 'staff' | 'skullstaff' | 'bow' | 'bomb' | 'lance' | 'mace' | 'crossbow' | 'cleaver' | 'scepter' | 'pickaxe';
-export type Face = 'dot' | 'angry' | 'skull' | 'visor' | 'glow' | 'sleepy';
+export type Face = 'dot' | 'angry' | 'skull' | 'visor' | 'glow' | 'sleepy' | 'happy' | 'laugh' | 'wink' | 'wow';
 
 export interface HumanoidSpec {
   height: number; // 約略身高（格）
@@ -182,6 +182,22 @@ export function addHumanoid(k: Kit, s: HumanoidSpec, team: { main: string; dark:
     for (const sx of [1, -1]) k.sphere(headR * 0.08, { at: [ox + sx * eyeX * 0.8, eyeY, fz + 0.045], color: s.eyeColor ?? '#ff4a3a' }, 6);
   } else if (face === 'glow') {
     for (const sx of [1, -1]) k.sphere(headR * 0.14, { at: [ox + sx * eyeX, eyeY, fz], scale: [1.2, 0.8, 0.6], color: s.eyeColor ?? '#ffb347' }, 8);
+  } else if (face === 'happy' || face === 'laugh' || face === 'wink') {
+    // 瞇眼笑（∩ 形）；眨眼時一眼閉一眼睜
+    for (const sx of [1, -1]) {
+      if (face === 'wink' && sx === -1) {
+        k.sphere(headR * 0.16, { at: [ox + sx * eyeX, eyeY, fz], scale: [0.85, 1.2, 0.6], color: eyeCol }, 8);
+        k.sphere(headR * 0.055, { at: [ox + sx * eyeX + 0.015, eyeY + headR * 0.07, fz + headR * 0.08], color: '#ffffff' }, 6);
+        continue;
+      }
+      k.torus(headR * 0.14, headR * 0.04, { at: [ox + sx * eyeX, eyeY - headR * (face === 'laugh' ? 0.06 : 0.03), fz + 0.012], color: eyeCol }, 8, Math.PI);
+    }
+  } else if (face === 'wow') {
+    // 睜大的圓眼：白眼球＋小瞳孔
+    for (const sx of [1, -1]) {
+      k.sphere(headR * 0.21, { at: [ox + sx * eyeX, eyeY + headR * 0.03, fz - 0.005], scale: [1, 1.15, 0.5], color: '#ffffff' }, 10);
+      k.sphere(headR * 0.08, { at: [ox + sx * eyeX, eyeY + headR * 0.03, fz + headR * 0.09], color: eyeCol }, 8);
+    }
   } else {
     for (const sx of [1, -1]) {
       const ey = face === 'sleepy' ? eyeY - headR * 0.04 : eyeY;
@@ -191,11 +207,13 @@ export function addHumanoid(k: Kit, s: HumanoidSpec, team: { main: string; dark:
     }
   }
   // 眉毛與嘴巴：Q 版角色的表情主要靠這兩個（有大鬍子的角色嘴巴被蓋住就不畫）
-  if (face === 'dot' || face === 'sleepy') {
+  if (face === 'dot' || face === 'sleepy' || face === 'happy' || face === 'laugh' || face === 'wink' || face === 'wow') {
     const browCol = s.hair?.color ?? s.beard?.color ?? shade(s.skin, -0.55);
+    const lift = face === 'wow' ? 0.38 : face === 'laugh' ? 0.3 : face === 'sleepy' ? 0.17 : 0.27;
+    const tilt = face === 'sleepy' ? 0.28 : face === 'wow' ? 0.15 : -0.12;
     for (const sx of [1, -1]) {
       k.box(headR * 0.3, headR * 0.07, 0.035, {
-        at: [ox + sx * eyeX, eyeY + headR * (face === 'sleepy' ? 0.17 : 0.27), oz + headR * 0.9], rot: [-0.35, 0, sx * (face === 'sleepy' ? 0.28 : -0.12)], color: browCol,
+        at: [ox + sx * eyeX, eyeY + headR * lift, oz + headR * 0.9], rot: [-0.35, 0, sx * tilt], color: browCol,
       });
     }
   }
@@ -209,6 +227,12 @@ export function addHumanoid(k: Kit, s: HumanoidSpec, team: { main: string; dark:
       k.box(headR * 0.36, headR * 0.06, 0.035, { at: [ox, my + headR * 0.025, mz + 0.004], color: '#f4f1e8' });
     } else if (face === 'sleepy') {
       k.sphere(headR * 0.08, { at: [ox, my, mz], scale: [1, 0.8, 0.5], color: '#5a2a2a' }, 6);
+    } else if (face === 'laugh') {
+      // 張大嘴笑：深色嘴＋粉紅舌頭
+      k.blob(headR * 0.42, headR * 0.3, headR * 0.12, { at: [ox, my - headR * 0.04, mz], color: '#4a1414' }, 10);
+      k.blob(headR * 0.24, headR * 0.1, headR * 0.08, { at: [ox, my - headR * 0.13, mz + 0.01], color: '#ff8a9a' }, 8);
+    } else if (face === 'wow') {
+      k.torus(headR * 0.09, headR * 0.035, { at: [ox, my - headR * 0.03, mz + 0.005], color: '#4a1414' }, 10);
     } else {
       // 微笑：半圓弧
       k.torus(headR * 0.15, headR * 0.035, { at: [ox, my + headR * 0.07, mz], rot: [0, 0, Math.PI], color: '#5a2a2a' }, 8, Math.PI);

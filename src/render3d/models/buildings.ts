@@ -248,6 +248,15 @@ export function buildPrincessTower(team: TeamPal): ModelAsset {
   return k.build(4.3);
 }
 
+/** 國王塔上的指揮官（原創角色：白色長鬍、王族軟帽、隊伍色披風、金色權杖）；表情可換，表情貼圖也用同一個角色。 */
+export function commanderSpec(team: TeamPal, face: HumanoidSpec['face'], beard = 1.0): HumanoidSpec {
+  return {
+    height: 1.7, build: 1.25, headScale: 1.12, skin: '#f1c39a', face, nose: 'ball', mustache: '#f4f1e8', beard: { color: '#f4f1e8', size: beard },
+    torso: team.dark, torso2: GOLD, apron: team.main, legs: '#4a3a3a', boots: '#3a2a1e', arms: team.main, hands: '#f4f1e8', hat: 'royal', hatColor2: team.main,
+    cape: true, belly: true, weapon: 'scepter', pads: true,
+  };
+}
+
 /** 國王塔：4×4 原創城堡——中央主堡（指揮官站在頂上）、前方兩座圓形砲台各架一門砲、後方兩座尖頂角樓，正面城牆有城門與長旗。 */
 export function buildKingTower(team: TeamPal): ModelAsset {
   const k = new Kit();
@@ -311,13 +320,7 @@ export function buildKingTower(team: TeamPal): ModelAsset {
     k.sphere(0.22, { at: [x, y + 0.12, BZ - 0.12], color: '#3a3530' }, 10);
   }
   k.bone = root;
-  // 指揮官（原創角色：白色長鬍、王族軟帽、隊伍色披風、金色權杖）
-  const lord: HumanoidSpec = {
-    height: 1.7, build: 1.25, headScale: 1.12, skin: '#f1c39a', face: 'sleepy', nose: 'ball', mustache: '#f4f1e8', beard: { color: '#f4f1e8', size: 1.0 },
-    torso: team.dark, torso2: GOLD, apron: team.main, legs: '#4a3a3a', boots: '#3a2a1e', arms: team.main, hands: '#f4f1e8', hat: 'royal', hatColor2: team.main,
-    cape: true, belly: true, weapon: 'scepter', pads: true,
-  };
-  addHumanoid(k, lord, team, root, [0, FLOOR, KZ + 0.15]);
+  addHumanoid(k, commanderSpec(team, 'sleepy'), team, root, [0, FLOOR, KZ + 0.15]);
   return k.build(4.75);
 }
 

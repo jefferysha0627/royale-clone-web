@@ -1,5 +1,6 @@
 import { Renderer2D } from '../render/renderer2d';
 import type { BattleRenderer } from '../render/types';
+import { portraits } from '../render3d/portraits';
 import { tryCreateRenderer3D } from '../render3d/renderer3d';
 import { AI_DECKS, AI_LEVELS, AiController, ARENA, CARDS, DT, Game, MATCH, Rng, type AiLevel, type GameEvent, type MatchResult } from '../sim';
 import type { Sound } from './audio';
@@ -519,12 +520,21 @@ export class Battle {
     return Array.from(slots.children).filter((c) => c.classList.contains('on')).length;
   }
 
+  /** 表情圖示：有 3D 指揮官表情貼圖就用貼圖，否則用系統表情符號。 */
+  private emoteIcon(id: string, team: 0 | 1): string {
+    const e = EMOTES.find((x) => x.id === id) ?? EMOTES[0];
+    const url = portraits.emote(e.id, team);
+    return url ? `<img class="em-img" src="${url}" alt="" draggable="false" />` : `<span class="em">${e.em}</span>`;
+  }
+
   private toggleEmotes(): void {
+    // 表情貼圖在背景產生；開啟時補上已經做好的貼圖
+    if (this.emotePicker.childElementCount && !this.emotePicker.querySelector('.em-img') && portraits.emote('good', 0)) this.emotePicker.innerHTML = '';
     if (!this.emotePicker.childElementCount) {
       for (const e of EMOTES) {
         const b = document.createElement('button');
         b.type = 'button';
-        b.innerHTML = `<span class="em">${e.em}</span>${e.text}`;
+        b.innerHTML = `${this.emoteIcon(e.id, 0)}${e.text}`;
         b.addEventListener('click', () => {
           this.emotePicker.hidden = true;
           this.showEmote(this.emoteMe, e.id);
@@ -542,7 +552,7 @@ export class Battle {
     const e = EMOTES.find((x) => x.id === id) ?? EMOTES[0];
     el.hidden = true;
     void el.offsetWidth;
-    el.innerHTML = `<span class="em">${e.em}</span>${e.text}`;
+    el.innerHTML = `${this.emoteIcon(e.id, el === this.emoteEnemy ? 1 : 0)}${e.text}`;
     el.hidden = false;
     this.emoteTimers.push(window.setTimeout(() => (el.hidden = true), 2200));
   }
