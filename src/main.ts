@@ -37,13 +37,53 @@ const battle = new Battle(sound, {
     saveSettings(settings);
   },
   onQuit() {
+    dropBattleEntry();
     battle.stop();
     showHome();
   },
   onDeck() {
+    dropBattleEntry();
     battle.stop();
     openDeck('home');
   },
+});
+
+// ───────── 返回鍵（Android 返回鍵、iOS 側滑返回、IG／Threads 內建瀏覽器的返回） ─────────
+// 對戰時在瀏覽紀錄放一筆；第一次按返回只暫停（不會直接離開網頁），暫停中或結算時再按返回才回主畫面。
+let battleEntry = false;
+let ignorePop = false;
+
+function pushBattleEntry(): void {
+  if (battleEntry) return;
+  try {
+    history.pushState({ btd: 'battle' }, '');
+    battleEntry = true;
+  } catch {
+    // 不能寫瀏覽紀錄時照常遊玩
+  }
+}
+
+function dropBattleEntry(): void {
+  if (!battleEntry) return;
+  battleEntry = false;
+  ignorePop = true;
+  history.back();
+}
+
+window.addEventListener('popstate', () => {
+  if (ignorePop) {
+    ignorePop = false;
+    return;
+  }
+  battleEntry = false;
+  if (!battle.isActive) return;
+  if (battle.running) {
+    battle.pause('按了返回：先暫停對戰。再按一次返回會回到主畫面。');
+    pushBattleEntry();
+  } else {
+    battle.stop();
+    showHome();
+  }
 });
 
 // ───────── 主畫面 ─────────
@@ -103,6 +143,7 @@ function startBattle(): void {
   home.hidden = true;
   deckScreen.hidden = true;
   battle.start(settings.deck, settings.level, fixedSeed);
+  pushBattleEntry();
 }
 
 function showHowto(then: (() => void) | null): void {

@@ -504,6 +504,59 @@ if (run('3')) {
   await ctx.close();
 }
 
+// ───────── 3a-2. 返回鍵：對戰中第一次只暫停，再按一次回主畫面；主畫面按返回正常離開；多場後瀏覽紀錄不會累積 ─────────
+if (run('3')) {
+  const vp = VIEWPORTS[2];
+  const { ctx, page } = await newPage(vp);
+  // 先開一個別的頁面，模擬從 IG／Threads 點連結進來（返回要能回到那裡）
+  await page.goto(`${BASE}favicon.svg`);
+  await page.goto(`${BASE}?test=1&seed=13`);
+  await page.waitForSelector('#screen-home:not([hidden])');
+  const len0 = await page.evaluate(() => history.length);
+  await page.evaluate(() => window.__btd.skipIntro(true));
+  await page.click('#btn-play');
+  if (await page.isVisible('#btn-howto-ok')) await page.click('#btn-howto-ok');
+  await page.waitForSelector('#screen-battle:not([hidden])');
+  await sleep(800);
+  const url0 = page.url();
+  await page.evaluate(() => history.back());
+  await sleep(600);
+  const paused1 = await page.isVisible('#ov-pause');
+  const inBattle1 = await page.isVisible('#screen-battle');
+  await page.evaluate(() => history.back());
+  await sleep(600);
+  const home2 = await page.isVisible('#screen-home');
+  const url2 = page.url();
+  check('[390x844] 返回鍵：對戰中第一次只暫停，再按一次回主畫面，不會離開網頁', paused1 && inBattle1 && home2 && url2 === url0, `第一次：暫停 ${paused1}、仍在對戰 ${inBattle1}；第二次：主畫面 ${home2}；網址不變 ${url2 === url0}`);
+  // 連續幾場：用介面離開（回主畫面）、再戰一場、結算後按返回，瀏覽紀錄都不能越堆越長
+  const lens = [];
+  for (let m = 0; m < 3; m++) {
+    await page.click('#btn-play');
+    await page.waitForSelector('#screen-battle:not([hidden])');
+    await page.evaluate(() => window.__btd.autoplay(600));
+    await page.waitForSelector('#ov-result:not([hidden])');
+    await sleep(500);
+    if (m === 0) {
+      await page.click('#btn-again');
+      await sleep(400);
+      await page.evaluate(() => window.__btd.autoplay(600));
+      await page.waitForSelector('#ov-result:not([hidden])');
+      await sleep(500);
+    }
+    if (m === 1) await page.evaluate(() => history.back());
+    else await page.click('#btn-result-home');
+    await page.waitForSelector('#screen-home:not([hidden])');
+    await sleep(400);
+    lens.push(await page.evaluate(() => history.length));
+  }
+  check('[390x844] 多場之後瀏覽紀錄不會累積（每場最多一筆）', lens.every((n) => n <= len0 + 1), `開始 ${len0}，各場後 ${lens.join(' / ')}`);
+  // 主畫面按返回：不攔截，正常回到前一個頁面
+  await page.evaluate(() => history.back());
+  const left = await page.waitForURL(/favicon\.svg/, { timeout: 5000 }).then(() => true).catch(() => false);
+  check('[390x844] 主畫面按返回會正常離開遊戲頁（回到前一頁）', left, page.url());
+  await ctx.close();
+}
+
 // ───────── 3b. 沒有 Web Audio 時仍可開戰；3c. 2D 備援畫面 ─────────
 for (const variant of run('3') ? ['noaudio', 'render2d'] : []) {
   const vp = VIEWPORTS[3];

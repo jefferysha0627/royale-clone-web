@@ -221,6 +221,11 @@ export class Battle {
 
   private landscape: MediaQueryList | null = null;
 
+  /** 對戰進行中且沒有暫停（返回鍵第一次按下時先暫停用）。 */
+  get running(): boolean {
+    return this.active && !this.paused && this.game.phase !== 'ended';
+  }
+
   /** 對戰中手機橫拿時顯示提示並暫停；轉回直向後提示消失，由玩家按「繼續」。 */
   private checkOrientation(): void {
     const sideways = !!this.landscape?.matches && this.active;
