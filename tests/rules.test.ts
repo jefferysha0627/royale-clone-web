@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  AI_DECKS, AI_LEVELS, AiController, ARENA, CARDS, DEFAULT_PLAYER_DECK, DT, Game, KING_ACTIVATION_TIME, MATCH, Rng, TOWERS, UNITS,
+  AI_DECKS, AI_LEVELS, AiController, ARENA, CARDS, DEFAULT_PLAYER_DECK, DEPLOY, DT, Game, KING_ACTIVATION_TIME, MATCH, Rng, TOWERS, UNITS,
   type Entity, type GameEvent, type Team,
 } from '../src/sim';
 
@@ -611,7 +611,11 @@ describe('可重現性與電腦對手', () => {
           for (const ev of g.drainEvents()) {
             if (ev.type === 'deploy' && ev.team === 1) {
               deploys++;
-              if (CARDS[ev.cardId].kind !== 'spell') expect(ev.y).toBeLessThan(ARENA.riverTop);
+              // 部隊只在己方半場；側塔倒下後，該路才可放進前進區
+              if (CARDS[ev.cardId].kind !== 'spell' && ev.y >= ARENA.riverTop) {
+                expect(princess(g, 0, ev.x < ARENA.width / 2 ? 0 : 1).alive, `${level} ${deck.name} pocket`).toBe(false);
+                expect(ev.y).toBeLessThanOrEqual(ARENA.height - DEPLOY.pocketMinY);
+              }
             }
           }
           g.step();

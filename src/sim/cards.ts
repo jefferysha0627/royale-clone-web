@@ -292,8 +292,8 @@ export const AI_DECKS: { name: string; cards: string[] }[] = [
   { name: '巨人推進', cards: ['giant', 'wizard', 'musketeer', 'goblins', 'arrows', 'zap', 'knight', 'tombstone'] },
   { name: '狼騎快攻', cards: ['wolf_rider', 'musketeer', 'ice_spirit', 'skeletons', 'cannon', 'fireball', 'log', 'knight'] },
   { name: '石像重推', cards: ['golem', 'baby_dragon', 'gargoyles', 'iron_swordsman', 'zap', 'poison', 'ice_spirit', 'knight'] },
-  { name: '誘餌消耗', cards: ['goblin_barrel', 'skeleton_army', 'spear_goblins', 'inferno', 'rocket', 'log', 'knight', 'fire_spirit'] },
-  { name: '空中轟炸', cards: ['bomb_blimp', 'bats', 'gargoyles', 'axe_dwarf', 'arrows', 'fireball', 'tombstone', 'ice_spirit'] },
+  { name: '誘餌消耗', cards: ['goblin_barrel', 'skeleton_army', 'spear_goblins', 'inferno', 'fireball', 'log', 'knight', 'iron_swordsman'] },
+  { name: '空中轟炸', cards: ['bomb_blimp', 'iron_swordsman', 'bats', 'musketeer', 'axe_dwarf', 'arrows', 'fireball', 'ice_spirit'] },
   { name: '騎士衝鋒', cards: ['lancer', 'giant_skeleton', 'witch', 'bomber', 'archers', 'zap', 'fire_spirit', 'iron_swordsman'] },
 ];
 
