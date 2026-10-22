@@ -129,7 +129,11 @@ export class Battle {
     this.bindButtons();
     const ro = typeof ResizeObserver === 'function' ? new ResizeObserver(() => this.layout()) : null;
     if (ro) ro.observe(this.wrap);
-    window.addEventListener('resize', () => this.layout());
+    window.addEventListener('resize', () => {
+      this.layout();
+      // 舊版 Safari 的 MediaQueryList 沒有 change 事件，轉向時靠 resize 補檢查
+      this.checkOrientation();
+    });
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'hidden') this.autoPause();
     });
