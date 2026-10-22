@@ -1,0 +1,217 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>皇室戰爭克隆｜非官方・手機點開就能玩的推塔對戰</title>
+    <meta name="description" content="非官方的皇室戰爭風格克隆小遊戲：出牌派兵、過橋推倒對方的塔，三分鐘一局，單人對電腦，免安裝免登入。與 Supercell 無關。" />
+    <meta name="theme-color" content="#16212c" />
+    <meta name="format-detection" content="telephone=no" />
+    <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="apple-touch-icon.png" />
+    <link rel="canonical" href="__SITE_URL__" data-site-url />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="皇室戰爭克隆" />
+    <meta property="og:title" content="皇室戰爭克隆｜三分鐘推塔對戰（非官方）" />
+    <meta property="og:description" content="點開就能玩：出牌派兵、過橋推倒對方的塔。單人對電腦，免安裝免登入。非官方克隆，與 Supercell 無關。" />
+    <meta property="og:image" content="__SITE_URL__og-image.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="皇室戰爭克隆：直向競技場，藍紅雙方隔著河道與兩座橋對戰" />
+    <meta property="og:url" content="__SITE_URL__" data-site-url />
+    <meta property="og:locale" content="zh_TW" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="皇室戰爭克隆｜三分鐘推塔對戰（非官方）" />
+    <meta name="twitter:description" content="點開就能玩：出牌派兵、過橋推倒對方的塔。單人對電腦，免安裝免登入。非官方克隆，與 Supercell 無關。" />
+    <meta name="twitter:image" content="__SITE_URL__og-image.png" />
+    <style>
+      html, body { margin: 0; height: 100%; background: #16212c; color: #f4efe4; font-family: system-ui, -apple-system, "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", sans-serif; }
+      .boot { position: fixed; inset: 0; z-index: 50; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; background: #16212c; }
+      .boot-logo { font-size: 34px; font-weight: 900; letter-spacing: 2px; }
+      .boot-bar { width: 180px; height: 8px; border-radius: 4px; background: #2b3a48; overflow: hidden; }
+      .boot-bar i { display: block; height: 100%; width: 30%; background: #f2b233; transition: width .3s; }
+      .boot p { margin: 0; font-size: 14px; color: #b8c2cc; }
+      .boot button { font: inherit; font-weight: 700; min-height: 44px; padding: 10px 20px; border-radius: 10px; border: 0; background: #f2b233; color: #1d1405; }
+    </style>
+  </head>
+  <body>
+    <div id="boot" class="boot">
+      <div class="boot-logo">皇室戰爭克隆</div>
+      <div class="boot-bar"><i id="boot-fill"></i></div>
+      <p id="boot-msg">載入中…</p>
+      <button id="boot-retry" type="button" hidden onclick="location.reload()">重新載入</button>
+    </div>
+
+    <div id="app">
+      <!-- 主畫面 -->
+      <section id="screen-home" class="screen home" hidden>
+        <div class="home-top">
+          <button id="btn-mute-home" class="chip-btn" type="button" aria-pressed="false">音效：開</button>
+        </div>
+        <div class="home-hero">
+          <svg class="logo-mark" viewBox="0 0 64 64" aria-hidden="true">
+            <rect x="6" y="20" width="18" height="30" rx="3" fill="#2f6fe0" />
+            <rect x="40" y="20" width="18" height="30" rx="3" fill="#d8423a" />
+            <rect x="4" y="14" width="5" height="8" fill="#2f6fe0" /><rect x="12.5" y="14" width="5" height="8" fill="#2f6fe0" /><rect x="21" y="14" width="5" height="8" fill="#2f6fe0" />
+            <rect x="38" y="14" width="5" height="8" fill="#d8423a" /><rect x="46.5" y="14" width="5" height="8" fill="#d8423a" /><rect x="55" y="14" width="5" height="8" fill="#d8423a" />
+            <rect x="17" y="41" width="30" height="12" rx="2" fill="#9b6b3d" /><path d="M24 41 V53 M32 41 V53 M40 41 V53" stroke="#6e4826" stroke-width="2" /><rect x="15" y="39" width="34" height="3" rx="1.5" fill="#f2b233" />
+            <rect x="2" y="50" width="60" height="6" rx="3" fill="#3b8fd0" />
+          </svg>
+          <h1 class="title">皇室戰爭克隆</h1>
+          <p class="tagline">出牌派兵、過橋推塔，三分鐘一局</p>
+          <p class="mode-note">單人對電腦・免安裝・免登入</p>
+        </div>
+        <div class="home-actions">
+          <button id="btn-play" class="btn primary big" type="button">開始對戰</button>
+          <div class="seg" role="radiogroup" aria-label="電腦難度">
+            <button type="button" class="seg-btn" data-diff="easy" role="radio">簡單</button>
+            <button type="button" class="seg-btn" data-diff="normal" role="radio">普通</button>
+            <button type="button" class="seg-btn" data-diff="hard" role="radio">困難</button>
+          </div>
+          <div class="row">
+            <button id="btn-deck" class="btn" type="button">編輯牌組</button>
+            <button id="btn-howto" class="btn" type="button">玩法說明</button>
+          </div>
+        </div>
+        <div class="home-deck">
+          <div class="home-deck-head"><span>目前牌組</span><span id="home-avg"></span></div>
+          <div id="home-deck-cards" class="mini-deck"></div>
+        </div>
+        <p id="home-record" class="record"></p>
+        <button id="btn-share-home" class="btn ghost" type="button">分享遊戲連結給朋友</button>
+        <div id="share-manual-home" class="share-manual" hidden>
+          <label for="share-input-home">長按或全選後複製：</label>
+          <input id="share-input-home" class="share-input" type="text" readonly />
+        </div>
+        <footer class="foot">非官方粉絲作品，與 Supercell 無關，素材皆為自製 · <span class="credit">Site by JeffreySha</span></footer>
+      </section>
+
+      <!-- 牌組編輯 -->
+      <section id="screen-deck" class="screen deck" hidden>
+        <div class="deck-head">
+          <div class="deck-title">
+            <h2>編輯牌組</h2>
+            <span id="deck-count" class="deck-count"></span>
+          </div>
+          <button id="btn-deck-done" class="btn small primary" type="button">完成</button>
+        </div>
+        <p id="deck-hint" class="deck-hint">點卡牌加入或移出牌組，需要剛好 8 張。</p>
+        <div id="deck-grid" class="deck-grid"></div>
+        <div class="deck-foot">
+          <span id="deck-avg" class="deck-avg"></span>
+          <button id="btn-deck-reset" class="btn small ghost" type="button">恢復預設牌組</button>
+        </div>
+      </section>
+
+      <!-- 對戰 -->
+      <section id="screen-battle" class="screen battle" hidden>
+        <div id="arena-wrap" class="arena-wrap">
+          <canvas id="arena" aria-label="對戰場地"></canvas>
+          <button id="btn-pause" class="hud-pause" type="button" aria-label="暫停">
+            <svg viewBox="0 0 20 20" aria-hidden="true"><rect x="4" y="3" width="4" height="14" rx="1" /><rect x="12" y="3" width="4" height="14" rx="1" /></svg>
+          </button>
+          <div class="hud-time">
+            <span class="hud-time-label" id="hud-time-label">剩餘時間</span>
+            <span id="hud-timer" class="hud-timer">3:00</span>
+            <span id="hud-x2" class="hud-x2" hidden>能量 ×2</span>
+          </div>
+          <div class="hud-crowns" aria-label="皇冠數">
+            <span class="crown enemy"><svg viewBox="0 0 20 16" aria-hidden="true"><path d="M1 14 L3 3 L7 8 L10 1 L13 8 L17 3 L19 14 Z" /></svg><b id="hud-crown-enemy">0</b></span>
+            <span class="crown me"><svg viewBox="0 0 20 16" aria-hidden="true"><path d="M1 14 L3 3 L7 8 L10 1 L13 8 L17 3 L19 14 Z" /></svg><b id="hud-crown-me">0</b></span>
+          </div>
+          <div id="banner" class="banner" hidden></div>
+          <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+        </div>
+        <div id="hand-panel" class="hand-panel">
+          <div class="hand-row">
+            <div class="next-wrap">
+              <span class="next-label">下一張</span>
+              <div id="next-card" class="card next"></div>
+            </div>
+            <div id="hand" class="hand">
+              <button class="card" type="button" data-index="0"></button>
+              <button class="card" type="button" data-index="1"></button>
+              <button class="card" type="button" data-index="2"></button>
+              <button class="card" type="button" data-index="3"></button>
+            </div>
+          </div>
+          <div class="elixir" aria-label="能量">
+            <span class="elixir-drop"><span id="elixir-num">5</span></span>
+            <div class="elixir-bar"><div id="elixir-fill" class="elixir-fill"></div><div class="elixir-ticks"></div></div>
+          </div>
+        </div>
+
+        <!-- 暫停 -->
+        <div id="ov-pause" class="overlay" hidden>
+          <div class="panel">
+            <h2>暫停中</h2>
+            <p id="pause-note" class="muted"></p>
+            <button id="btn-resume" class="btn primary big" type="button">繼續</button>
+            <button id="btn-mute-pause" class="btn" type="button">音效：開</button>
+            <button id="btn-restart" class="btn" type="button">重新開始</button>
+            <button id="btn-quit" class="btn ghost" type="button">離開對戰</button>
+          </div>
+        </div>
+
+        <!-- 結算 -->
+        <div id="ov-result" class="overlay" hidden>
+          <div class="panel result">
+            <h2 id="result-title" class="result-title">勝利！</h2>
+            <div class="result-crowns">
+              <span class="rc me"><b id="result-crown-me">0</b><small>你</small></span>
+              <span class="rc-sep">:</span>
+              <span class="rc enemy"><b id="result-crown-enemy">0</b><small>電腦</small></span>
+            </div>
+            <p id="result-reason" class="muted"></p>
+            <p id="result-stats" class="result-stats"></p>
+            <button id="btn-again" class="btn primary big" type="button">再玩一場</button>
+            <div class="row">
+              <button id="btn-result-deck" class="btn" type="button">換牌組</button>
+              <button id="btn-result-home" class="btn" type="button">回主畫面</button>
+            </div>
+            <button id="btn-share-result" class="btn ghost" type="button">分享戰績給朋友</button>
+            <div id="share-manual-result" class="share-manual" hidden>
+              <label for="share-input-result">長按或全選後複製：</label>
+              <input id="share-input-result" class="share-input" type="text" readonly />
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 玩法說明 -->
+      <div id="ov-howto" class="overlay top" hidden>
+        <div class="panel howto">
+          <h2>怎麼玩</h2>
+          <ol class="howto-list">
+            <li><b>出兵</b>：把下方卡牌拖到己方半場；或先點卡牌，再點地面。紅色區域不能放。</li>
+            <li><b>能量</b>：出牌會花能量，能量會自動回復。最後 1 分鐘回復速度加倍。</li>
+            <li><b>推塔</b>：推倒側塔得 1 頂皇冠，推倒中間的國王塔直接獲勝。</li>
+            <li><b>時間到</b>：3 分鐘後皇冠多者勝；平手進入延長賽，先拿到皇冠的一方獲勝。</li>
+          </ol>
+          <button id="btn-howto-ok" class="btn primary big" type="button">知道了</button>
+        </div>
+      </div>
+    </div>
+
+    <noscript><p style="padding:20px">需要啟用 JavaScript 才能遊玩。</p></noscript>
+    <script>
+      (function () {
+        var fill = document.getElementById('boot-fill');
+        if (fill) fill.style.width = '60%';
+        function fail() {
+          if (window.__booted) return;
+          var m = document.getElementById('boot-msg');
+          var b = document.getElementById('boot-retry');
+          if (m) m.textContent = '載入失敗，請檢查網路後重試。';
+          if (b) b.hidden = false;
+        }
+        window.addEventListener('error', function (e) {
+          var t = e && e.target;
+          if (t && (t.tagName === 'SCRIPT' || t.tagName === 'LINK')) fail();
+        }, true);
+        setTimeout(fail, 15000);
+      })();
+    </script>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

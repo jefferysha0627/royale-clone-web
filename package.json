@@ -1,0 +1,28 @@
+{
+  "name": "bridge-tower-duel",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview --host --port 4173",
+    "test": "vitest run",
+    "sim": "vite-node scripts/simulate.ts",
+    "e2e": "node scripts/e2e.mjs",
+    "assets": "node scripts/make-assets.mjs",
+    "check": "tsc --noEmit && vitest run && vite build",
+    "deploy:cf": "node scripts/deploy.mjs cf",
+    "deploy:gh": "node scripts/deploy.mjs gh",
+    "verify:live": "node scripts/verify-live.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "^24.19.2",
+    "playwright": "^1.64.1",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.5",
+    "vite-node": "^6.0.0",
+    "vitest": "^5.0.5",
+    "wrangler": "^4.151.3"
+  }
+}
