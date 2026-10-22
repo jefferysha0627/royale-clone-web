@@ -575,11 +575,20 @@ if (run('5')) {
   await page.waitForSelector('#screen-battle:not([hidden])');
   await page.evaluate(() => {
     const b = window.__btd;
-    for (let i = 0; i < 160; i++) {
-      b.autoplay(0.5);
-      const g = b.game();
-      if (g.entities.filter((e) => e.alive && e.kind !== 'tower').length >= 14 || g.phase === 'ended') break;
+    b.autoplay(20);
+    // 雙方各放一隊骷髏大軍、哥布林與幼龍在河邊交戰，做出大量單位同時混戰的畫面
+    const g = b.game();
+    const put = (team, card, x, y) => {
+      const p = g.players[team];
+      p.hand[0] = card;
+      p.elixir = 10;
+      g.deploy(team, 0, x, y);
+    };
+    for (const [card, x] of [['skeleton_army', 4.5], ['goblins', 13.5], ['baby_dragon', 9.5], ['skeleton_army', 13.5]]) {
+      put(0, card, x, 18.5);
+      put(1, card, x, 13.5);
     }
+    b.autoplay(1.2);
   });
   await cdp.send('Emulation.setCPUThrottlingRate', { rate: 4 });
   await sleep(1500);
