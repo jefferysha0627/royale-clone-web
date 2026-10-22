@@ -31,6 +31,9 @@ const S: Record<string, { at: [number, number]; setup: () => void }> = {
   riders: { at: [9, 15], setup: () => { put(0, 'wolf_rider', 3.5, 18.5); put(0, 'lancer', 13.5, 21.5); put(1, 'cannon', 9, 10); } },
   spawners: { at: [9, 20], setup: () => { put(0, 'witch', 9.5, 21.5); put(0, 'tombstone', 12, 22); put(0, 'ice_spirit', 6.5, 18.5); put(0, 'fire_spirit', 7.5, 18.5); put(1, 'knight', 6.5, 13.5); put(1, 'goblins', 9.5, 13.5); } },
   towers: { at: [9, 16], setup: () => { put(0, 'iron_swordsman', 3.5, 17.5); put(0, 'bomber', 14.5, 18.5); put(0, 'spear_goblins', 14.5, 20.5); } },
+  tunnel: { at: [3.5, 9], setup: () => { put(0, 'tunneler', 1.5, 6.5); put(0, 'elixir_collector', 6, 22); } },
+  rage: { at: [9, 15], setup: () => { put(0, 'knight', 8.5, 18.5); put(0, 'archers', 10.5, 19.5); put(1, 'barbarians', 9.5, 11.5); setTimeout(() => put(0, 'rage', 9.5, 16.5), 1200); } },
+  freeze: { at: [3.5, 8], setup: () => { put(1, 'barbarians', 3.5, 10.5); setTimeout(() => put(0, 'freeze', 3.5, 8.5), 900); } },
   collapse: {
     at: [3.5, 8],
     setup: () => {

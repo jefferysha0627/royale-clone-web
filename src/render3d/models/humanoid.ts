@@ -5,9 +5,9 @@ import { Kit, type ModelAsset, type V3 } from '../kit';
 // 所有角色外觀皆為本作原創的通用奇幻造型。
 
 export type Hat =
-  | 'none' | 'helmet' | 'horned' | 'wizard' | 'hood' | 'cap' | 'band' | 'iron' | 'winged' | 'skull' | 'bandana' | 'witch' | 'crest' | 'goggles' | 'royal';
+  | 'none' | 'helmet' | 'horned' | 'wizard' | 'hood' | 'cap' | 'band' | 'iron' | 'winged' | 'skull' | 'bandana' | 'witch' | 'crest' | 'goggles' | 'royal' | 'hardhat';
 export type Weapon =
-  | 'none' | 'sword' | 'greatsword' | 'axe2' | 'club' | 'spear' | 'musket' | 'staff' | 'skullstaff' | 'bow' | 'bomb' | 'lance' | 'mace' | 'crossbow' | 'cleaver' | 'scepter';
+  | 'none' | 'sword' | 'greatsword' | 'axe2' | 'club' | 'spear' | 'musket' | 'staff' | 'skullstaff' | 'bow' | 'bomb' | 'lance' | 'mace' | 'crossbow' | 'cleaver' | 'scepter' | 'pickaxe';
 export type Face = 'dot' | 'angry' | 'skull' | 'visor' | 'glow' | 'sleepy';
 
 export interface HumanoidSpec {
@@ -322,6 +322,14 @@ function addHat(k: Kit, hat: Hat, s: HumanoidSpec, ox: number, hy: number, oz: n
     case 'skull':
       k.shell(r * 1.06, { at: [ox, hy + r * 0.08, oz - r * 0.05], rot: [-0.45, 0, 0], color: c }, Math.PI * 0.45);
       break;
+    case 'hardhat':
+      // 礦工安全帽：圓頂、帽簷、前方頭燈（亮黃）
+      k.shell(r * 1.12, { at: [ox, hy + r * 0.12, oz - r * 0.04], rot: [-0.35, 0, 0], color: c }, Math.PI * 0.5);
+      k.cyl(r * 1.22, r * 1.22, r * 0.08, { at: [ox, hy + r * 0.55, oz + r * 0.05], rot: [-0.35, 0, 0], color: shade(c, -0.12) }, 16);
+      k.box(r * 0.16, r * 0.6, r * 0.16, { at: [ox, hy + r * 1.05, oz - r * 0.1], rot: [-0.35, 0, 0], color: shade(c, 0.12) });
+      k.cyl(r * 0.2, r * 0.2, r * 0.18, { at: [ox, hy + r * 0.82, oz + r * 0.9], rot: [Math.PI / 2 - 0.35, 0, 0], color: '#4a4a52' }, 10);
+      k.sphere(r * 0.16, { at: [ox, hy + r * 0.86, oz + r * 1.0], color: '#fff3a0' }, 8);
+      break;
     case 'royal':
       // 原創的王族軟帽：白色毛皮帽緣、隊伍色天鵝絨帽頂、金色細環與寶石（不是尖齒王冠）
       k.torus(r * 0.98, r * 0.17, { at: [ox, hy + r * 0.62, oz - r * 0.05], rot: [Math.PI / 2 - 0.2, 0, 0], color: '#f4f1e8' }, 16);
@@ -408,6 +416,13 @@ function addWeapon(k: Kit, w: Weapon, h: V3, armR: number, H: number, team: { ma
       k.sphere(0.14 * H, { at: [x, y + 0.08 * H, z + 0.08], color: '#2a2c33', bone: armR }, 10);
       k.cyl(0.02 * H, 0.02 * H, 0.08 * H, { at: [x, y + 0.24 * H, z + 0.08], color: '#c9a24a', bone: armR }, 5);
       k.sphere(0.035 * H, { at: [x, y + 0.29 * H, z + 0.08], color: '#ffd36b', bone: armR }, 6);
+      break;
+    case 'pickaxe':
+      // 十字鎬：木柄、兩頭尖的鐵鎬頭
+      k.cyl(0.03 * H, 0.03 * H, 0.75 * H, { at: [x, y + 0.24 * H, z + 0.05], color: wood, bone: armR }, 6);
+      k.cone(0.05 * H, 0.32 * H, { at: [x + 0.15 * H, y + 0.6 * H, z + 0.05], rot: [0, 0, -Math.PI / 2 - 0.25], color: '#9aa3ad', bone: armR }, 6);
+      k.cone(0.05 * H, 0.32 * H, { at: [x - 0.15 * H, y + 0.6 * H, z + 0.05], rot: [0, 0, Math.PI / 2 + 0.25], color: '#9aa3ad', bone: armR }, 6);
+      k.box(0.1 * H, 0.1 * H, 0.1 * H, { at: [x, y + 0.6 * H, z + 0.05], color: '#6b7078', bone: armR });
       break;
     case 'scepter':
       k.cyl(0.028 * H, 0.028 * H, 0.62 * H, { at: [x, y + 0.24 * H, z + 0.05], color: gold, bone: armR }, 6);

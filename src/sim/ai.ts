@@ -208,15 +208,85 @@ export class AiController {
     this.why = '';
     if (this.finisher(s)) return this.report(s, 'finish');
     if (this.defend(s)) return this.report(s, 'defend');
+    if (this.boost(s)) return this.report(s, 'boost');
     if (this.tiebreakChip(s)) return this.report(s, 'chip');
     if (this.chipTower(s)) return this.report(s, 'chip');
     if (this.valueSpell(s)) return this.report(s, 'spell');
     if (this.support(s)) return this.report(s, 'support');
+    if (this.pump(s)) return this.report(s, 'pump');
     if (this.push(s, false)) return this.report(s, 'push');
     if (this.avoidLeak(s)) this.report(s, 'leak');
   }
 
   private why = '';
+  private lastBoost = -99;
+
+  /** 狂暴與冰凍：我方部隊打到對方塔時使用（冰凍連同塔與附近的防守部隊一起凍住）。 */
+  private boost(s: Sit): boolean {
+    const g = this.game;
+    if (g.time - this.lastBoost < 3 || !this.chance(0.2 + this.opts.skill * 0.8)) return false;
+    const urgent = s.threats.some((t) => t.eta < 5 && t.value >= 3);
+    const rage = s.hand.find((h) => h.ci.rage && h.ci.cost <= s.elixir - (urgent ? 2 : 0));
+    const freeze = s.hand.find((h) => h.ci.freeze && h.ci.cost <= s.elixir - (urgent ? 2 : 0));
+    if (!rage && !freeze) return false;
+    for (const t of g.towers(this.enemy)) {
+      if (!t.alive) continue;
+      const attackers = g.entities.filter(
+        (e) => e.alive && e.team === this.team && e.kind === 'troop' && !e.tunneling && e.deployTimer <= 0 && distTo(e.x, e.y, t) <= Math.max(e.stats.range, 1) + 2.5,
+      );
+      if (attackers.length === 0) continue;
+      const value = attackers.reduce((sum, e) => sum + unitValue(e.unit, e.cardId) * (e.hp / e.maxHp), 0);
+      const cx = attackers.reduce((a, e) => a + e.x, 0) / attackers.length;
+      const cy = attackers.reduce((a, e) => a + e.y, 0) / attackers.length;
+      if (freeze && value >= 3.5) {
+        // 落點在塔與部隊之間：塔要在範圍內，順便凍住附近的防守部隊
+        const fx = (cx + t.x) / 2;
+        const fy = (cy + t.y) / 2;
+        if (distTo(fx, fy, t) <= freeze.ci.spell!.radius - 0.3) {
+          const dv = s.foes.filter((f) => f.e && Math.hypot(f.x - fx, f.y - fy) <= 3.2).reduce((sum, f) => sum + f.value * (f.hp / f.maxHp), 0);
+          if (dv >= 2 || t.hp < t.maxHp * 0.5) {
+            this.lastBoost = g.time;
+            return this.castSpell(freeze, fx, fy, true);
+          }
+        }
+      }
+      if (rage && attackers.length >= 2 && value >= 4) {
+        this.lastBoost = g.time;
+        return this.castSpell(rage, cx, cy, true);
+      }
+    }
+    return false;
+  }
+
+  /** 能量收集器：沒有威脅、能量充足時放在後場（另一路的後方）。 */
+  private pump(s: Sit): boolean {
+    const h = s.hand.find((x) => x.ci.pump && x.ci.cost <= s.elixir);
+    if (!h || s.threats.some((t) => t.eta < 10)) return false;
+    if (s.mult < 2 && s.elixir < Math.min(9.5, h.ci.cost + 2.5)) return false;
+    const mine = this.game.entities.filter((e) => e.alive && e.team === this.team && e.stats.elixirGen).length;
+    if (mine >= 2) return false;
+    const side = this.lane === 0 ? 1 : -1;
+    return this.deployOwn(h, 9 + side * 4.5, 30.5);
+  }
+
+  /** 地道挖掘者：鑽到對方側塔外側貼著塔身冒出來。 */
+  private deployTunnel(h: HandCard, lane: 0 | 1): boolean {
+    const g = this.game;
+    const princesses = g.towers(this.enemy).filter((t) => t.alive && t.unit === 'princess');
+    const t = princesses.find((x) => x.lane === lane) ?? princesses.sort((a, b) => a.hp - b.hp)[0] ?? g.king(this.enemy);
+    const out = t.x < ARENA.width / 2 ? -1 : 1;
+    const back = this.team === 0 ? -1 : 1; // 對方塔的後方（遠離河道）
+    const r = t.half + 0.5;
+    for (const [ox, oy] of [[out * r, 0], [0, back * r], [-out * r, 0], [0, -back * r]] as [number, number][]) {
+      const n = this.opts.noise * 0.3;
+      const [sx, sy] = g.snap(h.id, t.x + ox + this.rng.range(-n, n), t.y + oy + this.rng.range(-n, n));
+      if (!g.canDeployAt(this.team, h.id, sx, sy)) continue;
+      const ok = g.deploy(this.team, h.index, sx, sy).ok;
+      if (ok && this.trace) this.why += ` => ${h.id}@${sx.toFixed(1)},${this.vy(sy).toFixed(1)}`;
+      return ok;
+    }
+    return false;
+  }
 
   private report(s: Sit, kind: string): void {
     if (!this.trace) return;
@@ -269,6 +339,15 @@ export class AiController {
       if (!e.alive || e.team === this.team || e.kind === 'tower') continue;
       const seen = this.seenAt.get(e.id);
       if (seen === undefined || g.time - seen < delay) continue;
+      if (e.tunneling) {
+        // 鑽地中：看得到地面隆起往哪裡去，當成之後會在落點冒出來的部隊
+        const eta = Math.hypot(e.tunnelX - e.x, e.tunnelY - e.y) / (e.stats.tunnelSpeed ?? 10);
+        out.push({
+          e: null, unit: e.unit, cardId: e.cardId, st: e.stats, kind: e.kind, x: e.tunnelX, y: e.tunnelY, hp: e.hp, maxHp: e.maxHp,
+          value: unitValue(e.unit, e.cardId), appear: eta, deploy: e.stats.deployTime, pred: new Map(),
+        });
+        continue;
+      }
       out.push({
         e, unit: e.unit, cardId: e.cardId, st: e.stats, kind: e.kind, x: e.x, y: e.y, hp: e.hp, maxHp: e.maxHp,
         value: unitValue(e.unit, e.cardId), appear: 0, deploy: e.deployTimer, pred: new Map(),
@@ -582,7 +661,7 @@ export class AiController {
   /** 這張牌對這路威脅的最佳出手時機與位置。 */
   private defOption(s: Sit, th: Threat, h: HandCard, base: number): DefOption | null {
     const ci = h.ci;
-    if (ci.kind === 'spell' ? !ci.damageSpell : ci.hunter || !ci.st) return null;
+    if (ci.kind === 'spell' ? !ci.damageSpell : ci.hunter || !ci.st || ci.pump) return null;
     let best: DefOption | null = null;
     for (const d of DELAYS.slice(0, Math.max(1, this.opts.plan))) {
       if (ci.cost > s.elixir + s.rate * d + 1e-6) continue; // 到時候能量還不夠
@@ -921,6 +1000,7 @@ export class AiController {
     const ci = h.ci;
     const bx = ARENA.bridgeXs[lane];
     const tc = lane === 0 ? 1 : -1;
+    if (ci.tunnel) return this.deployTunnel(h, lane);
     if (ci.spell?.kind === 'barrel') {
       const p = g.towers(this.enemy).find((t) => t.unit === 'princess' && t.lane === lane && t.alive);
       const t = p ?? g.king(this.enemy);
@@ -946,7 +1026,7 @@ export class AiController {
     const troops = s.hand.filter((h) => h.ci.kind === 'troop' && h.ci.cost <= s.elixir).sort((a, b) => a.ci.cost - b.ci.cost);
     if (troops.length) return this.deployOwn(troops[0], ARENA.bridgeXs[this.lane], 30.5);
     // 只剩建築：對手有只打建築的牌時，預先放在拉怪點
-    const b = s.hand.find((h) => h.ci.kind === 'building' && h.ci.cost <= s.elixir);
+    const b = s.hand.find((h) => h.ci.kind === 'building' && !h.ci.pump && h.ci.cost <= s.elixir);
     if (b && [...this.model.seen].some((id) => cardInfo(id).hunter)) return this.deployOwn(b, 9 - (this.lane === 0 ? 1 : -1), 22);
     return false;
   }

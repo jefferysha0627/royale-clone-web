@@ -47,6 +47,9 @@ export interface UnitStats {
   spawner?: { unit: string; count: number; start: number; pause: number; interval: number };
   lifetime?: number; // 建築存在秒數
   half?: number; // 建築方形佔地的半邊長
+  towerMul?: number; // 對公主塔／國王塔的傷害倍率（地道挖掘者 25%）
+  tunnelSpeed?: number; // 可部署到場上任何地方：從己方國王塔由地底鑽過去的速度（格／秒）
+  elixirGen?: { amount: number; interval: number; onDeath: number }; // 能量收集器
 }
 
 export interface UnitDef {
@@ -74,6 +77,8 @@ export interface SpellStats {
   rollRange?: number;
   rollHalfDepth?: number;
   spawn?: { unit: string; count: number; deployTime: number };
+  freeze?: boolean; // stun 以冰凍呈現（冰凍法術）
+  rage?: { mul: number; linger: number }; // 狂暴：範圍內己方移動、攻擊與召喚加速，離開範圍後效果再維持 linger 秒
 }
 
 export interface CardDef {
@@ -211,6 +216,19 @@ export const UNITS: Record<string, UnitDef> = {
     // 三段傷害：第 1 段為資料集 11 級值，第 2、3 段以稀有度倍率換算 [R＋A]
     stats: ground({ hp: 1749, damage: 42, hitSpeed: 0.4, loadTime: 1.2, range: 6, sight: 6, speed: 0, radius: 0.6, mass: 100, targets: 'air-ground', lifetime: 30, half: 1, ramp: { damages: [42, 159, 846], stageTime: 2 } }),
   },
+  elixir_collector: {
+    id: 'elixir_collector', name: '能量收集器',
+    // 每 9 秒 1 點、存在 65 秒、倒下再給 1 點、碰撞半徑 1 格 [R]
+    stats: ground({
+      hp: 1070, damage: 0, hitSpeed: 10, loadTime: 0, range: 0, sight: 0, speed: 0, radius: 1, mass: 100, lifetime: 65, half: 1,
+      elixirGen: { amount: 1, interval: 9, onDeath: 1 },
+    }),
+  },
+  tunneler: {
+    id: 'tunneler', name: '地道挖掘者',
+    // 地底移動速度 650（約每秒 10.8 格）、對塔 25% [R]
+    stats: ground({ hp: 1210, damage: 193, hitSpeed: 1.2, loadTime: 0.7, range: 1.2, sight: 5.5, speed: 1.5, mass: 6, towerMul: 0.25, tunnelSpeed: 650 / 60 }),
+  },
   tombstone: {
     id: 'tombstone', name: '骷髏墓碑',
     stats: ground({
@@ -251,6 +269,8 @@ export const CARDS: Record<string, CardDef> = {
   cannon: { id: 'cannon', name: '加農砲', glyph: '砲', color: '#6d6f78', cost: 3, kind: 'building', rarity: 'common', role: '防守建築，吸引只打建築的敵人', unit: 'cannon' },
   inferno: { id: 'inferno', name: '熔岩塔', glyph: '熔', color: '#c4502a', cost: 5, kind: 'building', rarity: 'rare', role: '光束越燒越痛，剋坦克', unit: 'inferno' },
   tombstone: { id: 'tombstone', name: '骷髏墓碑', glyph: '墓', color: '#77707a', cost: 3, kind: 'building', rarity: 'rare', role: '持續召喚骷髏，倒下再放四隻', unit: 'tombstone' },
+  elixir_collector: { id: 'elixir_collector', name: '能量收集器', glyph: '集', color: '#c85ad0', cost: 6, kind: 'building', rarity: 'rare', role: '每 9 秒產生 1 點能量，倒下時再給 1 點', unit: 'elixir_collector' },
+  tunneler: { id: 'tunneler', name: '地道挖掘者', glyph: '掘', color: '#a0743a', cost: 3, kind: 'troop', rarity: 'legendary', role: '從地底鑽到場上任何地方，對塔傷害較低', unit: 'tunneler' },
   fireball: {
     id: 'fireball', name: '火球', glyph: '球', color: '#e0782f', cost: 4, kind: 'spell', rarity: 'rare', role: '中範圍高傷害並擊退',
     spell: { kind: 'projectile', radius: 2.5, damage: 689, towerPct: 0.3, speed: 10, hitsAir: true, pushback: 1 },
@@ -277,6 +297,16 @@ export const CARDS: Record<string, CardDef> = {
     id: 'poison', name: '毒霧', glyph: '毒', color: '#7aa83a', cost: 4, kind: 'spell', rarity: 'epic', role: '8 秒持續傷害並緩速',
     spell: { kind: 'area', radius: 3.5, damage: 91, towerPct: 0.3, speed: 0, hitsAir: true, duration: 8, tick: 1, slow: 0.15 },
   },
+  freeze: {
+    id: 'freeze', name: '冰凍', glyph: '凍', color: '#7fd3ff', cost: 4, kind: 'spell', rarity: 'epic', role: '範圍內的敵人全部凍住 4 秒',
+    // 半徑 3 格、冰凍 4 秒、對塔 30% [R]
+    spell: { kind: 'instant', radius: 3, damage: 115, towerPct: 0.3, speed: 0, hitsAir: true, stun: 4, freeze: true },
+  },
+  rage: {
+    id: 'rage', name: '狂暴', glyph: '怒', color: '#d0485a', cost: 2, kind: 'spell', rarity: 'epic', role: '範圍內己方移動與攻擊加快 35%',
+    // 半徑 3 格、持續 6 秒、每 0.3 秒刷新、離開後維持 2 秒、+35% [R]
+    spell: { kind: 'area', radius: 3, damage: 0, towerPct: 0, speed: 0, hitsAir: true, duration: 6, tick: 0.3, rage: { mul: 1.35, linger: 2 } },
+  },
   goblin_barrel: {
     id: 'goblin_barrel', name: '哥布林飛桶', glyph: '桶', color: '#8a6a3a', cost: 3, kind: 'spell', rarity: 'epic', role: '把三隻哥布林丟到任何地方',
     spell: { kind: 'barrel', radius: 1.5, damage: 0, towerPct: 1, speed: 400 / 60, hitsAir: false, spawn: { unit: 'goblin', count: 3, deployTime: 1.1 } },
@@ -289,12 +319,13 @@ export const DEFAULT_PLAYER_DECK = ['giant', 'musketeer', 'knight', 'archers', '
 
 /** 電腦牌組：各有明確的推進核心與對空、法術。 */
 export const AI_DECKS: { name: string; cards: string[] }[] = [
-  { name: '巨人推進', cards: ['giant', 'wizard', 'musketeer', 'goblins', 'arrows', 'zap', 'knight', 'tombstone'] },
-  { name: '狼騎快攻', cards: ['wolf_rider', 'musketeer', 'ice_spirit', 'skeletons', 'cannon', 'fireball', 'log', 'knight'] },
-  { name: '石像重推', cards: ['golem', 'baby_dragon', 'gargoyles', 'iron_swordsman', 'zap', 'poison', 'ice_spirit', 'knight'] },
-  { name: '誘餌消耗', cards: ['goblin_barrel', 'skeleton_army', 'spear_goblins', 'inferno', 'fireball', 'log', 'knight', 'iron_swordsman'] },
-  { name: '空中轟炸', cards: ['bomb_blimp', 'iron_swordsman', 'bats', 'musketeer', 'axe_dwarf', 'arrows', 'fireball', 'ice_spirit'] },
-  { name: '騎士衝鋒', cards: ['lancer', 'giant_skeleton', 'witch', 'bomber', 'archers', 'zap', 'fire_spirit', 'iron_swordsman'] },
+  { name: '巨人推進', cards: ['giant', 'wizard', 'archers', 'goblins', 'arrows', 'zap', 'knight', 'tombstone'] },
+  { name: '狼騎快攻', cards: ['wolf_rider', 'archers', 'ice_spirit', 'skeletons', 'cannon', 'zap', 'log', 'knight'] },
+  { name: '石像重推', cards: ['golem', 'baby_dragon', 'gargoyles', 'iron_swordsman', 'zap', 'poison', 'knight', 'elixir_collector'] },
+  { name: '誘餌消耗', cards: ['goblin_barrel', 'tunneler', 'skeleton_army', 'inferno', 'fireball', 'log', 'knight', 'musketeer'] },
+  { name: '空中轟炸', cards: ['bomb_blimp', 'giant', 'bats', 'musketeer', 'axe_dwarf', 'arrows', 'freeze', 'ice_spirit'] },
+  { name: '騎士衝鋒', cards: ['lancer', 'giant_skeleton', 'witch', 'bomber', 'archers', 'zap', 'rage', 'iron_swordsman'] },
+  { name: '地道控場', cards: ['tunneler', 'musketeer', 'skeletons', 'bomber', 'tombstone', 'log', 'fireball', 'knight'] },
 ];
 
 export function isValidDeck(deck: readonly string[]): boolean {

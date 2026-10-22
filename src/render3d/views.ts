@@ -127,7 +127,8 @@ export class UnitView {
     m.scale.set(sx * this.scale, sy * this.scale, sx * this.scale);
     this.flash = Math.max(0, this.flash - dt * 9);
     const deploying = e.deployTimer > 0 && this.dyingT < 0;
-    setStatusTint(this.mat, this.flash * this.flash * 0.5, st.frozen, e.stunTimer > 0 && !e.frozen);
+    const raged = e.rageTimer > 0 ? 0.6 + Math.sin(st.t * 9) * 0.4 : 0;
+    setStatusTint(this.mat, this.flash * this.flash * 0.5, st.frozen, e.stunTimer > 0 && !e.frozen, raged);
     if (this.dyingT < 0) {
       this.mat.transparent = deploying;
       this.mat.opacity = deploying ? 0.55 + 0.45 * (1 - e.deployTimer / Math.max(0.3, e.stats.deployTime)) : 1;

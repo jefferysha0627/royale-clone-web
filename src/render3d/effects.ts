@@ -191,7 +191,7 @@ const tmpC0 = new Color();
 const tmpC1 = new Color();
 
 export type Burst =
-  | 'dust' | 'smoke' | 'spark' | 'fire' | 'ice' | 'poison' | 'debris' | 'magic' | 'blood' | 'splinter' | 'elixir' | 'stun' | 'heal' | 'water';
+  | 'dust' | 'smoke' | 'spark' | 'fire' | 'ice' | 'poison' | 'debris' | 'magic' | 'blood' | 'splinter' | 'elixir' | 'stun' | 'heal' | 'water' | 'rage';
 
 export class Effects {
   readonly group = new Group();
@@ -316,6 +316,16 @@ export class Effects {
           tmpC0.set('#ffb8f0');
           tmpC1.set('#c03ad8');
           this.glow.emit(x, y + 0.2, z, Math.cos(a) * sp, 1 + R(), Math.sin(a) * sp, 0.45 + R() * 0.2, 0.28, 0.08, tmpC0, tmpC1, 0.9, 2, 2);
+        });
+        break;
+      case 'rage':
+        // 狂暴：從地面往上冒的紅色火花
+        emitN(n ?? Math.round(6 * power), () => {
+          const a = R() * Math.PI * 2;
+          const r = Math.sqrt(R()) * power;
+          tmpC0.set(R() < 0.5 ? '#ff9ab0' : '#ff6a88');
+          tmpC1.set('#a0163a');
+          this.glow.emit(x + Math.cos(a) * r, y, z + Math.sin(a) * r, 0, 1.2 + R() * 1.2, 0, 0.5 + R() * 0.4, 0.3, 0.06, tmpC0, tmpC1, 0.9, -0.5, 1);
         });
         break;
       case 'stun':

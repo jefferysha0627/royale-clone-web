@@ -31,10 +31,16 @@ export function toonMaterial(opts: ToonOptions = {}): MeshLambertMaterial {
 }
 
 /** 受擊閃白、冰凍、暈眩等狀態色，寫入 emissive。 */
-export function setStatusTint(m: MeshLambertMaterial, flash: number, frozen: boolean, stunned: boolean): void {
+export function setStatusTint(m: MeshLambertMaterial, flash: number, frozen: boolean, stunned: boolean, raged = 0): void {
   let r = flash;
   let g = flash;
   let b = flash;
+  // 狂暴：脈動的紅光（raged = 0～1 的強度）
+  if (raged > 0) {
+    r += 0.32 * raged;
+    g += 0.02 * raged;
+    b += 0.08 * raged;
+  }
   if (frozen) {
     r += 0.05;
     g += 0.22;

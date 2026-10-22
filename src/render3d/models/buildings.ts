@@ -76,6 +76,43 @@ export function buildTombstone(team: TeamPal): ModelAsset {
   return k.build(1.4);
 }
 
+/** 能量收集器（原創造型「能量井」）：石砌井座裡是粉紫色能量液，木架上吊著一顆會旋轉發光的能量水晶。 */
+export function buildCollector(team: TeamPal): ModelAsset {
+  const k = new Kit();
+  const root = k.addBone('root', -1, [0, 0, 0]);
+  const crystal = k.addBone('crystal', root, [0, 1.45, 0]);
+  k.bone = root;
+  k.cyl(0.92, 0.98, 0.18, { at: [0, 0.09, 0], color: STONE_D }, 14);
+  k.cyl(0.78, 0.86, 0.5, { at: [0, 0.38, 0], color: STONE }, 14);
+  for (let i = 0; i < 10; i++) {
+    const a = (i / 10) * Math.PI * 2;
+    k.box(0.3, 0.14, 0.18, { at: [Math.cos(a) * 0.8, 0.66, Math.sin(a) * 0.8], rot: [0, -a, 0], color: STONE_L });
+  }
+  // 井裡的能量液（略高於井口，避免和石面重疊閃爍）
+  k.cyl(0.7, 0.7, 0.05, { at: [0, 0.66, 0], color: '#d35ad8' }, 18);
+  k.cyl(0.38, 0.38, 0.05, { at: [0, 0.675, 0], color: '#f2a8f2' }, 14);
+  // 木架與橫樑
+  for (const sx of [1, -1]) {
+    k.box(0.12, 1.5, 0.12, { at: [sx * 0.72, 0.95, 0], color: WOOD });
+    k.box(0.16, 0.14, 0.2, { at: [sx * 0.72, 1.72, 0], color: WOOD_D });
+  }
+  k.box(1.6, 0.12, 0.12, { at: [0, 1.82, 0], color: WOOD });
+  k.cyl(0.02, 0.02, 0.18, { at: [0, 1.7, 0], color: '#4a4a52' }, 4);
+  // 隊伍色小旗
+  k.box(0.04, 0.3, 0.3, { at: [0.8, 1.98, 0.12], color: team.main });
+  k.cyl(0.025, 0.025, 0.4, { at: [0.78, 1.95, 0], color: WOOD_D }, 5);
+  // 旁邊的瓶罐
+  k.cyl(0.1, 0.12, 0.26, { at: [0.95, 0.13, 0.55], color: '#8a5a2e' }, 8);
+  k.sphere(0.12, { at: [-0.95, 0.12, 0.5], color: '#c85ad0' }, 8);
+  k.cyl(0.04, 0.04, 0.08, { at: [-0.95, 0.27, 0.5], color: '#8a5a2e' }, 6);
+  // 會旋轉的能量水晶
+  k.bone = crystal;
+  k.gem(0.3, { at: [0, 1.32, 0], scale: [0.85, 1.45, 0.85], color: '#e25ae8' });
+  k.gem(0.17, { at: [0, 1.34, 0], scale: [0.85, 1.45, 0.85], color: '#ffd0ff' });
+  k.torus(0.26, 0.03, { at: [0, 1.32, 0], rot: [Math.PI / 2, 0, 0], color: '#f2b233' }, 14);
+  return k.build(2.0);
+}
+
 // ───────── 防禦塔 ─────────
 
 const GOLD = '#f2b233';

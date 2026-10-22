@@ -48,6 +48,12 @@ export interface Entity {
   facing: number; // 弧度，畫面朝向
   jumping: boolean; // 跳河中
   lastAttack: number; // 最近一次出手的模擬時間（畫面用）
+  rageTimer: number; // 狂暴剩餘秒數
+  rageMul: number;
+  tunneling: boolean; // 從地底鑽往落點中（不能被攻擊、不碰撞）
+  tunnelX: number;
+  tunnelY: number;
+  genTimer: number; // 能量收集器：距離下次產生能量的秒數
 }
 
 export interface Projectile {
@@ -127,7 +133,7 @@ export interface Bomb {
 
 export type GameEvent =
   | { type: 'deploy'; team: Team; cardId: string; x: number; y: number; cost: number }
-  | { type: 'spawn'; id: number; team: Team; unit: string; x: number; y: number; source: 'card' | 'spawner' | 'death' | 'barrel' }
+  | { type: 'spawn'; id: number; team: Team; unit: string; x: number; y: number; source: 'card' | 'spawner' | 'death' | 'barrel' | 'tunnel' }
   | { type: 'attack'; id: number; unit: string; team: Team; x: number; y: number; tx: number; ty: number; targetId: number; ranged: boolean; charge: boolean }
   | { type: 'hit'; id: number; team: Team; x: number; y: number; amount: number; isTower: boolean; isBuilding: boolean }
   | { type: 'impact'; team: Team; x: number; y: number; radius: number; visual: ProjectileVisual }
@@ -140,6 +146,8 @@ export type GameEvent =
   | { type: 'blast'; team: Team; unit: string; x: number; y: number; radius: number; visual: 'quake' | 'bomb' }
   | { type: 'charge'; id: number }
   | { type: 'stun'; id: number; freeze: boolean }
+  | { type: 'emerge'; id: number; team: Team; x: number; y: number }
+  | { type: 'elixir'; team: Team; x: number; y: number; amount: number }
   | { type: 'phase'; phase: Phase }
   | { type: 'elixirRate'; mult: number }
   | { type: 'end'; result: MatchResult };
@@ -153,6 +161,7 @@ export interface PlayerState {
   cardsPlayed: number;
   elixirSpent: number;
   elixirLeaked: number;
+  elixirGained: number; // 能量收集器產生的能量（公開資訊：場上看得到）
 }
 
 export interface MatchResult {
@@ -274,6 +283,7 @@ export class Game {
       cardsPlayed: 0,
       elixirSpent: 0,
       elixirLeaked: 0,
+      elixirGained: 0,
     };
   }
 
@@ -284,6 +294,7 @@ export class Game {
       cooldown: 0, deployTimer: 0, stunTimer: 0, frozen: false, slowTimer: 0, slowMul: 1, lifetime: Infinity, active: true,
       activateTimer: 0, avoidSide: 0, chargeDist: 0, charging: false, rampTime: 0, spawnTimer: 0, spawnLeft: 0, spawnGap: 0,
       kbx: 0, kby: 0, kbTime: 0, moving: false, facing: team === 0 ? -Math.PI / 2 : Math.PI / 2, jumping: false, lastAttack: -99,
+      rageTimer: 0, rageMul: 1, tunneling: false, tunnelX: x, tunnelY: y, genTimer: stats.elixirGen?.interval ?? 0,
     };
     this.entities.push(e);
     return e;
@@ -367,6 +378,12 @@ export class Game {
       }
       return !this.occupied(x, y, half);
     }
+    if (UNITS[card.unit!].stats.tunnelSpeed) {
+      // 可部署到場上任何地方（河道除外），不能壓在塔或建築上
+      if (x <= 0 || x >= W || y <= 0 || y >= H) return false;
+      if (y > ARENA.riverTop && y < ARENA.riverBottom) return false;
+      return !this.occupied(x, y, 0.01);
+    }
     return this.inDeployZone(team, x, y) && !this.occupied(x, y, 0.01);
   }
 
@@ -413,6 +430,18 @@ export class Game {
       this.events.push({ type: 'spawn', id: e.id, team, unit: def.id, x, y, source: 'card' });
       return;
     }
+    if (def.stats.tunnelSpeed) {
+      // 從己方國王塔前緣鑽進地底，直線鑽到落點後才冒出來（冒出時才開始部署時間）
+      const king = this.king(team);
+      const sy = king.y + (team === 0 ? -1 : 1) * (king.half + 0.4);
+      const e = this.spawnEntity(team, 'troop', def.id, card.id, def.stats, king.x, sy);
+      e.tunneling = true;
+      e.tunnelX = x;
+      e.tunnelY = y;
+      e.facing = Math.atan2(y - sy, x - king.x);
+      this.events.push({ type: 'spawn', id: e.id, team, unit: def.id, x: e.x, y: e.y, source: 'tunnel' });
+      return;
+    }
     const count = card.count ?? 1;
     const sign = team === 0 ? 1 : -1;
     for (const [ox, oy] of formation(count)) {
@@ -449,7 +478,7 @@ export class Game {
         this.events.push({ type: 'spellCast', team, cardId: card.id, x, y, fromX: king.x, fromY: king.y, delay: 0 });
         this.areas.push({
           id: this.nextId++, team, cardId: card.id, x, y, radius: s.radius, timeLeft: s.duration!, duration: s.duration!,
-          tickTimer: 0, ticksLeft: Math.round(s.duration! / (s.tick ?? 1)),
+          tickTimer: 0, ticksLeft: s.rage ? 0 : Math.round(s.duration! / (s.tick ?? 1)),
         });
         return;
       case 'roll': {
@@ -605,13 +634,13 @@ export class Game {
   private applySpell(team: Team, cardId: string, s: SpellStats, x: number, y: number, wave: number): void {
     this.events.push({ type: 'spell', team, cardId, x, y, radius: s.radius, wave });
     for (const e of this.entities) {
-      if (!e.alive || e.team === team) continue;
+      if (!e.alive || e.team === team || e.tunneling) continue;
       if (e.stats.flying && !s.hitsAir) continue;
       if (distTo(x, y, e) > s.radius) continue;
       const amount = e.kind === 'tower' ? Math.round(s.damage * s.towerPct) : s.damage;
       if (amount > 0) this.applyDamage(e, amount);
       if (!e.alive) continue;
-      if (s.stun) this.stun(e, s.stun, false);
+      if (s.stun) this.stun(e, s.stun, !!s.freeze);
       if (s.pushback) this.knockback(e, x, y, s.pushback, false);
     }
   }
@@ -621,8 +650,21 @@ export class Game {
       a.timeLeft -= DT;
       a.tickTimer -= DT;
       const s = CARDS[a.cardId].spell!;
+      if (s.rage) {
+        // 狂暴：己方部隊與建築（不含塔）在範圍內就刷新加速
+        if (a.tickTimer <= 0) {
+          a.tickTimer += s.tick ?? 0.3;
+          for (const e of this.entities) {
+            if (!e.alive || e.team !== a.team || e.kind === 'tower' || e.tunneling) continue;
+            if (distTo(a.x, a.y, e) > a.radius) continue;
+            e.rageTimer = Math.max(e.rageTimer, s.rage.linger);
+            e.rageMul = s.rage.mul;
+          }
+        }
+        continue;
+      }
       for (const e of this.entities) {
-        if (!e.alive || e.team === a.team || e.kind !== 'troop') continue;
+        if (!e.alive || e.team === a.team || e.kind !== 'troop' || e.tunneling) continue;
         if (e.stats.flying && !s.hitsAir) continue;
         if (distTo(a.x, a.y, e) > a.radius) continue;
         if (s.slow) {
@@ -635,7 +677,7 @@ export class Game {
       a.ticksLeft--;
       this.events.push({ type: 'spell', team: a.team, cardId: a.cardId, x: a.x, y: a.y, radius: a.radius, wave: 0 });
       for (const e of this.entities) {
-        if (!e.alive || e.team === a.team) continue;
+        if (!e.alive || e.team === a.team || e.tunneling) continue;
         if (e.stats.flying && !s.hitsAir) continue;
         if (distTo(a.x, a.y, e) > a.radius) continue;
         this.applyDamage(e, e.kind === 'tower' ? Math.round(s.damage * s.towerPct) : s.damage);
@@ -651,7 +693,7 @@ export class Game {
       r.traveled = Math.min(s.rollRange!, r.traveled + step);
       r.y = r.startY + r.dir * r.traveled;
       for (const e of this.entities) {
-        if (!e.alive || e.team === r.team || e.stats.flying || r.hit.has(e.id)) continue;
+        if (!e.alive || e.team === r.team || e.stats.flying || e.tunneling || r.hit.has(e.id)) continue;
         // 方形掃過區：寬 2×radius、厚 2×rollHalfDepth
         const dx = e.half > 0 ? Math.max(0, Math.abs(e.x - r.x) - e.half) : Math.max(0, Math.abs(e.x - r.x) - e.stats.radius);
         const dy = e.half > 0 ? Math.max(0, Math.abs(e.y - r.y) - e.half) : Math.max(0, Math.abs(e.y - r.y) - e.stats.radius);
@@ -678,7 +720,7 @@ export class Game {
     const dd = UNITS[unit].stats.deathDamage!;
     this.events.push({ type: 'blast', team, unit, x, y, radius: dd.radius, visual: dd.visual });
     for (const e of this.entities) {
-      if (!e.alive || e.team === team) continue;
+      if (!e.alive || e.team === team || e.tunneling) continue;
       if (e.stats.flying) continue; // 死亡傷害只打地面
       if (distTo(x, y, e) > dd.radius) continue;
       this.applyDamage(e, e.kind === 'tower' ? Math.round(dd.damage * dd.towerMul) : dd.damage);
@@ -689,7 +731,7 @@ export class Game {
   // ───────── 索敵 ─────────
 
   canTarget(attacker: Entity, target: Entity): boolean {
-    if (!target.alive || target.team === attacker.team) return false;
+    if (!target.alive || target.team === attacker.team || target.tunneling) return false;
     const t = attacker.stats.targets;
     if (t === 'buildings') return target.kind !== 'troop';
     if (t === 'ground') return !target.stats.flying;
@@ -744,7 +786,17 @@ export class Game {
   }
 
   private updateEntity(e: Entity): void {
-    e.cooldown = Math.max(0, e.cooldown - DT);
+    if (e.tunneling) {
+      this.updateTunnel(e);
+      return;
+    }
+    let haste = 1;
+    if (e.rageTimer > 0) {
+      e.rageTimer -= DT;
+      haste = e.rageMul;
+      if (e.rageTimer <= 0) e.rageMul = 1;
+    }
+    e.cooldown = Math.max(0, e.cooldown - DT * haste);
     e.moving = false;
     if (e.slowTimer > 0) {
       e.slowTimer -= DT;
@@ -779,7 +831,8 @@ export class Game {
       e.activateTimer -= DT;
       return;
     }
-    this.updateSpawner(e);
+    this.updateSpawner(e, haste);
+    this.updateElixirGen(e);
     if (e.stats.damage <= 0 && !e.stats.ramp) return;
 
     const target = this.acquireTarget(e);
@@ -805,18 +858,57 @@ export class Game {
     if (e.stats.speed > 0) this.moveToward(e, target);
   }
 
-  private updateSpawner(e: Entity): void {
+  /** 地底鑽行：直線前往落點，到達後冒出地面並開始部署時間。 */
+  private updateTunnel(e: Entity): void {
+    const dx = e.tunnelX - e.x;
+    const dy = e.tunnelY - e.y;
+    const d = Math.hypot(dx, dy);
+    const step = (e.stats.tunnelSpeed ?? 10) * DT;
+    if (d > step) {
+      e.x += (dx / d) * step;
+      e.y += (dy / d) * step;
+      e.facing = Math.atan2(dy, dx);
+      return;
+    }
+    e.x = e.tunnelX;
+    e.y = e.tunnelY;
+    e.tunneling = false;
+    e.deployTimer = e.stats.deployTime;
+    e.facing = e.team === 0 ? -Math.PI / 2 : Math.PI / 2;
+    this.events.push({ type: 'emerge', id: e.id, team: e.team, x: e.x, y: e.y });
+  }
+
+  /** 能量收集器：定時給己方能量（滿了就浪費，計入溢出）。 */
+  private updateElixirGen(e: Entity): void {
+    const gen = e.stats.elixirGen;
+    if (!gen) return;
+    e.genTimer -= DT;
+    if (e.genTimer > 0) return;
+    e.genTimer += gen.interval;
+    this.giveElixir(e.team, gen.amount, e.x, e.y);
+  }
+
+  private giveElixir(team: Team, amount: number, x: number, y: number): void {
+    const p = this.players[team];
+    const room = MATCH.maxElixir - p.elixir;
+    if (amount > room) p.elixirLeaked += amount - Math.max(0, room);
+    p.elixir = Math.min(MATCH.maxElixir, p.elixir + amount);
+    p.elixirGained += amount;
+    this.events.push({ type: 'elixir', team, x, y, amount });
+  }
+
+  private updateSpawner(e: Entity, haste = 1): void {
     const sp = e.stats.spawner;
     if (!sp) return;
     if (e.spawnLeft > 0) {
-      e.spawnGap -= DT;
+      e.spawnGap -= DT * haste;
       if (e.spawnGap > 0) return;
       this.spawnOne(e, sp.count - e.spawnLeft, sp.count);
       e.spawnLeft--;
       e.spawnGap = sp.interval;
       return;
     }
-    e.spawnTimer -= DT;
+    e.spawnTimer -= DT * haste;
     if (e.spawnTimer > 0) return;
     e.spawnTimer = sp.pause;
     if (sp.interval <= 0) {
@@ -867,6 +959,7 @@ export class Game {
       return;
     }
     let dmg = charged ? s.charge!.damage : s.damage;
+    if (t.kind === 'tower' && s.towerMul !== undefined) dmg = Math.round(dmg * s.towerMul);
     if (s.ramp) {
       const st = Math.min(2, Math.floor(e.rampTime / s.ramp.stageTime));
       dmg = s.ramp.damages[st];
@@ -891,7 +984,7 @@ export class Game {
 
   private areaDamage(team: Team, x: number, y: number, radius: number, damage: number, hitsAir: boolean, hitsGround: boolean, freeze = 0): void {
     for (const o of this.entities) {
-      if (!o.alive || o.team === team) continue;
+      if (!o.alive || o.team === team || o.tunneling) continue;
       if (o.stats.flying ? !hitsAir : !hitsGround) continue;
       if (distTo(x, y, o) > radius) continue;
       this.applyDamage(o, damage);
@@ -1010,6 +1103,7 @@ export class Game {
 
   private deathEffects(t: Entity): void {
     const s = t.stats;
+    if (s.elixirGen?.onDeath) this.giveElixir(t.team, s.elixirGen.onDeath, t.x, t.y);
     if (s.deathDamage) {
       if (s.deathDamage.delay > 0) {
         const b: Bomb = { id: this.nextId++, team: t.team, unit: t.unit, x: t.x, y: t.y, timer: s.deathDamage.delay, total: s.deathDamage.delay };
@@ -1082,7 +1176,7 @@ export class Game {
     let ux = (wx - e.x) / d;
     let uy = (wy - e.y) / d;
     if (!e.stats.flying) [ux, uy] = this.steerAround(e, target, ux, uy, d);
-    let speed = e.stats.speed * e.slowMul;
+    let speed = e.stats.speed * e.slowMul * (e.rageTimer > 0 ? e.rageMul : 1);
     if (e.stats.charge) {
       if (e.charging) speed *= e.stats.charge.speedMul;
     }
@@ -1147,7 +1241,7 @@ export class Game {
   }
 
   private resolveCollisions(): void {
-    const movers = this.entities.filter((e) => e.alive && e.kind === 'troop');
+    const movers = this.entities.filter((e) => e.alive && e.kind === 'troop' && !e.tunneling);
     for (let i = 0; i < movers.length; i++) {
       const a = movers[i];
       for (let j = i + 1; j < movers.length; j++) {

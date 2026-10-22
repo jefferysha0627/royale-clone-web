@@ -566,6 +566,103 @@ describe('建築', () => {
   });
 });
 
+describe('冰凍、狂暴、能量收集器、地道挖掘者', () => {
+  it('冰凍：範圍內敵人（含塔）凍住 4 秒並受 115 傷害、塔 30%；凍住的塔不會攻擊', () => {
+    const g = newGame();
+    const t = princess(g, 1, 0);
+    const [k] = place(g, 1, 'knight', t.x + 2.5, t.y + 1);
+    k.deployTimer = 0;
+    hold(g, 0, 'freeze');
+    expect(g.deploy(0, 0, t.x + 1, t.y + 1).ok).toBe(true);
+    expect(k.maxHp - k.hp).toBe(115);
+    expect(TOWERS.princess.hp - t.hp).toBe(Math.round(115 * 0.3));
+    expect(k.frozen && t.frozen).toBe(true);
+    expect(k.stunTimer).toBeCloseTo(4, 5);
+    // 凍住期間把我方部隊放進射程，塔不會出手
+    const [m] = place(g, 0, 'knight', 3.5, 18.5);
+    m.x = t.x;
+    m.y = t.y + 3.5;
+    m.deployTimer = 99;
+    let towerShots = 0;
+    run(g, 3.5, (ev) => ev.forEach((v) => v.type === 'attack' && v.id === t.id && towerShots++));
+    expect(towerShots).toBe(0);
+    run(g, 2);
+    expect(t.frozen).toBe(false);
+  });
+
+  it('狂暴：範圍內己方部隊移動與攻擊加快 35%，離開範圍後效果再維持約 2 秒', () => {
+    const speedOf = (rage: boolean) => {
+      const g = newGame();
+      const [k] = place(g, 0, 'knight', 9.5, 24.5);
+      k.deployTimer = 0;
+      if (rage) {
+        hold(g, 0, 'rage');
+        g.deploy(0, 0, 9.5, 23.5);
+      }
+      const y0 = k.y;
+      run(g, 1);
+      return { d: y0 - k.y, k, g };
+    };
+    const base = speedOf(false);
+    const raged = speedOf(true);
+    expect(raged.d / base.d).toBeCloseTo(1.35, 1);
+    // 離開範圍後：效果還在，約 2 秒後消失
+    raged.k.x = 2.5;
+    raged.k.y = 31.5;
+    run(raged.g, 0.5);
+    expect(raged.k.rageTimer).toBeGreaterThan(0);
+    run(raged.g, 2);
+    expect(raged.k.rageTimer).toBeLessThanOrEqual(0);
+  });
+
+  it('能量收集器：每 9 秒給 1 點能量，倒下時再給 1 點，65 秒後消失', () => {
+    const g = newGame();
+    const [c] = place(g, 0, 'elixir_collector', 9, 22);
+    const p = g.players[0];
+    p.elixir = 0;
+    let gains = 0;
+    run(g, 1 + 9 * 2 + 0.2, (ev) => ev.forEach((v) => v.type === 'elixir' && v.team === 0 && gains++));
+    expect(gains).toBe(2);
+    expect(p.elixirGained).toBe(2);
+    const before = p.elixirGained;
+    g.applyDamage(c, c.hp);
+    expect(p.elixirGained).toBe(before + 1);
+    const g2 = newGame();
+    const [c2] = place(g2, 0, 'elixir_collector', 9, 22);
+    run(g2, 1 + 65 + 0.5);
+    expect(g2.get(c2.id)).toBeUndefined();
+  });
+
+  it('地道挖掘者：可放到對方半場（河道與塔上除外），鑽地途中不能被攻擊，冒出後對塔只有 25% 傷害', () => {
+    const g = newGame();
+    const t = princess(g, 1, 0);
+    hold(g, 0, 'tunneler');
+    expect(g.canDeployAt(0, 'tunneler', 9.5, 16.5)).toBe(false); // 河道
+    expect(g.canDeployAt(0, 'tunneler', t.x, t.y)).toBe(false); // 塔上
+    expect(g.canDeployAt(0, 'tunneler', t.x, t.y + 2)).toBe(true);
+    const r = g.deploy(0, 0, t.x, t.y + 2);
+    expect(r.ok).toBe(true);
+    const m = g.entities.find((e) => e.unit === 'tunneler')!;
+    expect(m.tunneling).toBe(true);
+    // 鑽地途中：法術打不到、敵方塔不會鎖定它
+    run(g, 0.5);
+    hold(g, 1, 'zap');
+    g.deploy(1, 0, m.x, m.y);
+    expect(m.hp).toBe(m.maxHp);
+    let emerged = -1;
+    const travel = Math.hypot(m.tunnelX - m.x, m.tunnelY - m.y) / UNITS.tunneler.stats.tunnelSpeed!;
+    run(g, travel + 0.2, (ev) => ev.forEach((v) => v.type === 'emerge' && v.id === m.id && (emerged = g.time)));
+    expect(emerged).toBeGreaterThan(0);
+    expect(m.tunneling).toBe(false);
+    expect(Math.hypot(m.x - t.x, m.y - (t.y + 2))).toBeLessThan(1.2);
+    // 冒出後攻擊側塔：每下 193 × 25%
+    const hits: number[] = [];
+    run(g, 4, (ev) => ev.forEach((v) => v.type === 'hit' && v.id === t.id && hits.push(v.amount)));
+    expect(hits.length).toBeGreaterThan(0);
+    expect(hits[0]).toBe(Math.round(193 * 0.25));
+  });
+});
+
 describe('卡池', () => {
   it('至少 30 張卡，每張都有對應單位或法術資料', () => {
     const ids = Object.keys(CARDS);
@@ -611,8 +708,10 @@ describe('可重現性與電腦對手', () => {
           for (const ev of g.drainEvents()) {
             if (ev.type === 'deploy' && ev.team === 1) {
               deploys++;
-              // 部隊只在己方半場；側塔倒下後，該路才可放進前進區
-              if (CARDS[ev.cardId].kind !== 'spell' && ev.y >= ARENA.riverTop) {
+              // 部隊只在己方半場；側塔倒下後，該路才可放進前進區；會鑽地的部隊可放任何地方（河道除外）
+              const tunnel = !!CARDS[ev.cardId].unit && !!UNITS[CARDS[ev.cardId].unit!].stats.tunnelSpeed;
+              if (tunnel) expect(ev.y > ARENA.riverTop && ev.y < ARENA.riverBottom).toBe(false);
+              else if (CARDS[ev.cardId].kind !== 'spell' && ev.y >= ARENA.riverTop) {
                 expect(princess(g, 0, ev.x < ARENA.width / 2 ? 0 : 1).alive, `${level} ${deck.name} pocket`).toBe(false);
                 expect(ev.y).toBeLessThanOrEqual(ARENA.height - DEPLOY.pocketMinY);
               }

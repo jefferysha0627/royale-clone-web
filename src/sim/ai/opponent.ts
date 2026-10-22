@@ -17,6 +17,7 @@ export class OpponentModel {
   lastPlay = { time: -99, cardId: '', x: 0, y: 0 };
   private spent = 0;
   private played = 0;
+  private gained = 0;
   private time = 0;
   private maxId = 0;
 
@@ -34,6 +35,11 @@ export class OpponentModel {
     const dt = g.time - this.time;
     this.time = g.time;
     if (dt > 0) this.elixir = Math.min(MATCH.maxElixir, this.elixir + MATCH.elixirPerSecond * g.elixirMultiplier() * dt);
+    // 對手的能量收集器產生的能量（場上看得到幫浦運作）
+    if (p.elixirGained !== this.gained) {
+      this.elixir = Math.min(MATCH.maxElixir, this.elixir + (p.elixirGained - this.gained));
+      this.gained = p.elixirGained;
+    }
     if (p.cardsPlayed === this.played) return;
     const n = p.cardsPlayed - this.played;
     const spent = p.elixirSpent - this.spent;

@@ -162,6 +162,19 @@ function noise(ctx: AudioContext, out: AudioNode, t: number, dur: number, vol: n
 
 const VOICES: Record<string, Voice> = {
   tap: (c, o, t) => tone(c, o, t, 'triangle', 880, 990, 0.05, 0.22),
+  rage: (c, o, t) => {
+    tone(c, o, t, 'sawtooth', 110, 220, 0.38, 0.16);
+    tone(c, o, t + 0.04, 'square', 165, 330, 0.34, 0.08);
+    noise(c, o, t, 0.3, 0.18, 'bandpass', 400, 1400, 1.4);
+  },
+  elixir: (c, o, t) => {
+    tone(c, o, t, 'sine', 620, 1240, 0.12, 0.22);
+    tone(c, o, t + 0.07, 'sine', 930, 1650, 0.1, 0.16);
+  },
+  dig: (c, o, t) => {
+    noise(c, o, t, 0.35, 0.4, 'lowpass', 320, 90, 1);
+    tone(c, o, t + 0.05, 'sine', 95, 50, 0.3, 0.45);
+  },
   error: (c, o, t) => {
     tone(c, o, t, 'square', 220, 180, 0.12, 0.12);
     tone(c, o, t + 0.08, 'square', 180, 150, 0.12, 0.1);

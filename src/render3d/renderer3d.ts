@@ -418,6 +418,36 @@ export class Renderer3D implements BattleRenderer {
           if (t && !t.down) t.collapse();
           break;
         }
+        case 'emerge': {
+          // 地道挖掘者冒出地面：土石噴發＋彈出動畫
+          const X = toX(ev.x);
+          const Z = toZ(ev.y);
+          const v = this.units.get(ev.id);
+          if (v) {
+            v.popT = 0;
+            v.inst.mesh.visible = true;
+          }
+          fx.burst('dust', X, 0, Z, 1.3, 22);
+          fx.burst('debris', X, 0.2, Z, 0.9, 12);
+          fx.ring(X, Z, 0.3, 1.4, '#b8956a', 0.45);
+          this.shake(0.05);
+          break;
+        }
+        case 'elixir': {
+          const X = toX(ev.x);
+          const Z = toZ(ev.y);
+          this.overlay.addFloat(X, Z, `+${ev.amount}`, '#ff8ff0', 24, 1.3);
+          fx.burst('elixir', X, 1.3, Z, 1, 12);
+          break;
+        }
+        case 'spellCast':
+          if (ev.cardId === 'rage') {
+            const X = toX(ev.x);
+            const Z = toZ(ev.y);
+            fx.ring(X, Z, 0.4, 3, '#ff6a88', 0.5);
+            fx.burst('rage', X, 0.1, Z, 2.4, 30);
+          }
+          break;
         case 'kingActivate': {
           const k = game.king(ev.team);
           fx.burst('spark', toX(k.x), 3.2, toZ(k.y), 1.2, 14);
@@ -500,6 +530,13 @@ export class Renderer3D implements BattleRenderer {
         fx.burst('stun', X, 0.3, Z, 1, 16);
         this.shake(0.06);
         break;
+      case 'freeze':
+        fx.flash(X, 0.8, Z, 0.4, radius * 0.9, '#a8e8ff', 0.3, 0.7);
+        fx.burst('ice', X, 0.5, Z, radius * 0.8, 50);
+        fx.ring(X, Z, 0.4, radius, '#bfefff', 0.6);
+        fx.decal(X, Z, radius * 0.95, '#d8f4ff', 4.2);
+        this.shake(0.05);
+        break;
       case 'goblin_barrel':
         fx.burst('splinter', X, 0.4, Z, 1, 16);
         fx.burst('dust', X, 0, Z, 1.2, 12);
@@ -577,7 +614,8 @@ export class Renderer3D implements BattleRenderer {
         v = new UnitView(e, this.layer);
         this.noteShared(v.inst.mesh);
         const src = this.pendingSpawn.get(e.id);
-        if (src === 'card' || src === 'barrel') v.dropT = 0;
+        if (src === 'tunnel') v.inst.mesh.visible = false;
+        else if (src === 'card' || src === 'barrel') v.dropT = 0;
         else if (src === 'spawner' || src === 'death') v.popT = 0;
         this.pendingSpawn.delete(e.id);
         this.units.set(e.id, v);
@@ -590,6 +628,12 @@ export class Renderer3D implements BattleRenderer {
         }
       }
       v.update(alpha, dt, animDt, game.time);
+      if (e.tunneling) {
+        // 鑽地中：看不到部隊，只有一路翻起的塵土
+        v.inst.mesh.visible = false;
+        if (dt > 0 && Math.random() < 0.8) this.fx.burst('dust', v.x, 0, v.z, 0.45, 2);
+        if (dt > 0 && Math.random() < 0.15) this.fx.burst('debris', v.x, 0.05, v.z, 0.3, 1);
+      }
       this.updateBeam(e, v, game);
       if (e.charging && Math.random() < 0.5) this.fx.trail('smoke', v.x, 0.1, v.z);
     }
@@ -612,6 +656,7 @@ export class Renderer3D implements BattleRenderer {
     // 飛行單位的地面影子（低畫質時所有單位都用）
     this.shadows.begin();
     for (const v of this.units.values()) {
+      if (v.e.tunneling) continue;
       if (v.hover > 0 || this.quality === 'low') this.shadows.add(v.x, v.z, visualRadius(v.e.unit) * (v.hover > 0 ? 0.9 : 1.1));
     }
     this.shadows.end();
@@ -803,8 +848,9 @@ export class Renderer3D implements BattleRenderer {
       let g = this.areas.get(a.id);
       if (!g) {
         g = new Group();
-        const disc = new Mesh(this.poisonGeo, new MeshBasicMaterial({ color: '#8fd14f', transparent: true, opacity: 0.25, depthWrite: false, side: DoubleSide }));
-        const ring = new Mesh(this.poisonRingGeo, new MeshBasicMaterial({ color: '#d6ff8a', transparent: true, opacity: 0.7, depthWrite: false, side: DoubleSide }));
+        const rage = a.cardId === 'rage';
+        const disc = new Mesh(this.poisonGeo, new MeshBasicMaterial({ color: rage ? '#ff4a6a' : '#8fd14f', transparent: true, opacity: 0.25, depthWrite: false, side: DoubleSide }));
+        const ring = new Mesh(this.poisonRingGeo, new MeshBasicMaterial({ color: rage ? '#ffa0b4' : '#d6ff8a', transparent: true, opacity: 0.7, depthWrite: false, side: DoubleSide }));
         for (const m of [disc, ring]) {
           m.rotation.x = -Math.PI / 2;
           m.renderOrder = 3;
@@ -819,7 +865,7 @@ export class Renderer3D implements BattleRenderer {
       const disc = g.children[0] as Mesh;
       (disc.material as MeshBasicMaterial).opacity = (0.2 + Math.sin(this.time * 4) * 0.05) * fade;
       ((g.children[1] as Mesh).material as MeshBasicMaterial).opacity = 0.7 * fade;
-      if (Math.random() < 0.6) this.fx.burst('poison', toX(a.x), 0.05, toZ(a.y), a.radius, 1);
+      if (Math.random() < 0.6) this.fx.burst(a.cardId === 'rage' ? 'rage' : 'poison', toX(a.x), 0.05, toZ(a.y), a.radius, 1);
     }
     for (const [id, g] of this.areas) {
       if (liveA.has(id)) continue;
@@ -899,7 +945,7 @@ export class Renderer3D implements BattleRenderer {
     o.begin();
     const k = this.k;
     for (const v of this.units.values()) {
-      if (v.dyingT >= 0) continue;
+      if (v.dyingT >= 0 || v.e.tunneling) continue;
       const e = v.e;
       const top = v.hover + v.height * v.scale + 0.2;
       const [sx, sy] = this.project(v.x, top, v.z);

@@ -414,7 +414,15 @@ export class Battle {
           this.sound.play('kingWake');
           break;
         case 'spellCast':
-          this.sound.play(ev.cardId === 'zap' ? 'zap' : ev.cardId === 'log' ? 'log' : ev.cardId === 'poison' ? 'poison' : 'whoosh');
+          this.sound.play(
+            ev.cardId === 'zap' ? 'zap' : ev.cardId === 'log' ? 'log' : ev.cardId === 'poison' ? 'poison' : ev.cardId === 'rage' ? 'rage' : ev.cardId === 'freeze' ? 'freeze' : 'whoosh',
+          );
+          break;
+        case 'emerge':
+          this.sound.play('dig');
+          break;
+        case 'elixir':
+          if (ev.team === 0) this.sound.play('elixir');
           break;
         case 'spell':
           if (ev.cardId === 'fireball' || ev.cardId === 'rocket') this.sound.play(ev.cardId === 'rocket' ? 'bigBoom' : 'boom');

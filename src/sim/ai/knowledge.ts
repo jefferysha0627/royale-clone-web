@@ -21,8 +21,12 @@ export interface CardInfo {
   tank: boolean; // 單隻高血量前排
   bruiser: boolean; // 中型近戰（能扛也能打）
   spirit: boolean; // 自爆精靈
-  win: boolean; // 進攻核心：只打建築、衝鋒或飛桶
-  damageSpell: boolean; // 有傷害的法術（不含飛桶）
+  win: boolean; // 進攻核心：只打建築、衝鋒、飛桶或地道挖掘者
+  damageSpell: boolean; // 用來打價值的傷害法術（不含飛桶、冰凍、狂暴）
+  freeze: boolean; // 冰凍法術
+  rage: boolean; // 狂暴法術
+  pump: boolean; // 能量收集器
+  tunnel: boolean; // 可鑽地部署到任何地方
 }
 
 const cache = new Map<string, CardInfo>();
@@ -54,8 +58,12 @@ export function cardInfo(id: string): CardInfo {
     tank: !!st && def.kind === 'troop' && count === 1 && st.hp >= 2500,
     bruiser: !!st && def.kind === 'troop' && count === 1 && st.hp >= 1200 && st.hp < 2500 && st.targets !== 'buildings',
     spirit: !!st?.kamikaze,
-    win: st?.targets === 'buildings' || spell?.kind === 'barrel' || !!st?.charge,
-    damageSpell: def.kind === 'spell' && !!spell && spell.kind !== 'barrel' && spell.damage > 0,
+    win: st?.targets === 'buildings' || spell?.kind === 'barrel' || !!st?.charge || !!st?.tunnelSpeed,
+    damageSpell: def.kind === 'spell' && !!spell && spell.kind !== 'barrel' && spell.damage > 0 && !spell.freeze && !spell.rage,
+    freeze: !!spell?.freeze,
+    rage: !!spell?.rage,
+    pump: !!st?.elixirGen,
+    tunnel: !!st?.tunnelSpeed,
   };
   cache.set(id, ci);
   return ci;

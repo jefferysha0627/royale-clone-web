@@ -1,6 +1,6 @@
 import { TEAM_RGB } from '../coords';
 import { Kit, type ModelAsset } from '../kit';
-import { buildCannon, buildInferno, buildKingTower, buildPrincessTower, buildRubble, buildTombstone } from './buildings';
+import { buildCannon, buildCollector, buildInferno, buildKingTower, buildPrincessTower, buildRubble, buildTombstone } from './buildings';
 import { buildBabyDragon, buildBat, buildBlimp, buildGargoyle, buildGolem, buildLancer, buildSpirit, buildWolfRider } from './creatures';
 import { addHumanoid, buildHumanoid, type HumanoidSpec } from './humanoid';
 
@@ -77,6 +77,11 @@ const HUMANOIDS: Record<string, (t: TeamPal) => HumanoidSpec> = {
     height: 1.2, skin: '#cfe0c0', face: 'dot', eyeColor: '#5a1f7a', hair: { style: 'long', color: '#2a1a3a' }, hat: 'witch', hatColor: '#4a2a6a',
     torso: '#5a3a7a', robe: true, apron: '#4a2a6a', legs: '#3a2a4a', boots: '#2a1a2a', weapon: 'skullstaff', cape: true,
   }),
+  tunneler: () => ({
+    height: 1.15, build: 1.18, skin: SKIN, face: 'dot', nose: 'ball', beard: { color: '#7a4a2a', size: 0.75 }, mustache: '#6b3f22', hat: 'hardhat',
+    hatColor: '#e8b830', torso: '#7a6a52', torso2: '#3a2a1e', legs: '#4a5f7a', boots: '#3a2a1e', arms: '#7a6a52', hands: '#8a6a4a',
+    strap: '#5a3a1e', bracers: '#5a4a3a', weapon: 'pickaxe', scarf: true,
+  }),
   giant_skeleton: () => ({
     height: 2.0, build: 1.25, headScale: 0.8, torsoScale: 1.15, skin: BONE, face: 'skull', bones: true, torso: '#e6dfcc', legs: '#e6dfcc', boots: '#d9d2c0',
     hands: BONE, scarf: true,
@@ -111,6 +116,8 @@ export const PROFILES: Record<string, AnimProfile> = {
   cannon: { rig: 'cannon', attack: 'fire' },
   inferno: { rig: 'inferno', attack: 'beam' },
   tombstone: { rig: 'tomb', attack: 'none' },
+  tunneler: { rig: 'biped', attack: 'chop', cadence: 1.2 },
+  elixir_collector: { rig: 'inferno', attack: 'none' },
   princess: { rig: 'princess', attack: 'bow' },
   king: { rig: 'king', attack: 'fire' },
 };
@@ -147,6 +154,7 @@ function buildAsset(unit: string, team: 0 | 1): ModelAsset {
     case 'cannon': return buildCannon(t);
     case 'inferno': return buildInferno(t);
     case 'tombstone': return buildTombstone(t);
+    case 'elixir_collector': return buildCollector(t);
     case 'princess': return buildPrincessTower(t);
     case 'king': return buildKingTower(t);
     case 'rubble-princess': return buildRubble(3);

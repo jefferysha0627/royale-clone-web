@@ -48,6 +48,7 @@ const CARD_THEME: Record<string, string> = {
   iron_swordsman: 'steel', lancer: 'steel',
   bomb_blimp: 'sky', arrows: 'sky', rocket: 'sky',
   zap: 'storm', poison: 'toxic', fireball: 'blaze', log: 'timber',
+  freeze: 'frost', rage: 'blaze', tunneler: 'canyon', elixir_collector: 'dusk',
 };
 
 function themeOf(cardId: string): Theme {
@@ -452,6 +453,31 @@ function spellIcon(cardId: string): Group {
       for (const sx of [1, -1]) k.sphere(0.04, { at: [sx * 0.055, -0.13, 0.54], color: '#2a3a1e' }, 6);
       for (let i = 0; i < 5; i++) glow('#d6ff8a', 0.05 + (i % 3) * 0.025, -0.15 + ((i * 29) % 7) * 0.05, 0.75 + i * 0.16, 0.1, 0.9);
       break;
+    case 'freeze': {
+      // 冰凍：六角雪花冰晶＋冰塊碎片
+      for (let i = 0; i < 6; i++) {
+        const a = (i / 6) * Math.PI * 2;
+        k.box(0.12, 0.95, 0.08, { at: [Math.sin(a) * 0.42, Math.cos(a) * 0.42, 0], rot: [0, 0, -a], color: '#d8f6ff' });
+        for (const sgn of [1, -1]) {
+          k.box(0.07, 0.32, 0.06, {
+            at: [Math.sin(a) * 0.62 + Math.sin(a + sgn * 0.9) * 0.12, Math.cos(a) * 0.62 + Math.cos(a + sgn * 0.9) * 0.12, 0.02], rot: [0, 0, -a - sgn * 0.9], color: '#bfeeff',
+          });
+        }
+      }
+      k.gem(0.24, { at: [0, 0, 0.05], color: '#ffffff' });
+      glow('#9fe2ff', 0.75, 0, 0, -0.3, 0.25, true);
+      for (let i = 0; i < 5; i++) k.gem(0.07 + (i % 2) * 0.04, { at: [-0.75 + i * 0.38, -0.85 + ((i * 3) % 4) * 0.08, 0.2], color: '#e8faff' });
+      break;
+    }
+    case 'rage': {
+      // 狂暴：冒著紅色蒸氣的藥瓶與往上竄的火花
+      k.lathe([[0.01, -0.62], [0.36, -0.58], [0.46, -0.32], [0.4, 0.0], [0.15, 0.18], [0.15, 0.42], [0.2, 0.47]], { color: '#7a2a4a' }, 18);
+      glow('#ff3a6a', 0.36, 0, -0.28, 0.1, 0.9);
+      k.cyl(0.13, 0.13, 0.16, { at: [0, 0.54, 0], color: '#8a5a2e' }, 10);
+      for (let i = 0; i < 6; i++) glow(i % 2 ? '#ff9ab0' : '#ff4a6a', 0.07 + (i % 3) * 0.03, -0.25 + ((i * 37) % 5) * 0.12, 0.7 + i * 0.13, 0.05, 0.85);
+      glow('#ff6a8a', 0.8, 0, 0.2, -0.4, 0.22, true);
+      break;
+    }
     case 'goblin_barrel':
       k.cyl(0.45, 0.45, 0.85, { rot: [0.2, 0, 0], color: '#9a6834' }, 14);
       k.torus(0.46, 0.04, { at: [0, 0.28, 0.06], rot: [Math.PI / 2 + 0.2, 0, 0], color: '#5a5f6b' }, 16);
