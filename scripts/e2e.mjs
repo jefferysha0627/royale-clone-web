@@ -2,14 +2,15 @@
 // 用法：npm run build && npm run e2e            （完整，含一場即時對戰，約 8 分鐘）
 //       npm run build && npm run e2e -- --quick （略過即時整場對戰）
 //       npm run build && npm run e2e -- --only=6 （只跑第 6 節即時對戰；部分執行的結果另存 e2e-results-only-6.json）
-// 結果寫入上一層的 verification/v2/（e2e-results.json、screenshots/）。
+// 結果寫入上一層的 verification/v3/（e2e-results.json、screenshots/）；E2E_OUT=資料夾名 可改。
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { preview } from 'vite';
 import { launchBrowser } from './browser.mjs';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
-const outDir = fileURLToPath(new URL('../../verification/v2/', import.meta.url));
+// 結果資料夾：v3 分支寫到 verification/v3/（v2.0-rc 的驗證證據留在 verification/v2/，不要覆蓋）；可用 E2E_OUT=v2 指定
+const outDir = fileURLToPath(new URL(`../../verification/${process.env.E2E_OUT ?? 'v3'}/`, import.meta.url));
 const shotDir = `${outDir}screenshots/`;
 mkdirSync(shotDir, { recursive: true });
 const QUICK = process.argv.includes('--quick');
@@ -773,7 +774,7 @@ results.finishedAt = new Date().toISOString();
 results.summary = { total: results.checks.length, failed: failures };
 const outName = ONLY ? `e2e-results-only-${ONLY.join('-')}.json` : 'e2e-results.json';
 writeFileSync(`${outDir}${outName}`, JSON.stringify(results, null, 2));
-console.log(`\n${results.checks.length - failures}/${results.checks.length} 通過，結果寫入 verification/v2/${outName}`);
+console.log(`\n${results.checks.length - failures}/${results.checks.length} 通過，結果寫入 ${outDir}${outName}`);
 await browser.close();
 await new Promise((r) => server.httpServer.close(r));
 process.exit(failures ? 1 : 0);

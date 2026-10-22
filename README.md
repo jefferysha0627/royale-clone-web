@@ -25,7 +25,7 @@ npm run dev        # 開發伺服器，手機可用區網 IP 連入
 | `npm run preview` | 在 4173 埠預覽 `dist/` |
 | `npm test` | 規則與電腦對手的自動測試（vitest） |
 | `npm run sim -- 30 1 normal hard --swap --quiet` | 無畫面電腦對電腦批次模擬（場數、起始 seed、雙方難度；`--swap` 交換座位）；`scripts/dev/deckmatrix.ts` 牌組矩陣、`scripts/dev/novice.ts` 新手腳本對各難度 |
-| `npm run e2e` | 先 `npm run build`。用真實瀏覽器操作桌面與 360×640、390×844、430×932，含一場以觸控即時打完的對戰（約 8 分鐘）；加 `-- --quick` 略過即時整場。結果寫入上一層 `verification/v2/` |
+| `npm run e2e` | 先 `npm run build`。用真實瀏覽器操作桌面與 360×640、390×844、430×932，含一場以觸控即時打完的對戰（約 8 分鐘）；加 `-- --quick` 略過即時整場。結果寫入上一層 `verification/v3/`（`E2E_OUT=資料夾名` 可改） |
 | `npm run assets` | 用遊戲自己的 3D 渲染器重新產生 `public/og-image.png`（1200×630）與 `public/apple-touch-icon.png` |
 | `npm run check` | 型別檢查 + 測試 + build |
 

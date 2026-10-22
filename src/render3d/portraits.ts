@@ -1,6 +1,6 @@
 import {
-  AmbientLight, Box3, Color, DirectionalLight, Group, Mesh, MeshBasicMaterial, MeshLambertMaterial, OrthographicCamera, Scene, SphereGeometry, SRGBColorSpace,
-  Vector3, WebGLRenderer, type Object3D,
+  AdditiveBlending, AmbientLight, Box3, CanvasTexture, CircleGeometry, Color, DirectionalLight, Group, HemisphereLight, Mesh, MeshBasicMaterial, MeshLambertMaterial,
+  NormalBlending, OrthographicCamera, PlaneGeometry, Scene, ShaderMaterial, SphereGeometry, SRGBColorSpace, Vector3, WebGLRenderer, type Object3D,
 } from 'three';
 import { CARDS, UNITS } from '../sim';
 import { animate, newAnimState } from './anim';
@@ -9,11 +9,102 @@ import { instantiate, Kit } from './kit';
 import { toonMaterial } from './materials';
 import { getAsset, profileOf } from './models';
 
-// 卡面圖：用遊戲內同一套原創 3D 模型即時渲染成小圖（透明背景），不需要下載任何圖檔。
+// 卡面圖：用遊戲內同一套原創 3D 模型即時渲染成小插畫（主題色背景＋光暈＋地面影子），不需要下載任何圖檔。
 // 在閒置時間分批產生，完成前卡面先顯示文字圖示。
 
-const W = 192;
-const H = 232;
+const W = 216;
+const H = 264;
+
+// ───────── 卡面背景主題（原創配色） ─────────
+
+interface Theme {
+  top: string; // 天空上緣
+  mid: string; // 地平線霧色
+  glow: string; // 主體後方的光暈
+  ground: string | null; // 地面顏色（null = 不畫地面，例如法術）
+}
+
+const THEMES: Record<string, Theme> = {
+  meadow: { top: '#5aa8f0', mid: '#d6efff', glow: '#fff4c8', ground: '#79c457' },
+  forest: { top: '#2e7a52', mid: '#c4eba6', glow: '#fff3b8', ground: '#5c9c3c' },
+  dusk: { top: '#2e2464', mid: '#a58ad2', glow: '#efd8ff', ground: '#56634a' },
+  ember: { top: '#a8301c', mid: '#ffb760', glow: '#fff1a6', ground: '#8a5a3a' },
+  frost: { top: '#2f86d2', mid: '#dcf7ff', glow: '#ffffff', ground: '#cfe9f2' },
+  canyon: { top: '#c0642a', mid: '#ffdca4', glow: '#fff3c6', ground: '#b88a5a' },
+  steel: { top: '#334055', mid: '#b9c6d8', glow: '#eef4ff', ground: '#7d8794' },
+  sky: { top: '#3f86d8', mid: '#e6f4ff', glow: '#ffffff', ground: null },
+  storm: { top: '#1f2f7a', mid: '#86aef8', glow: '#e8f4ff', ground: null },
+  toxic: { top: '#24521c', mid: '#acdf6c', glow: '#f3ffb6', ground: null },
+  blaze: { top: '#8a1f14', mid: '#ff9a4a', glow: '#fff0a0', ground: null },
+  timber: { top: '#3d6f3a', mid: '#e3eebd', glow: '#fff6cc', ground: '#6b9a44' },
+};
+
+const CARD_THEME: Record<string, string> = {
+  goblins: 'forest', spear_goblins: 'forest', goblin_barrel: 'forest', wolf_rider: 'forest',
+  skeletons: 'dusk', skeleton_army: 'dusk', giant_skeleton: 'dusk', witch: 'dusk', tombstone: 'dusk', bats: 'dusk', gargoyles: 'dusk',
+  wizard: 'ember', fire_spirit: 'ember', inferno: 'ember', baby_dragon: 'ember',
+  ice_spirit: 'frost',
+  golem: 'canyon', cannon: 'canyon', bomber: 'canyon', axe_dwarf: 'canyon',
+  iron_swordsman: 'steel', lancer: 'steel',
+  bomb_blimp: 'sky', arrows: 'sky', rocket: 'sky',
+  zap: 'storm', poison: 'toxic', fireball: 'blaze', log: 'timber',
+};
+
+function themeOf(cardId: string): Theme {
+  return THEMES[CARD_THEME[cardId] ?? 'meadow'];
+}
+
+const BG_VERT = `
+varying vec2 vUv;
+void main() {
+  vUv = uv;
+  gl_Position = vec4(position.xy, 0.0, 1.0);
+}`;
+
+const BG_FRAG = `
+uniform vec3 uTop;
+uniform vec3 uMid;
+uniform vec3 uGlow;
+varying vec2 vUv;
+void main() {
+  vec3 col = mix(uMid, uTop, smoothstep(0.28, 1.0, vUv.y));
+  // 主體後方的柔和光暈與幾道放射光
+  vec2 c = vUv - vec2(0.5, 0.6);
+  float d = length(c * vec2(1.0, 0.85));
+  float ang = atan(c.y, c.x);
+  float rays = 0.5 + 0.5 * sin(ang * 9.0);
+  col += uGlow * (1.0 - smoothstep(0.0, 0.62, d)) * (0.42 + 0.12 * rays);
+  // 四周壓暗（暈影）
+  float v = smoothstep(0.98, 0.38, length((vUv - 0.5) * vec2(1.0, 0.9)));
+  col *= mix(0.55, 1.0, v);
+  gl_FragColor = vec4(col, 1.0);
+  #include <colorspace_fragment>
+}`;
+
+const groundTextures = new Map<string, CanvasTexture>();
+
+/** 地面：中央有柔和接觸影子，往外淡出融進背景。 */
+function groundTexture(color: string): CanvasTexture {
+  let t = groundTextures.get(color);
+  if (t) return t;
+  const c = document.createElement('canvas');
+  c.width = c.height = 128;
+  const g = c.getContext('2d')!;
+  const base = new Color(color);
+  const rgb = (k: number, a: number) => `rgba(${Math.round(base.r * 255 * k)},${Math.round(base.g * 255 * k)},${Math.round(base.b * 255 * k)},${a})`;
+  const grad = g.createRadialGradient(64, 64, 0, 64, 64, 64);
+  grad.addColorStop(0, rgb(0.45, 1));
+  grad.addColorStop(0.16, rgb(0.62, 1));
+  grad.addColorStop(0.32, rgb(1, 1));
+  grad.addColorStop(0.62, rgb(1.05, 0.85));
+  grad.addColorStop(1, rgb(1.1, 0));
+  g.fillStyle = grad;
+  g.fillRect(0, 0, 128, 128);
+  t = new CanvasTexture(c);
+  t.colorSpace = SRGBColorSpace;
+  groundTextures.set(color, t);
+  return t;
+}
 
 type Listener = () => void;
 
@@ -56,27 +147,58 @@ class PortraitStore {
       return;
     }
     const scene = new Scene();
-    scene.add(new AmbientLight('#ffffff', 1.1));
-    const key = new DirectionalLight('#fff3dc', 3.2);
-    key.position.set(-2, 3, 4);
+    scene.add(new AmbientLight('#ffffff', 0.55));
+    scene.add(new HemisphereLight('#fff8e8', '#6f8f5a', 1.1));
+    const key = new DirectionalLight('#fff1d6', 3.4);
+    key.position.set(-2.5, 3.5, 4);
     scene.add(key);
-    const rim = new DirectionalLight('#bfe0ff', 2.2);
-    rim.position.set(3, 2, -3);
+    const rim = new DirectionalLight('#d6ecff', 2.6);
+    rim.position.set(3, 2.5, -3);
     scene.add(rim);
     const cam = new OrthographicCamera(-1, 1, 1, -1, 0.1, 100);
+    // 背景：全畫面漸層＋光暈（另一個場景，先畫）
+    const bgScene = new Scene();
+    const bgMat = new ShaderMaterial({
+      uniforms: { uTop: { value: new Color() }, uMid: { value: new Color() }, uGlow: { value: new Color() } },
+      vertexShader: BG_VERT,
+      fragmentShader: BG_FRAG,
+      depthWrite: false,
+    });
+    const bgQuad = new Mesh(new PlaneGeometry(2, 2), bgMat);
+    bgQuad.frustumCulled = false;
+    bgScene.add(bgQuad);
+    const bgCam = new OrthographicCamera(-1, 1, 1, -1, 0, 1);
     const queue = [...new Set([...order, ...Object.keys(CARDS)])];
+    const renderCard = (id: string) => {
+      const theme = themeOf(id);
+      bgMat.uniforms.uTop.value.set(theme.top);
+      bgMat.uniforms.uMid.value.set(theme.mid);
+      bgMat.uniforms.uGlow.value.set(theme.glow);
+      const subject = buildSubject(id);
+      scene.add(subject);
+      const ground = theme.ground ? addGround(subject, theme.ground) : null;
+      frame(cam, subject, id);
+      r.autoClear = false;
+      r.clear();
+      r.render(bgScene, bgCam);
+      r.clearDepth();
+      r.render(scene, cam);
+      r.autoClear = true;
+      this.urls.set(id, r.domElement.toDataURL('image/jpeg', 0.9));
+      scene.remove(subject);
+      if (ground) {
+        ground.removeFromParent();
+        ground.geometry.dispose();
+        (ground.material as MeshBasicMaterial).dispose();
+      }
+      disposeTree(subject);
+    };
     const step = () => {
       const t0 = performance.now();
       while (queue.length && performance.now() - t0 < 24) {
         const id = queue.shift()!;
         try {
-          const subject = buildSubject(id);
-          scene.add(subject);
-          frame(cam, subject, id);
-          r.render(scene, cam);
-          this.urls.set(id, r.domElement.toDataURL('image/png'));
-          scene.remove(subject);
-          disposeTree(subject);
+          renderCard(id);
         } catch {
           // 單張失敗就保留文字圖示
         }
@@ -99,12 +221,28 @@ class PortraitStore {
   }
 }
 
+/** 在主體腳下放一片淡出的地面（含接觸影子）；飛行單位的地面在下方較遠處。 */
+function addGround(subject: Group, color: string): Mesh {
+  subject.updateMatrixWorld(true);
+  const box = new Box3().setFromObject(subject);
+  const size = box.getSize(new Vector3());
+  const radius = Math.max(size.x, size.z) * 1.15 + 0.4;
+  const m = new Mesh(new CircleGeometry(radius, 40), new MeshBasicMaterial({ map: groundTexture(color), transparent: true, depthWrite: false }));
+  m.rotation.x = -Math.PI / 2;
+  m.position.set((box.min.x + box.max.x) / 2, (subject.userData.groundY as number | undefined) ?? 0, (box.min.z + box.max.z) / 2);
+  m.renderOrder = -1;
+  subject.parent!.add(m);
+  return m;
+}
+
 export const portraits = new PortraitStore();
 
 function disposeTree(o: Object3D): void {
   o.traverse((c) => {
     const m = c as Mesh;
     if (m.material && !Array.isArray(m.material)) m.material.dispose();
+    // 單位模型的幾何是共用快取，不能釋放；法術圖示的幾何是這張卡專用的
+    if (m.geometry && !m.geometry.userData.shared) m.geometry.dispose();
   });
 }
 
@@ -170,16 +308,21 @@ function buildSubject(cardId: string): Group {
   const offsets: [number, number, number][] =
     n === 1 ? [[0, 0, 0]] : n === 2 ? [[-0.38, 0, -0.2], [0.38, 0, 0.15]] : n === 3 ? [[-0.5, 0, -0.3], [0.5, 0, -0.25], [0, 0, 0.2]] : [[-0.6, 0, -0.4], [0.6, 0, -0.4], [-0.3, 0, 0.15], [0.35, 0, 0.25]];
   const scale = 1 / Math.max(0.8, UNITS[unit].stats.half ? 1.4 : getAsset(unit, 0).height * 0.85);
-  for (const [ox, oy, oz] of offsets) {
+  const prof = profileOf(unit);
+  // 飛行單位離地，卡面上看得出是在空中
+  const lift = UNITS[unit].stats.flying ? Math.max(0.45, (prof.hover ?? 0.8) * 0.75) : 0;
+  offsets.forEach(([ox, oy, oz], i) => {
     const inst = instantiate(getAsset(unit, 0), toonMaterial({ rim: 0.5 }));
     const st = newAnimState();
-    st.t = 0.3;
-    animate(inst, profileOf(unit), st, 0.016);
+    // 最前面那隻擺出出手前的蓄力姿勢，其他的稍微錯開，卡面比較有動感
+    st.t = 0.3 + i * 0.7;
+    st.windup = card.kind === 'troop' && i === offsets.length - 1 ? 0.7 : -1;
+    animate(inst, prof, st, 0.016);
     const m = inst.mesh;
-    m.position.set(ox * getAsset(unit, 0).height, oy, oz);
+    m.position.set(ox * getAsset(unit, 0).height, oy + lift, oz);
     m.rotation.y = -0.38 + ox * 0.3;
     g.add(m);
-  }
+  });
   g.scale.setScalar(scale);
   g.userData.unit = unit;
   return g;
@@ -204,6 +347,10 @@ function frame(cam: OrthographicCamera, subject: Group, cardId: string): void {
     } else {
       viewH *= 0.95;
     }
+  } else if (card.kind === 'building') {
+    // 建築卡拉近一點，主體佔滿卡面
+    viewH *= 0.82;
+    center.y += size.y * 0.06;
   }
   const viewW = viewH * (W / H);
   cam.left = -viewW / 2;
@@ -215,52 +362,95 @@ function frame(cam: OrthographicCamera, subject: Group, cardId: string): void {
   cam.updateProjectionMatrix();
 }
 
-/** 法術的原創圖示模型。 */
+/** 法術的原創圖示模型：實體部分用 Kit，發光部分用不受光的半透明球。 */
 function spellIcon(cardId: string): Group {
   const g = new Group();
   const k = new Kit();
   k.addBone('root', -1, [0, 0, 0]);
-  const glow = (color: string, r: number, x = 0, y = 0, z = 0) => {
-    const m = new Mesh(new SphereGeometry(r, 16, 12), new MeshBasicMaterial({ color }));
+  const glow = (color: string, r: number, x = 0, y = 0, z = 0, opacity = 1, additive = false) => {
+    const m = new Mesh(
+      new SphereGeometry(r, 18, 14),
+      new MeshBasicMaterial({ color, transparent: opacity < 1 || additive, opacity, blending: additive ? AdditiveBlending : NormalBlending, depthWrite: !additive }),
+    );
     m.position.set(x, y, z);
     g.add(m);
   };
   switch (cardId) {
-    case 'fireball':
-      glow('#ff7a2a', 0.55, 0.15, 0.2, 0);
-      glow('#ffd36b', 0.32, 0.2, 0.25, 0.3);
-      for (let i = 0; i < 5; i++) k.cone(0.16 - i * 0.02, 0.7, { at: [-0.45 - i * 0.12, -0.25 - i * 0.15, -0.1], rot: [0, 0, 2.3], color: i % 2 ? '#ffb347' : '#ff6a2a' }, 8);
+    case 'fireball': {
+      // 火球：亮黃核心、橘色火焰層、外圍光暈，往左下拖出火焰尾巴與火星
+      glow('#fff6c0', 0.3, 0.22, 0.28, 0.2);
+      glow('#ffb03a', 0.44, 0.2, 0.26, 0, 0.92);
+      glow('#ff5a1a', 0.66, 0.2, 0.26, -0.1, 0.32, true);
+      for (let i = 0; i < 7; i++) {
+        const t = i / 6;
+        k.cone(0.3 - t * 0.2, 0.75 - t * 0.2, {
+          at: [-0.25 - t * 0.55, -0.12 - t * 0.5, -0.15 - t * 0.1], rot: [0, 0, 2.25 + (i % 2 ? 0.25 : -0.2)], color: i % 3 === 0 ? '#ffd36b' : i % 3 === 1 ? '#ff8a2a' : '#e8461e',
+        }, 8);
+      }
+      for (let i = 0; i < 6; i++) glow(i % 2 ? '#ffe08a' : '#ff8a3a', 0.04 + (i % 3) * 0.015, -0.7 + i * 0.22, -0.55 + ((i * 37) % 5) * 0.12, 0.3, 1);
       break;
+    }
     case 'arrows':
+      // 三支箭斜斜落下，後面拖著速度線
       for (let i = 0; i < 3; i++) {
-        const x = -0.4 + i * 0.4;
-        k.cyl(0.035, 0.035, 1.3, { at: [x, 0.1, 0], rot: [0, 0, 0.35], color: '#8a5a2e' }, 6);
-        k.cone(0.1, 0.25, { at: [x - 0.25, -0.55, 0], rot: [0, 0, Math.PI + 0.35], color: '#cfd6de' }, 6);
-        k.box(0.22, 0.25, 0.03, { at: [x + 0.2, 0.68, 0], rot: [0, 0, 0.35], color: '#5fbf7a' });
+        const x = -0.45 + i * 0.45;
+        const y = 0.15 - i * 0.12;
+        k.cyl(0.04, 0.04, 1.25, { at: [x, y, 0], rot: [0, 0, 0.42], color: '#8a5a2e' }, 6);
+        k.cone(0.11, 0.28, { at: [x - 0.27, y - 0.6, 0], rot: [0, 0, Math.PI + 0.42], color: '#dfe5ec' }, 6);
+        for (const s2 of [-1, 1]) k.box(0.2, 0.26, 0.03, { at: [x + 0.23, y + 0.55, s2 * 0.05], rot: [s2 * 0.5, 0, 0.42], color: i === 1 ? '#f2b233' : '#5fbf7a' });
+        for (let j = 0; j < 2; j++) {
+          const m = new Mesh(new PlaneGeometry(0.035, 0.7), new MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.55 }));
+          m.position.set(x + 0.42 + j * 0.12, y + 0.85 + j * 0.1, -0.05);
+          m.rotation.z = 0.42;
+          g.add(m);
+        }
       }
       break;
-    case 'zap':
-      k.box(0.22, 0.7, 0.12, { at: [0.1, 0.35, 0], rot: [0, 0, -0.5], color: '#ffe45c' });
-      k.box(0.6, 0.18, 0.12, { at: [0, 0, 0], color: '#ffe45c' });
-      k.box(0.22, 0.7, 0.12, { at: [-0.1, -0.35, 0], rot: [0, 0, -0.5], color: '#ffe45c' });
-      glow('#bfe8ff', 0.18, 0.3, 0.7, -0.1);
+    case 'zap': {
+      // 鋸齒閃電：黃色外框＋白色內芯，轉折處有藍白光暈與火花
+      const pts: [number, number][] = [[0.25, 0.95], [-0.15, 0.2], [0.18, 0.12], [-0.25, -0.85]];
+      for (let i = 0; i < pts.length - 1; i++) {
+        const [x0, y0] = pts[i];
+        const [x1, y1] = pts[i + 1];
+        const len = Math.hypot(x1 - x0, y1 - y0);
+        const ang = Math.atan2(y1 - y0, x1 - x0) - Math.PI / 2;
+        k.box(0.26, len + 0.12, 0.14, { at: [(x0 + x1) / 2, (y0 + y1) / 2, 0], rot: [0, 0, ang], color: '#ffd23a' });
+        k.box(0.1, len + 0.05, 0.16, { at: [(x0 + x1) / 2, (y0 + y1) / 2, 0.02], rot: [0, 0, ang], color: '#fffbe0' });
+      }
+      for (const [x, y] of pts) glow('#9fd8ff', 0.16, x, y, -0.05, 0.3, true);
+      glow('#cfeaff', 0.6, 0, 0.05, -0.4, 0.1, true);
+      for (let i = 0; i < 6; i++) {
+        const a2 = i * 1.05;
+        k.box(0.04, 0.18, 0.04, { at: [Math.cos(a2) * 0.55, Math.sin(a2) * 0.6, 0.1], rot: [0, 0, a2], color: '#fff2a0' });
+      }
       break;
+    }
     case 'rocket':
-      k.cyl(0.22, 0.22, 1.2, { rot: [0, 0, -0.8], color: '#d8d0bc' }, 12);
-      k.cone(0.23, 0.45, { at: [0.6, 0.55, 0], rot: [0, 0, -0.8], color: '#c0392b' }, 12);
-      for (const sx of [1, -1]) k.box(0.05, 0.38, 0.38, { at: [-0.45 + sx * 0.12, -0.45 - sx * 0.12, 0], rot: [0, 0, -0.8], color: '#c0392b' });
-      glow('#ffb347', 0.22, -0.62, -0.62, 0);
+      // 火箭：條紋彈身、紅色彈頭與尾翼、尾焰與煙霧
+      k.cyl(0.22, 0.22, 1.1, { at: [0.05, 0.05, 0], rot: [0, 0, -0.8], color: '#e6dfcc' }, 14);
+      for (const t of [-0.25, 0.15]) k.cyl(0.225, 0.225, 0.1, { at: [0.05 + t * 0.72, 0.05 + t * 0.7, 0], rot: [0, 0, -0.8], color: '#c0392b' }, 14);
+      k.cone(0.23, 0.48, { at: [0.6, 0.6, 0], rot: [0, 0, -0.8], color: '#c0392b' }, 14);
+      for (const sx of [1, -1]) k.box(0.05, 0.4, 0.42, { at: [-0.38 + sx * 0.14, -0.38 - sx * 0.14, 0], rot: [0, 0, -0.8], color: '#a8301c' });
+      for (let i = 0; i < 3; i++) k.cone(0.17 - i * 0.04, 0.42 + i * 0.12, { at: [-0.62 - i * 0.08, -0.62 - i * 0.08, 0], rot: [0, 0, 2.35], color: ['#fff3a0', '#ffb03a', '#ff6a2a'][i] }, 10);
+      glow('#ffd36b', 0.28, -0.6, -0.6, 0.05, 0.5, true);
+      for (let i = 0; i < 4; i++) glow('#d9d4cc', 0.16 + i * 0.05, -0.9 - i * 0.12, -0.95 - i * 0.05, -0.2, 0.7);
       break;
     case 'log':
-      k.cyl(0.36, 0.36, 1.6, { rot: [0, 0, Math.PI / 2 - 0.25], color: '#8a5a2e' }, 14);
-      k.cyl(0.31, 0.31, 0.05, { at: [0.78, 0.2, 0], rot: [0, 0, Math.PI / 2 - 0.25], color: '#d9b77a' }, 14);
-      for (let i = 0; i < 4; i++) k.cone(0.06, 0.22, { at: [-0.5 + i * 0.35, 0.28 + i * 0.09, 0.2], color: '#6b4426' }, 4);
+      // 滾木：長木頭、年輪切面與尖刺，下方揚起塵土
+      k.cyl(0.38, 0.38, 1.6, { rot: [0, 0, Math.PI / 2 - 0.25], color: '#8a5a2e' }, 16);
+      k.cyl(0.33, 0.33, 0.05, { at: [0.78, 0.2, 0], rot: [0, 0, Math.PI / 2 - 0.25], color: '#d9b77a' }, 16);
+      k.torus(0.2, 0.025, { at: [0.8, 0.205, 0], rot: [0, Math.PI / 2, 0.25], color: '#b88a50' }, 14);
+      for (let i = 0; i < 5; i++) k.cone(0.07, 0.26, { at: [-0.6 + i * 0.3, 0.3 + i * 0.075, 0.22], rot: [0.4, 0, -0.25], color: '#5a3a1e' }, 5);
+      for (let i = 0; i < 5; i++) glow('#d8c39a', 0.12 + (i % 2) * 0.06, -0.7 + i * 0.3, -0.42 - (i % 2) * 0.05, 0.3, 0.75);
       break;
     case 'poison':
-      k.lathe([[0.01, -0.55], [0.42, -0.5], [0.5, -0.2], [0.42, 0.15], [0.16, 0.3], [0.16, 0.55], [0.22, 0.6]], { color: '#4f8f2a' }, 16);
-      k.cyl(0.14, 0.14, 0.18, { at: [0, 0.68, 0], color: '#8a5a2e' }, 10);
-      glow('#b8f06a', 0.12, 0.15, -0.1, 0.42);
-      glow('#d6ff8a', 0.08, -0.2, 0.05, 0.4);
+      // 毒藥瓶：發光的綠色藥水、骷髏標籤、往上冒的泡泡
+      k.lathe([[0.01, -0.6], [0.44, -0.54], [0.53, -0.22], [0.44, 0.14], [0.17, 0.3], [0.17, 0.56], [0.23, 0.62]], { color: '#3d6f2a' }, 18);
+      k.cyl(0.15, 0.15, 0.2, { at: [0, 0.7, 0], color: '#8a5a2e' }, 10);
+      glow('#9dff4a', 0.4, 0, -0.2, 0.12, 0.85);
+      k.sphere(0.16, { at: [0, -0.15, 0.48], scale: [1, 1, 0.4], color: '#f4f1e8' }, 12);
+      for (const sx of [1, -1]) k.sphere(0.04, { at: [sx * 0.055, -0.13, 0.54], color: '#2a3a1e' }, 6);
+      for (let i = 0; i < 5; i++) glow('#d6ff8a', 0.05 + (i % 3) * 0.025, -0.15 + ((i * 29) % 7) * 0.05, 0.75 + i * 0.16, 0.1, 0.9);
       break;
     case 'goblin_barrel':
       k.cyl(0.45, 0.45, 0.85, { rot: [0.2, 0, 0], color: '#9a6834' }, 14);
@@ -270,6 +460,12 @@ function spellIcon(cardId: string): Group {
       for (const sx of [1, -1]) {
         k.cone(0.07, 0.25, { at: [sx * 0.28, 0.66, 0.05], rot: [0, 0, -sx * 1.3], color: '#7cbf4a' }, 5);
         k.sphere(0.05, { at: [sx * 0.08, 0.66, 0.26], color: '#1b1b22' }, 6);
+      }
+      for (let i = 0; i < 3; i++) {
+        const m = new Mesh(new PlaneGeometry(0.04, 0.55), new MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.5 }));
+        m.position.set(-0.55 - i * 0.12, 0.5 + i * 0.12, -0.2);
+        m.rotation.z = -0.9;
+        g.add(m);
       }
       break;
     default:
