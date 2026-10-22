@@ -725,3 +725,5 @@ button { cursor: pointer; touch-action: manipulation; }
   0%, 25% { transform: rotate(-90deg); }
   60%, 100% { transform: rotate(0deg); }
 }
+
+p.small { font-size: 12px; line-height: 1.45; margin: -2px 0 2px; }
