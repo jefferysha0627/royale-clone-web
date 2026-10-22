@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="UTF-8" />
+    <title>模型展示（開發用）</title>
+    <style>
+      html, body { margin: 0; height: 100%; background: #10161c; overflow: hidden; font-family: system-ui, -apple-system, "PingFang TC", sans-serif; }
+      canvas { display: block; width: 100vw; height: 100vh; }
+      .label { position: absolute; transform: translate(-50%, 0); color: #fff; font-size: 12px; font-weight: 700; text-shadow: 0 1px 2px #000; pointer-events: none; white-space: nowrap; }
+    </style>
+  </head>
+  <body>
+    <canvas id="c"></canvas>
+    <div id="labels"></div>
+    <script type="module" src="./models.ts"></script>
+  </body>
+</html>

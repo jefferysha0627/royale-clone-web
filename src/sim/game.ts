@@ -203,7 +203,7 @@ function towerStats(type: 'king' | 'princess'): UnitStats {
 }
 
 /** 多隻部隊的出場隊形（相對落點，以隊伍 0 視角：+y 朝己方後方）。 */
-function formation(count: number): [number, number][] {
+export function formation(count: number): [number, number][] {
   switch (count) {
     case 1: return [[0, 0]];
     case 2: return [[-0.6, 0], [0.6, 0]];

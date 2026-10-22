@@ -1,8 +1,9 @@
 import { Renderer2D } from '../render/renderer2d';
 import type { BattleRenderer } from '../render/types';
-import { AI_DECKS, AI_LEVELS, AiController, ARENA, CARDS, DT, Game, Rng, type AiLevel, type GameEvent, type MatchResult } from '../sim';
+import { tryCreateRenderer3D } from '../render3d/renderer3d';
+import { AI_DECKS, AI_LEVELS, AiController, ARENA, CARDS, DT, Game, MATCH, Rng, type AiLevel, type GameEvent, type MatchResult } from '../sim';
 import type { Sound } from './audio';
-import { fillCard } from './cardview';
+import { crownSlots, fillCard } from './cardview';
 import { shareGame, shareUrl } from './share';
 
 export interface BattleHost {
@@ -33,10 +34,14 @@ const LEVEL_NAME: Record<AiLevel, string> = { easy: '簡單', normal: '普通', 
 const REASON_TEXT: Record<MatchResult['reason'], (winner: 0 | 1 | null) => string> = {
   king: (w) => (w === 0 ? '你推倒了對方的國王塔！' : '我方國王塔被推倒了'),
   time: () => '時間到，皇冠較多的一方獲勝',
-  overtime: () => '延長賽中率先拿下皇冠',
-  tiebreak: () => '延長賽結束，比較雙方血量最低的塔',
-  draw: () => '延長賽結束，雙方不分勝負',
+  overtime: () => '延長賽中率先推倒塔的一方獲勝',
+  tiebreak: () => '延長賽結束：塔同步扣血，最低血量的塔先倒',
+  draw: () => '延長賽結束，雙方塔血量相同',
 };
+
+/** 開場：VS 畫面 → 3、2、1 → 開戰。 */
+const INTRO_VS = 1.7;
+const INTRO_COUNT = 0.62;
 
 export class Battle {
   game!: Game;
@@ -45,6 +50,9 @@ export class Battle {
   private raf = 0;
   private active = false;
   paused = false;
+  /** 開場倒數中（模擬暫停、不能出牌）。 */
+  intro = 0;
+  private introStep = -1;
   private last = 0;
   private acc = 0;
   private selected: number | null = null;
@@ -53,6 +61,7 @@ export class Battle {
   private resultShown = false;
   private deck: string[] = [];
   private level: AiLevel = 'normal';
+  private aiDeckName = '';
   private seed = 0;
   private handKey = '';
   private hudKey = '';
@@ -60,31 +69,45 @@ export class Battle {
   private bannerTimer = 0;
   private sizeW = 0;
   private sizeH = 0;
+  private fullShown = false;
   /** 自動測試用：每個模擬步數的計數（不影響遊戲）。 */
   stepsRun = 0;
+  /** 測試用：略過開場動畫。 */
+  skipIntro = false;
 
   private readonly root = $<HTMLElement>('screen-battle');
   private readonly wrap = $<HTMLElement>('arena-wrap');
   private readonly canvas = $<HTMLCanvasElement>('arena');
+  private readonly uiCanvas = $<HTMLCanvasElement>('arena-ui');
   private readonly panel = $<HTMLElement>('hand-panel');
+  private readonly handEl = $<HTMLElement>('hand');
   private readonly cards = Array.from(document.querySelectorAll<HTMLButtonElement>('#hand .card'));
   private readonly nextCard = $<HTMLElement>('next-card');
   private readonly elixirNum = $<HTMLElement>('elixir-num');
   private readonly elixirFill = $<HTMLElement>('elixir-fill');
+  private readonly elixirFull = $<HTMLElement>('elixir-full');
   private readonly elixirBox = this.panel.querySelector<HTMLElement>('.elixir')!;
   private readonly timer = $<HTMLElement>('hud-timer');
-  private readonly timeBox = this.root.querySelector<HTMLElement>('.hud-time')!;
+  private readonly timeBox = $<HTMLElement>('hud-time-box');
   private readonly timeLabel = $<HTMLElement>('hud-time-label');
-  private readonly x2 = $<HTMLElement>('hud-x2');
-  private readonly crownMe = $<HTMLElement>('hud-crown-me');
-  private readonly crownEnemy = $<HTMLElement>('hud-crown-enemy');
+  private readonly mult = $<HTMLElement>('hud-mult');
+  private readonly multText = $<HTMLElement>('hud-mult-text');
+  private readonly crownsMe = $<HTMLElement>('hud-crowns-me');
+  private readonly crownsEnemy = $<HTMLElement>('hud-crowns-enemy');
+  private readonly nameEnemy = $<HTMLElement>('hud-name-enemy');
   private readonly toastEl = $<HTMLElement>('toast');
   private readonly bannerEl = $<HTMLElement>('banner');
+  private readonly countdownEl = $<HTMLElement>('countdown');
+  private readonly ovVs = $<HTMLElement>('ov-vs');
   private readonly ovPause = $<HTMLElement>('ov-pause');
   private readonly ovResult = $<HTMLElement>('ov-result');
+  private readonly handSlots: (string | null)[] = [null, null, null, null];
 
   constructor(private readonly sound: Sound, private readonly host: BattleHost) {
-    this.renderer = new Renderer2D(this.canvas);
+    // 優先使用 3D；裝置不支援 WebGL 時退回 2D 畫面（同一套規則與操作）
+    const r3 = new URLSearchParams(location.search).get('render') === '2d' ? null : tryCreateRenderer3D(this.canvas, this.uiCanvas);
+    this.renderer = r3 ?? new Renderer2D(this.canvas);
+    if (!r3) this.uiCanvas.hidden = true;
     this.bindInput();
     this.bindButtons();
     const ro = typeof ResizeObserver === 'function' ? new ResizeObserver(() => this.layout()) : null;
@@ -103,7 +126,9 @@ export class Battle {
     this.level = level;
     this.seed = seed ?? Math.floor(Math.random() * 2 ** 31);
     const pick = new Rng(this.seed ^ 0x5bd1e995);
-    this.game = new Game({ seed: this.seed, decks: [this.deck, [...pick.pick(AI_DECKS).cards]] });
+    const aiDeck = pick.pick(AI_DECKS);
+    this.aiDeckName = aiDeck.name;
+    this.game = new Game({ seed: this.seed, decks: [this.deck, [...aiDeck.cards]] });
     this.ai = new AiController(this.game, 1, this.game.rng.fork(), AI_LEVELS[level]);
     this.renderer.reset();
     this.selected = null;
@@ -115,14 +140,36 @@ export class Battle {
     this.stepsRun = 0;
     this.handKey = '';
     this.hudKey = '';
+    this.fullShown = false;
+    this.handSlots.fill(null);
     this.ovPause.hidden = true;
     this.ovResult.hidden = true;
     this.toastEl.hidden = true;
     this.bannerEl.hidden = true;
-    this.cards.forEach((c) => c.classList.remove('selected', 'dragging', 'deny'));
+    this.countdownEl.hidden = true;
+    this.cards.forEach((c) => c.classList.remove('selected', 'dragging', 'deny', 'dealt'));
     $('share-manual-result').hidden = true;
+    const enemyName = `電腦（${LEVEL_NAME[level]}）`;
+    this.nameEnemy.textContent = enemyName;
+    $('vs-name-enemy').textContent = enemyName;
+    $('vs-sub-enemy').textContent = `牌組：${aiDeck.name}`;
+    $('vs-sub-me').textContent = `平均 ${(deck.reduce((s, id) => s + CARDS[id].cost, 0) / deck.length).toFixed(1)} 能量`;
+    crownSlots(this.crownsMe, 3, 0);
+    crownSlots(this.crownsEnemy, 3, 0);
     this.root.hidden = false;
     this.active = true;
+    this.intro = this.skipIntro ? 0 : INTRO_VS + INTRO_COUNT * 4;
+    this.sound.stopMusic();
+    if (this.skipIntro) this.sound.startMusic();
+    this.introStep = -1;
+    this.ovVs.hidden = this.skipIntro;
+    if (!this.skipIntro) {
+      // 重新觸發 CSS 動畫
+      this.ovVs.style.animation = 'none';
+      void this.ovVs.offsetWidth;
+      this.ovVs.style.animation = '';
+      this.sound.play('vs');
+    }
     this.layout();
     this.renderHand();
     this.updateHud();
@@ -135,6 +182,7 @@ export class Battle {
     this.active = false;
     cancelAnimationFrame(this.raf);
     this.root.hidden = true;
+    this.sound.stopMusic();
   }
 
   /** 以方法讀取，避免 TypeScript 對 game.phase 的窄化誤判。 */
@@ -148,6 +196,19 @@ export class Battle {
 
   get currentSeed(): number {
     return this.seed;
+  }
+
+  get rendererKind(): string {
+    return this.renderer.kind;
+  }
+
+  get effectCount(): number {
+    return this.renderer.effectCount;
+  }
+
+  /** 平均每幀毫秒（效能紀錄）。 */
+  get frameTime(): number {
+    return (this.renderer as { frameTime?: number }).frameTime ?? 0;
   }
 
   private layout(): void {
@@ -168,7 +229,10 @@ export class Battle {
     const dt = Math.min(0.1, Math.max(0, (now - this.last) / 1000));
     this.last = now;
     const g = this.game;
-    if (!this.paused && g.phase !== 'ended') {
+    if (this.intro > 0 && !this.paused) this.updateIntro(dt);
+    // 打擊停頓：大招命中、塔倒下時讓戰鬥停一瞬間（只影響畫面節奏，不影響模擬結果）
+    const stopped = (this.renderer as { hitStop?: number }).hitStop ?? 0;
+    if (!this.paused && this.intro <= 0 && g.phase !== 'ended' && stopped <= 0) {
       this.acc += dt;
       while (this.acc >= DT) {
         this.simStep();
@@ -184,15 +248,35 @@ export class Battle {
     if (this.endAt && now >= this.endAt && !this.resultShown) this.showResult();
   };
 
+  private updateIntro(dt: number): void {
+    this.intro = Math.max(0, this.intro - dt);
+    const elapsed = INTRO_VS + INTRO_COUNT * 4 - this.intro;
+    if (elapsed < INTRO_VS) return;
+    this.ovVs.hidden = true;
+    const step = Math.min(3, Math.floor((elapsed - INTRO_VS) / INTRO_COUNT));
+    if (step !== this.introStep) {
+      this.introStep = step;
+      const el = this.countdownEl;
+      el.hidden = false;
+      el.classList.remove('tick', 'go');
+      void el.offsetWidth;
+      el.textContent = step < 3 ? String(3 - step) : '開戰！';
+      el.classList.add('tick');
+      if (step === 3) el.classList.add('go');
+      this.sound.play(step < 3 ? 'count' : 'go');
+    }
+    if (this.intro <= 0) {
+      this.countdownEl.hidden = true;
+      this.last = performance.now();
+      this.sound.startMusic();
+    }
+  }
+
   /** 場地格座標 → 視窗座標（自動測試用來瞄準真實滑鼠／觸控輸入）。 */
   screenOf(x: number, y: number): [number, number] {
     const r = this.canvas.getBoundingClientRect();
     const [sx, sy] = this.renderer.toScreen(x, y);
     return [r.left + sx, r.top + sy];
-  }
-
-  get effectCount(): number {
-    return this.renderer.effectCount;
   }
 
   /** 推進一個固定步長（AI 先決策，再模擬）。 */
@@ -213,39 +297,82 @@ export class Battle {
         case 'deploy':
           this.sound.play(ev.team === 0 ? 'deploy' : 'enemyDeploy');
           break;
+        case 'spawn':
+          if (ev.source === 'card' && CARDS[this.game.get(ev.id)?.cardId ?? '']?.kind === 'troop') {
+            const u = this.game.get(ev.id);
+            if (u && u.stats.mass >= 18) this.sound.play('thud');
+          }
+          break;
+        case 'attack':
+          this.sound.play(attackSound(ev.unit, ev.ranged));
+          break;
         case 'hit':
-          if (ev.isTower) this.sound.play('hit');
+          if (ev.isTower) this.sound.play('towerHit');
+          else if (ev.amount >= 250) this.sound.play('heavyHit');
+          else this.sound.play('hit');
+          break;
+        case 'impact':
+          this.sound.play(ev.visual === 'ice' ? 'freeze' : ev.visual === 'magic' ? 'magic' : 'boom');
           break;
         case 'death':
-          if (ev.kind !== 'tower') this.sound.play('death');
+          if (ev.kind === 'building') this.sound.play('crumble');
+          else if (ev.kind === 'troop' && !ev.kamikaze) this.sound.play('death');
           break;
         case 'towerDown': {
-          this.sound.play('tower');
-          const el = ev.team === 1 ? this.crownMe : this.crownEnemy;
-          el.parentElement!.classList.remove('pop');
-          void el.parentElement!.offsetWidth;
-          el.parentElement!.classList.add('pop');
-          if (!ev.isKing && !ev.cascade) this.banner(ev.team === 1 ? '+1 皇冠！' : '我方的塔倒了', ev.team === 1 ? '繼續進攻國王塔' : '守住國王塔');
+          this.sound.play(ev.isKing ? 'kingDown' : 'tower');
+          const g = this.game;
+          crownSlots(this.crownsMe, 3, g.players[0].crowns);
+          crownSlots(this.crownsEnemy, 3, g.players[1].crowns);
+          if (!ev.isKing && !ev.cascade) {
+            this.banner(ev.team === 1 ? '拿下一頂皇冠！' : '我方的塔倒了', ev.team === 1 ? '繼續進攻國王塔' : '守住國王塔', ev.team === 1 ? 'gold' : '');
+          }
           break;
         }
+        case 'kingActivate':
+          this.sound.play('kingWake');
+          break;
+        case 'spellCast':
+          this.sound.play(ev.cardId === 'zap' ? 'zap' : ev.cardId === 'log' ? 'log' : ev.cardId === 'poison' ? 'poison' : 'whoosh');
+          break;
         case 'spell':
-          this.sound.play('spell');
+          if (ev.cardId === 'fireball' || ev.cardId === 'rocket') this.sound.play(ev.cardId === 'rocket' ? 'bigBoom' : 'boom');
+          else if (ev.cardId === 'arrows') this.sound.play('arrows');
+          else if (ev.cardId === 'goblin_barrel') this.sound.play('crumble');
+          break;
+        case 'blast':
+          this.sound.play(ev.visual === 'bomb' ? 'bigBoom' : 'thud');
+          break;
+        case 'bombDrop':
+          this.sound.play('fuse');
+          break;
+        case 'charge':
+          this.sound.play('charge');
+          break;
+        case 'stun':
+          if (ev.freeze) this.sound.play('freeze');
           break;
         case 'elixirRate':
           this.sound.play('phase');
-          this.banner(ev.mult === 3 ? '能量三倍！' : '能量加倍！', ev.mult === 3 ? '最後 60 秒' : '');
+          this.sound.setMusicIntensity(ev.mult >= 3 ? 2 : 1);
+          this.banner(ev.mult === 3 ? '能量三倍！' : '能量加倍！', ev.mult === 3 ? '延長賽最後 60 秒' : this.game.phase === 'overtime' ? '' : '最後 60 秒', 'pink');
           break;
         case 'phase':
           if (ev.phase === 'overtime') {
-            this.sound.play('phase');
-            this.banner('延長賽！', '先推倒任一座塔就獲勝');
+            this.sound.play('overtime');
+            this.sound.setMusicIntensity(1);
+            this.banner('延長賽！', '先推倒任一座塔就獲勝', 'gold');
+          } else if (ev.phase === 'tiebreak') {
+            this.sound.play('overtime');
+            this.banner('決勝！', '雙方塔同步扣血，最低的塔先倒', 'gold');
           }
           break;
         case 'end':
-          this.endAt = performance.now() + 1600;
+          this.sound.stopMusic();
+          this.endAt = performance.now() + (ev.result.reason === 'king' ? 2200 : 1700);
           this.setSelected(null);
           this.drag = null;
           this.renderer.preview = null;
+          this.banner(ev.result.winner === 0 ? '勝利！' : ev.result.winner === 1 ? '落敗' : '平手', '', ev.result.winner === 0 ? 'gold' : '');
           break;
         default:
           break;
@@ -253,10 +380,11 @@ export class Battle {
     }
   }
 
-  private banner(text: string, sub = ''): void {
+  private banner(text: string, sub = '', tone = ''): void {
     const el = this.bannerEl;
     el.hidden = true;
     void el.offsetWidth;
+    el.className = `banner ${tone}`;
     el.innerHTML = sub ? `${text}<small>${sub}</small>` : text;
     el.hidden = false;
     clearTimeout(this.bannerTimer);
@@ -279,7 +407,18 @@ export class Battle {
     const key = `${p.hand.join(',')}|${p.queue[0]}`;
     if (key === this.handKey) return;
     this.handKey = key;
-    p.hand.forEach((id, i) => fillCard(this.cards[i], id ?? undefined));
+    p.hand.forEach((id, i) => {
+      const c = this.cards[i];
+      const prev = this.handSlots[i];
+      fillCard(c, id ?? undefined);
+      c.classList.toggle('empty', !id);
+      if (id && id !== prev && prev !== undefined && this.stepsRun > 0) {
+        c.classList.remove('dealt');
+        void c.offsetWidth;
+        c.classList.add('dealt');
+      }
+      this.handSlots[i] = id;
+    });
     fillCard(this.nextCard, p.queue[0]);
   }
 
@@ -300,25 +439,31 @@ export class Battle {
       const fill = c.lastElementChild as HTMLElement | null;
       if (fill) fill.style.height = short ? `${Math.min(1, el / card.cost) * 100}%` : '0%';
     }
+    const full = el >= MATCH.maxElixir - 1e-6 && g.playing && this.intro <= 0;
+    if (full !== this.fullShown) {
+      this.fullShown = full;
+      this.elixirFull.hidden = !full;
+      this.handEl.classList.toggle('full', full);
+    }
     const ot = g.phase === 'overtime';
-    const x2 = g.elixirMultiplier() > 1 && g.phase !== 'ended';
-    const key = `${whole}|${fmtTime(g.timeLeft)}|${ot}|${x2}|${p.crowns}|${g.players[1].crowns}`;
+    const mult = g.playing ? g.elixirMultiplier() : 1;
+    const key = `${whole}|${fmtTime(g.timeLeft)}|${ot}|${mult}|${g.phase}`;
     if (key === this.hudKey) return;
     this.hudKey = key;
     this.elixirNum.textContent = String(whole);
     this.timer.textContent = fmtTime(g.timeLeft);
-    this.timeLabel.textContent = ot ? '延長賽' : '剩餘時間';
-    this.timeBox.classList.toggle('overtime', ot);
-    this.timeBox.classList.toggle('urgent', g.timeLeft <= 10 && g.phase !== 'ended');
-    this.x2.hidden = !x2;
-    this.elixirBox.classList.toggle('x2', x2);
-    this.crownMe.textContent = String(p.crowns);
-    this.crownEnemy.textContent = String(g.players[1].crowns);
+    this.timeLabel.textContent = ot ? '延長賽' : g.phase === 'tiebreak' ? '決勝' : '剩餘時間';
+    this.timeBox.classList.toggle('overtime', ot || g.phase === 'tiebreak');
+    this.timeBox.classList.toggle('urgent', g.timeLeft <= 10 && g.playing);
+    this.mult.hidden = mult <= 1;
+    this.multText.textContent = `x${mult}`;
+    this.elixirBox.classList.toggle('x2', mult > 1);
   }
 
   // ───────── 輸入 ─────────
 
   private setSelected(i: number | null): void {
+    if (i !== null && !this.game.players[0].hand[i]) i = null;
     this.selected = i;
     this.cards.forEach((c, k) => c.classList.toggle('selected', k === i));
     this.renderer.showZone = i !== null;
@@ -327,7 +472,7 @@ export class Battle {
   }
 
   private canInteract(): boolean {
-    return this.active && !this.paused && this.game.phase !== 'ended';
+    return this.active && !this.paused && this.intro <= 0 && this.game.playing;
   }
 
   /** 螢幕座標 → 場地格座標；不在場地上回傳 null。 */
@@ -384,13 +529,14 @@ export class Battle {
     const root = this.root;
     root.addEventListener('pointerdown', (e) => {
       const t = e.target as Element;
-      if (t.closest('.overlay, .hud-pause')) return;
+      if (t.closest('.overlay, .hud-pause, .vs')) return;
       if (!this.canInteract() || this.drag) return;
       if (e.pointerType === 'mouse' && e.button !== 0) return;
       const cardEl = t.closest<HTMLElement>('#hand .card');
       if (cardEl) {
         e.preventDefault();
         const index = Number(cardEl.dataset.index);
+        if (!this.game.players[0].hand[index]) return;
         this.drag = { pointerId: e.pointerId, index, sx: e.clientX, sy: e.clientY, moved: false, fromArena: false, wasSelected: this.selected === index };
         this.setSelected(index);
         this.capture(e.pointerId);
@@ -513,6 +659,7 @@ export class Battle {
     $('pause-note').textContent = note;
     $('pause-note').hidden = !note;
     this.ovPause.hidden = false;
+    this.sound.stopMusic();
   }
 
   private autoPause(): void {
@@ -528,6 +675,11 @@ export class Battle {
     this.ovPause.hidden = true;
     this.acc = 0;
     this.last = performance.now();
+    if (this.intro <= 0 && this.game.playing) {
+      this.sound.startMusic();
+      const m = this.game.elixirMultiplier();
+      this.sound.setMusicIntensity(m >= 3 ? 2 : m >= 2 ? 1 : 0);
+    }
   }
 
   private showResult(): void {
@@ -539,14 +691,29 @@ export class Battle {
     panel.classList.toggle('win', r.winner === 0);
     panel.classList.toggle('lose', r.winner === 1);
     $('result-title').textContent = r.winner === 0 ? '勝利！' : r.winner === 1 ? '落敗' : '平手';
-    $('result-crown-me').textContent = String(r.crowns[0]);
-    $('result-crown-enemy').textContent = String(r.crowns[1]);
+    $('result-name-enemy').textContent = `電腦（${LEVEL_NAME[this.level]}）`;
+    $('result-row-me').classList.toggle('won', r.winner === 0);
+    $('result-row-enemy').classList.toggle('won', r.winner === 1);
+    const me = $('result-crowns-me');
+    const en = $('result-crowns-enemy');
+    crownSlots(me, 3, 0);
+    crownSlots(en, 3, 0);
+    // 皇冠逐一亮起
+    const total = Math.max(r.crowns[0], r.crowns[1]);
+    for (let i = 1; i <= total; i++) {
+      window.setTimeout(() => {
+        if (!this.resultShown) return;
+        crownSlots(me, 3, Math.min(i, r.crowns[0]));
+        crownSlots(en, 3, Math.min(i, r.crowns[1]));
+        this.sound.play('crown');
+      }, 350 + i * 380);
+    }
     $('result-reason').textContent = REASON_TEXT[r.reason](r.winner);
-    $('result-stats').textContent = `${LEVEL_NAME[this.level]}電腦 · 出牌 ${p.cardsPlayed} 張 · 花費 ${Math.round(p.elixirSpent)} 能量 · 對戰 ${fmtTime(r.time)}`;
+    $('result-stats').textContent = `${LEVEL_NAME[this.level]}電腦（${this.aiDeckName}）· 出牌 ${p.cardsPlayed} 張 · 花費 ${Math.round(p.elixirSpent)} 能量 · ${fmtTime(r.time)}`;
     $('btn-share-result').textContent = '分享戰績給朋友';
     $('share-manual-result').hidden = true;
     this.ovResult.hidden = false;
-    this.sound.play(r.winner === 0 ? 'win' : 'lose');
+    this.sound.play(r.winner === 0 ? 'win' : r.winner === 1 ? 'lose' : 'draw');
     this.host.onResult(r);
   }
 
@@ -572,5 +739,39 @@ export class Battle {
       input.focus();
       input.select();
     }
+  }
+}
+
+/** 依單位挑攻擊音效。 */
+function attackSound(unit: string, ranged: boolean): string {
+  switch (unit) {
+    case 'princess':
+    case 'archer':
+      return 'bow';
+    case 'musketeer':
+      return 'gun';
+    case 'king':
+    case 'cannon':
+      return 'cannon';
+    case 'wizard':
+    case 'baby_dragon':
+      return 'fire';
+    case 'witch':
+      return 'magic';
+    case 'spear_goblin':
+    case 'bomber':
+      return 'throw';
+    case 'inferno':
+      return 'beam';
+    case 'giant':
+    case 'golem':
+    case 'golemite':
+    case 'giant_skeleton':
+      return 'punch';
+    case 'bat':
+    case 'gargoyle':
+      return 'bite';
+    default:
+      return ranged ? 'throw' : 'slash';
   }
 }

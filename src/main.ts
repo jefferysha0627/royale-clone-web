@@ -1,10 +1,11 @@
 import './style.css';
-import { AiController, AI_LEVELS, CARD_IDS, CARDS, DEFAULT_PLAYER_DECK, canHitAir, isValidDeck, type AiLevel } from './sim';
+import { AiController, AI_LEVELS, CARD_IDS, CARDS, DEFAULT_PLAYER_DECK, UNITS, canHitAir, isValidDeck, type AiLevel, type CardDef } from './sim';
 import { Sound } from './ui/audio';
 import { Battle } from './ui/battle';
-import { avgCost, cardTags, fillCard } from './ui/cardview';
+import { avgCost, cardTags, fillCard, rarityName, refreshPortraits } from './ui/cardview';
 import { loadSettings, saveSettings } from './ui/settings';
 import { shareGame, shareUrl } from './ui/share';
+import { portraits } from './render3d/portraits';
 
 const $ = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T;
 
@@ -19,10 +20,14 @@ const fixedSeed = params.has('seed') ? Number(params.get('seed')) : undefined;
 const home = $('screen-home');
 const deckScreen = $('screen-deck');
 const howto = $('ov-howto');
+const cardSheet = $('ov-card');
 
 let deckReturn: 'home' | 'battle-result' = 'home';
 let draftDeck: string[] = [];
 let afterHowto: (() => void) | null = null;
+/** 牌組已滿時選了「使用」：等玩家點一張牌組內的卡來替換。 */
+let swapIn: string | null = null;
+let infoCard: string | null = null;
 
 const battle = new Battle(sound, {
   onResult(r) {
@@ -60,9 +65,16 @@ function renderHome(): void {
   }
   $('home-avg').textContent = `平均 ${avgCost(settings.deck).toFixed(1)} 能量`;
   const { win, lose, draw } = settings.record;
-  $('home-record').textContent = win + lose + draw > 0 ? `本機戰績：${win} 勝 ${lose} 敗${draw ? ` ${draw} 平` : ''}` : '';
+  $('home-record').textContent = win + lose + draw > 0 ? `本機戰績 ${win} 勝 ${lose} 敗${draw ? ` ${draw} 平` : ''}` : '還沒有戰績';
   document.querySelectorAll<HTMLButtonElement>('.seg-btn').forEach((b) => b.setAttribute('aria-checked', String(b.dataset.diff === settings.level)));
   renderMute();
+  const hero = portraits.hero();
+  if (hero) {
+    const img = $<HTMLImageElement>('hero-img');
+    if (img.src !== hero) img.src = hero;
+    img.hidden = false;
+    $('hero-fallback').hidden = true;
+  }
 }
 
 function renderMute(): void {
@@ -123,6 +135,8 @@ document.querySelectorAll<HTMLButtonElement>('.seg-btn').forEach((b) =>
   b.addEventListener('click', () => {
     settings.level = (b.dataset.diff as AiLevel) ?? 'normal';
     saveSettings(settings);
+    sound.unlock();
+    sound.play('tap');
     renderHome();
   }),
 );
@@ -146,16 +160,36 @@ $('btn-share-home').addEventListener('click', async () => {
 function openDeck(ret: 'home' | 'battle-result'): void {
   deckReturn = ret;
   draftDeck = [...settings.deck];
+  swapIn = null;
   home.hidden = true;
   deckScreen.hidden = false;
   renderDeck();
 }
 
 function renderDeck(): void {
+  const slots = $('deck-slots');
+  slots.innerHTML = '';
+  for (let i = 0; i < 8; i++) {
+    const id = draftDeck[i];
+    if (!id) {
+      const e = document.createElement('div');
+      e.className = 'slot-empty';
+      slots.appendChild(e);
+      continue;
+    }
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'card';
+    fillCard(b, id);
+    b.addEventListener('click', () => onDeckSlot(id));
+    slots.appendChild(b);
+  }
+  slots.classList.toggle('swap', swapIn !== null);
+
   const grid = $('deck-grid');
   if (!grid.childElementCount) {
-    for (const id of CARD_IDS) {
-      const c = CARDS[id];
+    const order = [...CARD_IDS].sort((a, b) => CARDS[a].cost - CARDS[b].cost || a.localeCompare(b));
+    for (const id of order) {
       const tile = document.createElement('button');
       tile.type = 'button';
       tile.className = 'tile';
@@ -163,13 +197,14 @@ function renderDeck(): void {
       const face = document.createElement('span');
       face.className = 'card';
       fillCard(face, id);
-      const info = document.createElement('span');
-      info.className = 'tile-info';
-      info.innerHTML = `<span class="card-name">${c.name}</span><span class="tile-tags">${cardTags(c).join('・')}</span><span class="tile-role">${c.role}</span>`;
-      tile.append(face, info);
-      tile.addEventListener('click', () => toggleDeckCard(id));
+      const lvl = document.createElement('span');
+      lvl.className = 'tile-lvl';
+      lvl.textContent = `${rarityName(CARDS[id].rarity)}・11 級`;
+      tile.append(face, lvl);
+      tile.addEventListener('click', () => openInfo(id));
       grid.appendChild(tile);
     }
+    $('collection-note').textContent = `${CARD_IDS.length} 張・全部 11 級`;
   }
   grid.querySelectorAll<HTMLElement>('.tile').forEach((t) => {
     const inDeck = draftDeck.includes(t.dataset.card!);
@@ -180,40 +215,125 @@ function renderDeck(): void {
   const count = $('deck-count');
   count.textContent = `${n}/8`;
   count.classList.toggle('bad', n !== 8);
-  $('deck-avg').textContent = n ? `平均 ${avgCost(draftDeck).toFixed(1)} 能量` : '';
+  $('deck-avg-num').textContent = n ? avgCost(draftDeck).toFixed(1) : '0';
+  $('deck-avg').textContent = '平均能量';
   const done = $<HTMLButtonElement>('btn-deck-done');
   done.disabled = n !== 8;
   const hint = $('deck-hint');
   const noAir = n === 8 && !draftDeck.some((id) => canHitAir(CARDS[id]));
-  hint.classList.toggle('warn', noAir);
+  hint.classList.toggle('warn', noAir || swapIn !== null);
   hint.textContent =
-    n < 8 ? `再選 ${8 - n} 張卡牌。` : noAir ? '提醒：這副牌沒有能打飛行單位的卡，容易被蝙蝠和幼龍突破。' : '點卡牌加入或移出牌組，需要剛好 8 張。';
+    swapIn !== null
+      ? `點上方牌組中的一張卡，換成「${CARDS[swapIn].name}」。`
+      : n < 8
+        ? `再選 ${8 - n} 張卡牌。點卡牌看數值，再按「使用」。`
+        : noAir
+          ? '提醒：這副牌沒有能打飛行單位的卡，容易被蝙蝠和幼龍突破。'
+          : '點卡牌看詳細數值，再選「使用」或「移出」。';
 }
 
-function toggleDeckCard(id: string): void {
+function onDeckSlot(id: string): void {
+  if (swapIn) {
+    const i = draftDeck.indexOf(id);
+    if (i >= 0) draftDeck[i] = swapIn;
+    swapIn = null;
+    sound.play('tap');
+    renderDeck();
+    return;
+  }
+  openInfo(id);
+}
+
+function openInfo(id: string): void {
+  infoCard = id;
+  swapIn = null;
+  const c = CARDS[id];
+  fillCard($('info-card'), id);
+  $('info-name').textContent = c.name;
+  $('info-meta').textContent = `${rarityName(c.rarity)}・${c.cost} 能量・${cardTags(c).join('・')}`;
+  $('info-role').textContent = c.role;
+  const dl = $('info-stats');
+  dl.innerHTML = statRows(c)
+    .map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`)
+    .join('');
+  const inDeck = draftDeck.includes(id);
+  const use = $('btn-info-use');
+  use.textContent = inDeck ? '移出牌組' : '使用';
+  use.classList.toggle('primary', !inDeck);
+  cardSheet.hidden = false;
+  sound.play('tap');
+}
+
+const speedName = (v: number): string => (v >= 2 ? '極快' : v >= 1.5 ? '快' : v >= 1 ? '中等' : '慢');
+
+/** 卡牌資訊畫面的數值列（11 級，依公開資料校準）。 */
+function statRows(c: CardDef): [string, string][] {
+  if (c.kind === 'spell') {
+    const s = c.spell!;
+    const rows: [string, string][] = [];
+    if (s.spawn) rows.push(['召喚', `${UNITS[s.spawn.unit].name} ×${s.spawn.count}`]);
+    if (s.damage > 0) {
+      const waves = s.waves ?? 1;
+      rows.push([s.kind === 'area' ? '每秒傷害' : '傷害', waves > 1 ? `${s.damage} ×${waves}` : String(s.damage)]);
+      rows.push(['對塔傷害', String(Math.round(s.damage * s.towerPct) * waves * (s.kind === 'area' ? s.duration! : 1))]);
+    }
+    rows.push(['範圍', s.kind === 'roll' ? `寬 ${(s.radius * 2).toFixed(1)}・長 ${s.rollRange} 格` : `半徑 ${s.radius} 格`]);
+    if (s.stun) rows.push(['暈眩', `${s.stun} 秒`]);
+    if (s.duration) rows.push(['持續', `${s.duration} 秒`]);
+    if (s.slow) rows.push(['緩速', `${Math.round(s.slow * 100)}%`]);
+    if (s.pushback) rows.push(['擊退', `${s.pushback} 格`]);
+    rows.push(['目標', s.hitsAir ? '空中與地面' : '只打地面']);
+    return rows;
+  }
+  const u = UNITS[c.unit!].stats;
+  const rows: [string, string][] = [['生命值', String(u.hp)]];
+  if (u.ramp) rows.push(['傷害', u.ramp.damages.join(' → ')]);
+  else if (u.damage > 0) rows.push([u.splash || u.projectile?.splash ? '範圍傷害' : '傷害', String(u.damage)]);
+  if (u.damage > 0 && !u.kamikaze) rows.push(['攻擊間隔', `${u.hitSpeed} 秒`]);
+  if (u.damage > 0) rows.push(['射程', u.range >= 2 ? `${u.range} 格` : `近戰（${u.range}）`]);
+  if (u.speed > 0) rows.push(['移動速度', speedName(u.speed)]);
+  rows.push(['目標', u.targets === 'buildings' ? '只打建築' : u.targets === 'ground' ? '地面' : '空中與地面']);
+  rows.push(['部署時間', `${u.deployTime} 秒`]);
+  if ((c.count ?? 1) > 1) rows.push(['數量', `×${c.count}`]);
+  if (u.lifetime) rows.push(['存在時間', `${u.lifetime} 秒`]);
+  if (u.charge) rows.push(['衝鋒傷害', String(u.charge.damage)]);
+  if (u.deathDamage) rows.push(['死亡傷害', String(u.deathDamage.damage)]);
+  if (u.spawner) rows.push(['召喚', `${UNITS[u.spawner.unit].name} ×${u.spawner.count}／${u.spawner.pause} 秒`]);
+  if (u.deathSpawn) rows.push(['死亡時', `${UNITS[u.deathSpawn.unit].name} ×${u.deathSpawn.count}`]);
+  if (u.projectile?.freeze) rows.push(['冰凍', `${u.projectile.freeze} 秒`]);
+  if (u.jumpsRiver) rows.push(['特性', '可跳過河']);
+  return rows;
+}
+
+$('btn-info-close').addEventListener('click', () => {
+  cardSheet.hidden = true;
+});
+cardSheet.addEventListener('click', (e) => {
+  if (e.target === cardSheet) cardSheet.hidden = true;
+});
+$('btn-info-use').addEventListener('click', () => {
+  const id = infoCard;
+  cardSheet.hidden = true;
+  if (!id) return;
   const i = draftDeck.indexOf(id);
   if (i >= 0) draftDeck.splice(i, 1);
   else if (draftDeck.length < 8) draftDeck.push(id);
-  else {
-    const hint = $('deck-hint');
-    hint.textContent = '牌組已滿 8 張，先點一張已選的卡移除。';
-    hint.classList.add('warn');
-    sound.play('error');
-    return;
-  }
+  else swapIn = id; // 牌組已滿：進入替換模式
   sound.play('tap');
   renderDeck();
-}
+});
 
 $('btn-deck-done').addEventListener('click', () => {
   if (!isValidDeck(draftDeck)) return;
   settings.deck = [...draftDeck];
   saveSettings(settings);
+  swapIn = null;
   if (deckReturn === 'battle-result') startBattle();
   else showHome();
 });
 $('btn-deck-reset').addEventListener('click', () => {
   draftDeck = [...DEFAULT_PLAYER_DECK];
+  swapIn = null;
   renderDeck();
 });
 
@@ -235,6 +355,7 @@ if (testMode) {
     battle,
     settings,
     sound,
+    portraits,
     game: () => battle.game,
     /** 以玩家側 AI 代打並快轉 sec 秒（用於多場穩定性測試）。 */
     autoplay(sec: number): void {
@@ -245,6 +366,10 @@ if (testMode) {
         bot.update();
         battle.simStep();
       }
+    },
+    /** 略過開場動畫（自動測試用）。 */
+    skipIntro(on = true): void {
+      battle.skipIntro = on;
     },
     fastForward(sec: number): void {
       const steps = Math.round(sec * 30);
@@ -260,3 +385,9 @@ const bootFill = document.getElementById('boot-fill');
 if (bootFill) bootFill.style.width = '100%';
 document.getElementById('boot')?.remove();
 showHome();
+// 卡面圖在背景分批產生：先做目前牌組，再做主畫面插圖與其他卡
+portraits.onUpdate(() => {
+  refreshPortraits();
+  if (!home.hidden) renderHome();
+});
+portraits.start(settings.deck);
