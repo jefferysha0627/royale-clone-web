@@ -8,6 +8,7 @@ export interface Settings {
   level: AiLevel;
   howtoSeen: boolean;
   record: { win: number; lose: number; draw: number };
+  trophies: number;
 }
 
 const KEY = 'bridge-tower-duel.v1';
@@ -28,6 +29,7 @@ export function loadSettings(): Settings {
       lose: Number(r?.lose) || 0,
       draw: Number(r?.draw) || 0,
     },
+    trophies: Math.max(0, Math.floor(Number(raw.trophies) || 0)),
   };
 }
 

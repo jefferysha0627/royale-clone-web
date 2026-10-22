@@ -5,12 +5,39 @@ import {
 import { ARENA, TOWER_LAYOUT } from '../sim';
 import { CX, CZ } from './coords';
 import { Kit } from './kit';
+import { shade } from './models/humanoid';
 
 // 競技場：手繪感的草地格紋與石磚步道（Canvas 產生貼圖）、下凹的流動河道、3 格寬木橋、石牆與場外樹木。
 // 版面依原作公開截圖的結構（直向、雙橋、步道連接塔與橋）重新以原創風格繪製。
 
 const PX = 48; // 每格貼圖像素
 const RIVER_DEPTH = 0.32;
+
+/** 競技場配色（獎盃累積到門檻會換場地，見 ui/progress.ts）。 */
+interface ArenaPalette {
+  grassA: string;
+  grassB: string;
+  path: string;
+  pathLine: string;
+  base: string;
+  trees: [string, string, string]; // 樹冠深、中、亮
+  outside: string; // 場外草地
+}
+
+export const ARENA_THEMES: ArenaPalette[] = [
+  // 0 綠野競技場
+  { grassA: '#8fcf5e', grassB: '#86c656', path: '#e5c98a', pathLine: 'rgba(150,110,60,0.45)', base: '#c9b07a', trees: ['#3f8f3a', '#4a9a3e', '#5aae48'], outside: '#3f7a35' },
+  // 1 石橋要塞：偏冷的草地、灰色石板路
+  { grassA: '#94c76c', grassB: '#89bb62', path: '#cfcabb', pathLine: 'rgba(95,95,100,0.45)', base: '#b4ad9c', trees: ['#2f7a45', '#3a874f', '#4c9a5c'], outside: '#386f3a' },
+  // 2 楓紅山谷：秋天的黃綠草地與楓紅樹
+  { grassA: '#b7c75c', grassB: '#abbb52', path: '#e6b878', pathLine: 'rgba(150,90,40,0.45)', base: '#cf9f62', trees: ['#c4532a', '#e0782e', '#f2a63a'], outside: '#6f7a32' },
+  // 3 月光湖畔：帶藍的青草、淡色石路
+  { grassA: '#7fc69a', grassB: '#74ba8f', path: '#dcd6c0', pathLine: 'rgba(90,110,120,0.45)', base: '#bdb9a2', trees: ['#2c6f6a', '#36807a', '#46958c'], outside: '#2f6455' },
+  // 4 雷霆高地：乾草地、深色樹
+  { grassA: '#a4bf6c', grassB: '#98b262', path: '#cdb48a', pathLine: 'rgba(120,95,60,0.45)', base: '#ad976c', trees: ['#46603a', '#556f42', '#66814c'], outside: '#4d5f36' },
+  // 5 黃金王座：鮮綠草地、金色步道
+  { grassA: '#92d66c', grassB: '#86cb61', path: '#f1d47e', pathLine: 'rgba(170,120,30,0.5)', base: '#e2c060', trees: ['#2f9a46', '#3aab52', '#52c062'], outside: '#3a8a3a' },
+];
 
 function rand(seed: number): () => number {
   let s = seed >>> 0;
@@ -24,10 +51,9 @@ function rand(seed: number): () => number {
 }
 
 /** 畫出整片地面貼圖（含河道區域的河床）。 */
-function paintGround(): HTMLCanvasElement {
+function paintGround(pal: ArenaPalette, c = document.createElement('canvas')): HTMLCanvasElement {
   const W = ARENA.width;
   const H = ARENA.height;
-  const c = document.createElement('canvas');
   c.width = W * PX;
   c.height = H * PX;
   const g = c.getContext('2d')!;
@@ -36,7 +62,7 @@ function paintGround(): HTMLCanvasElement {
   for (let ty = 0; ty < H; ty++) {
     for (let tx = 0; tx < W; tx++) {
       const even = (tx + ty) % 2 === 0;
-      g.fillStyle = even ? '#8fcf5e' : '#86c656';
+      g.fillStyle = even ? pal.grassA : pal.grassB;
       g.fillRect(tx * PX, ty * PX, PX, PX);
     }
   }
@@ -55,10 +81,10 @@ function paintGround(): HTMLCanvasElement {
     const y = Math.min(y0, y1) * PX;
     const w = Math.abs(x1 - x0) * PX;
     const h = Math.abs(y1 - y0) * PX;
-    g.fillStyle = '#e5c98a';
+    g.fillStyle = pal.path;
     g.fillRect(x, y, w, h);
     // 石磚分隔線
-    g.strokeStyle = 'rgba(150,110,60,0.45)';
+    g.strokeStyle = pal.pathLine;
     g.lineWidth = 2;
     const step = PX / 2;
     for (let yy = y; yy <= y + h; yy += step) {
@@ -95,7 +121,7 @@ function paintGround(): HTMLCanvasElement {
     for (const t of TOWER_LAYOUT) {
       const half = t.type === 'king' ? 2.4 : 1.9;
       const ty = fy(t.y);
-      g.fillStyle = '#c9b07a';
+      g.fillStyle = pal.base;
       g.fillRect((t.x - half) * PX, (ty - half) * PX, half * 2 * PX, half * 2 * PX);
       g.strokeStyle = 'rgba(110,80,40,0.55)';
       g.lineWidth = 4;
@@ -149,10 +175,17 @@ void main() {
 export class ArenaView {
   readonly group = new Group();
   private water: ShaderMaterial;
+  private canvas: HTMLCanvasElement;
+  private tex: CanvasTexture;
+  private decor: Mesh;
+  private decors = new Map<number, Mesh>();
+  private farMat: MeshLambertMaterial;
+  private theme = 0;
 
   constructor(renderer: WebGLRenderer) {
     const W = ARENA.width;
-    const tex = new CanvasTexture(paintGround());
+    this.canvas = paintGround(ARENA_THEMES[0]);
+    const tex = (this.tex = new CanvasTexture(this.canvas));
     tex.colorSpace = SRGBColorSpace;
     tex.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
     tex.minFilter = LinearMipmapLinearFilter;
@@ -180,6 +213,46 @@ export class ArenaView {
     water.position.set(0, -RIVER_DEPTH + 0.06, (ARENA.riverTop + ARENA.riverBottom) / 2 - CZ);
     this.group.add(water);
 
+    this.decor = this.buildDecor(ARENA_THEMES[0]);
+    this.decors.set(0, this.decor);
+    this.group.add(this.decor);
+
+    // 遠方草地底色，避免寬螢幕露出背景
+    this.farMat = new MeshLambertMaterial({ color: new Color(shade(ARENA_THEMES[0].outside, -0.04)), side: DoubleSide });
+    const far = new Mesh(new PlaneGeometry(120, 120), this.farMat);
+    far.rotation.x = -Math.PI / 2;
+    far.position.y = -0.7;
+    far.receiveShadow = true;
+    this.group.add(far);
+  }
+
+  /** 換競技場配色：重畫地面貼圖、換整組裝飾。 */
+  setTheme(i: number): void {
+    const idx = Math.max(0, Math.min(ARENA_THEMES.length - 1, Math.floor(i)));
+    if (idx === this.theme) return;
+    this.theme = idx;
+    const pal = ARENA_THEMES[idx];
+    paintGround(pal, this.canvas);
+    this.tex.needsUpdate = true;
+    this.decor.visible = false;
+    let d = this.decors.get(idx);
+    if (!d) {
+      d = this.buildDecor(pal);
+      this.decors.set(idx, d);
+      this.group.add(d);
+    }
+    d.visible = true;
+    this.decor = d;
+    this.farMat.color.set(shade(pal.outside, -0.04));
+  }
+
+  update(t: number): void {
+    this.water.uniforms.uTime.value = t;
+  }
+
+  /** 場地裝飾（河岸、橋、圍牆、場外樹木）；依競技場配色建立，切換場地時換整組。 */
+  private buildDecor(pal: ArenaPalette): Mesh {
+    const W = ARENA.width;
     const k = new Kit();
     k.addBone('root', -1, [0, 0, 0]);
     const bankZ = [ARENA.riverTop - CZ, ARENA.riverBottom - CZ];
@@ -215,7 +288,7 @@ export class ArenaView {
       k.box(0.6, 0.12, ARENA.height + 1, { at: [wx, 0.58, 0], color: '#c2bcad' });
       for (let i = 0; i < 17; i++) k.box(0.62, 0.16, 0.08, { at: [wx, 0.36, -16 + i * 2], color: '#8a8478' });
       // 場外地面
-      k.box(14, 0.1, ARENA.height + 14, { at: [sx * (W / 2 + 7.6), -0.06, 0], color: '#3f7a35' });
+      k.box(14, 0.1, ARENA.height + 14, { at: [sx * (W / 2 + 7.6), -0.06, 0], color: pal.outside });
       for (let i = 0; i < 26; i++) {
         const x = sx * (W / 2 + 1.4 + r() * 8);
         const z = -21 + r() * 42;
@@ -225,8 +298,8 @@ export class ArenaView {
           // 樹：樹幹＋兩層樹冠
           const s = 0.8 + r() * 0.7;
           k.cyl(0.14 * s, 0.2 * s, 0.9 * s, { at: [x, 0.45 * s, z], color: '#6b4426' }, 6);
-          k.sphere(0.85 * s, { at: [x, 1.35 * s, z], scale: [1, 0.9, 1], color: r() < 0.5 ? '#3f8f3a' : '#4a9a3e' }, 9);
-          k.sphere(0.6 * s, { at: [x + 0.25 * s, 1.85 * s, z + 0.1 * s], color: '#5aae48' }, 8);
+          k.sphere(0.85 * s, { at: [x, 1.35 * s, z], scale: [1, 0.9, 1], color: r() < 0.5 ? pal.trees[0] : pal.trees[1] }, 9);
+          k.sphere(0.6 * s, { at: [x + 0.25 * s, 1.85 * s, z + 0.1 * s], color: pal.trees[2] }, 8);
         } else if (kind < 0.8) {
           const s = 0.4 + r() * 0.5;
           k.rock(s, { at: [x, s * 0.4, z], scale: [1.2, 0.8, 1], color: r() < 0.5 ? '#9a958a' : '#8a857a' });
@@ -240,7 +313,7 @@ export class ArenaView {
     // 上方（對手後方）：城垛高牆、兩端角樓、隊伍色三角旗，牆後一排樹與遠丘；高牆在場地後面，不會擋到場上單位
     {
       const wz = -(ARENA.height / 2 + 0.6);
-      k.box(W + 14, 0.1, 9, { at: [0, -0.06, wz - 4.2], color: '#447f39' });
+      k.box(W + 14, 0.1, 9, { at: [0, -0.06, wz - 4.2], color: shade(pal.outside, 0.06) });
       k.box(W + 2.4, 1.15, 0.8, { at: [0, 0.57, wz], color: '#b8ad98' });
       k.box(W + 2.6, 0.14, 0.92, { at: [0, 1.2, wz], color: '#cfc5b0' });
       for (let i = 0; i < 21; i++) k.box(0.5, 0.34, 0.8, { at: [-W / 2 - 0.9 + i * 0.99, 1.43, wz], color: i % 2 ? '#c4b9a3' : '#cbc1ab' });
@@ -265,8 +338,8 @@ export class ArenaView {
         const z = wz - 1.4 - r() * 2.6;
         const s = 0.95 + r() * 0.55;
         k.cyl(0.15 * s, 0.22 * s, 1.0 * s, { at: [x, 0.5 * s, z], color: '#6b4426' }, 6);
-        k.sphere(0.95 * s, { at: [x, 1.5 * s, z], scale: [1, 0.9, 1], color: i % 3 === 0 ? '#3c8a37' : '#47963d' }, 9);
-        k.sphere(0.62 * s, { at: [x + 0.3 * s, 2.05 * s, z + 0.15 * s], color: '#58a848' }, 8);
+        k.sphere(0.95 * s, { at: [x, 1.5 * s, z], scale: [1, 0.9, 1], color: i % 3 === 0 ? pal.trees[0] : pal.trees[1] }, 9);
+        k.sphere(0.62 * s, { at: [x + 0.3 * s, 2.05 * s, z + 0.15 * s], color: pal.trees[2] }, 8);
       }
       for (let i = 0; i < 6; i++) {
         k.sphere(3.2, { at: [-W / 2 - 2 + i * 4.4, -1.2, wz - 6.5 - (i % 2) * 1.2], scale: [1.4, 0.75, 1], color: i % 2 ? '#3f7d36' : '#46883c' }, 12);
@@ -277,7 +350,7 @@ export class ArenaView {
       const wz = ARENA.height / 2 + 0.35;
       k.box(W + 1.2, 0.6, 0.5, { at: [0, 0.3, wz], color: '#a49e90' });
       k.box(W + 1.2, 0.12, 0.6, { at: [0, 0.62, wz], color: '#c2bcad' });
-      k.box(W + 14, 0.1, 6, { at: [0, -0.06, wz + 3.05], color: '#3f7a35' });
+      k.box(W + 14, 0.1, 6, { at: [0, -0.06, wz + 3.05], color: pal.outside });
       for (let i = 0; i < 6; i++) {
         const x = -W / 2 + 1.2 + i * 3.1;
         k.box(2.2, 0.32, 0.6, { at: [x, 0.16, wz + 0.75], color: '#8a5a2e' });
@@ -294,17 +367,7 @@ export class ArenaView {
     const decor = new Mesh(k.build(1).geometry, new MeshLambertMaterial({ vertexColors: true }));
     decor.castShadow = true;
     decor.receiveShadow = true;
-    this.group.add(decor);
-
-    // 遠方草地底色，避免寬螢幕露出背景
-    const far = new Mesh(new PlaneGeometry(120, 120), new MeshLambertMaterial({ color: new Color('#3a7232'), side: DoubleSide }));
-    far.rotation.x = -Math.PI / 2;
-    far.position.y = -0.7;
-    far.receiveShadow = true;
-    this.group.add(far);
+    return decor;
   }
 
-  update(t: number): void {
-    this.water.uniforms.uTime.value = t;
-  }
 }

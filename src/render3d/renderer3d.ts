@@ -251,6 +251,10 @@ export class Renderer3D implements BattleRenderer {
     return [(X - this.left) * this.k, (this.top - up) * this.k];
   }
 
+  setArenaTheme(theme: number): void {
+    this.arena.setTheme(theme);
+  }
+
   reset(): void {
     for (const v of this.units.values()) v.dispose();
     for (const v of this.towers.values()) v.dispose();

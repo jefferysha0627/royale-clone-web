@@ -3,6 +3,7 @@ import { AiController, AI_LEVELS, CARD_IDS, CARDS, DEFAULT_PLAYER_DECK, UNITS, c
 import { Sound } from './ui/audio';
 import { Battle } from './ui/battle';
 import { avgCost, cardTags, fillCard, rarityName, refreshPortraits } from './ui/cardview';
+import { arenaIndex, arenaOf, arenaProgress, trophyDelta } from './ui/progress';
 import { loadSettings, saveSettings } from './ui/settings';
 import { shareGame, shareUrl } from './ui/share';
 import { portraits } from './render3d/portraits';
@@ -34,7 +35,12 @@ const battle = new Battle(sound, {
     if (r.winner === 0) settings.record.win++;
     else if (r.winner === 1) settings.record.lose++;
     else settings.record.draw++;
+    const before = settings.trophies;
+    const delta = trophyDelta(settings.level, r.winner, r.crowns[0], before);
+    settings.trophies = Math.max(0, before + delta);
     saveSettings(settings);
+    showTrophyResult(delta, before, settings.trophies);
+    syncArena();
   },
   onQuit() {
     dropBattleEntry();
@@ -86,6 +92,30 @@ window.addEventListener('popstate', () => {
   }
 });
 
+// ───────── 獎盃 ─────────
+
+const TROPHY_SVG = $('home-trophies').previousElementSibling?.outerHTML ?? '';
+
+/** 把目前獎盃對應的競技場交給對戰畫面（下一場生效，含「再戰一場」）。 */
+function syncArena(): void {
+  const arena = arenaOf(settings.trophies);
+  battle.arenaTheme = arena.theme;
+  battle.arenaName = arena.name;
+  battle.playerTrophies = settings.trophies;
+}
+
+function showTrophyResult(delta: number, before: number, after: number): void {
+  const el = $('result-trophies');
+  const promoted = arenaIndex(after) > arenaIndex(before);
+  const sign = delta > 0 ? `+${delta}` : delta < 0 ? `${delta}` : '±0';
+  el.innerHTML = `${TROPHY_SVG}${sign}<small>獎盃 ${after}${promoted ? `・解鎖新競技場「${arenaOf(after).name}」！` : ''}</small>`;
+  el.classList.toggle('down', delta < 0);
+  el.hidden = false;
+  el.style.animation = 'none';
+  void el.offsetWidth;
+  el.style.animation = '';
+}
+
 // ───────── 主畫面 ─────────
 
 function showHome(): void {
@@ -106,6 +136,12 @@ function renderHome(): void {
   $('home-avg').textContent = `平均 ${avgCost(settings.deck).toFixed(1)} 能量`;
   const { win, lose, draw } = settings.record;
   $('home-record').textContent = win + lose + draw > 0 ? `本機戰績 ${win} 勝 ${lose} 敗${draw ? ` ${draw} 平` : ''}` : '還沒有戰績';
+  $('home-trophies').textContent = String(settings.trophies);
+  const arena = arenaOf(settings.trophies);
+  const prog = arenaProgress(settings.trophies);
+  $('home-arena').textContent = arena.name;
+  $('home-arena-fill').style.width = `${Math.round(prog.frac * 100)}%`;
+  $('home-arena-next').textContent = prog.next ? `再 ${prog.need} 座獎盃解鎖「${prog.next.name}」` : '已到達最高競技場';
   document.querySelectorAll<HTMLButtonElement>('.seg-btn').forEach((b) => b.setAttribute('aria-checked', String(b.dataset.diff === settings.level)));
   renderMute();
   const hero = portraits.hero();
@@ -142,6 +178,7 @@ function startBattle(): void {
   sound.unlock();
   home.hidden = true;
   deckScreen.hidden = true;
+  syncArena();
   battle.start(settings.deck, settings.level, fixedSeed);
   pushBattleEntry();
 }

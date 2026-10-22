@@ -20,6 +20,8 @@ export interface BattleRenderer {
   /** 場地格座標（地面）→ 畫布 CSS 座標。 */
   toScreen(x: number, y: number): [number, number];
   reset(): void;
+  /** 換競技場配色（獎盃進度），2D 畫面可以不支援。 */
+  setArenaTheme?(theme: number): void;
   pushEvents(events: GameEvent[], game: Game): void;
   render(game: Game, alpha: number, dt: number): void;
   dispose?(): void;

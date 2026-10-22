@@ -353,6 +353,7 @@ if (run('2')) {
   const domCounts = [];
   const gpuCounts = [];
   const matchLog = [];
+  const trophyLog = [];
   for (let m = 0; m < 4; m++) {
     await page.evaluate(() => window.__btd.autoplay(600));
     await page.waitForSelector('#ov-result:not([hidden])', { timeout: 10000 });
@@ -366,6 +367,13 @@ if (run('2')) {
       `[desktop] 第 ${m + 1} 場打完並顯示結算（${title} ${crownsUi.join(':')}，${s.result.reason}）`,
       s.phase === 'ended' && crownsUi[0] === s.result.crowns[0] && crownsUi[1] === s.result.crowns[1] && winnerRow === s.result.winner,
     );
+    // 獎盃：贏了加、輸了扣（不低於 0）、平手不變；結算顯示增減與新的總數
+    const trophyText = (await page.locator('#result-trophies').textContent()) ?? '';
+    const shownTotal = Number(/獎盃 (\d+)/.exec(trophyText)?.[1] ?? NaN);
+    const savedTotal = await page.evaluate(() => window.__btd.settings.trophies);
+    const signOk = s.result.winner === 0 ? /\+\d+/.test(trophyText) : s.result.winner === 1 ? /-\d+|±0/.test(trophyText) : /±0/.test(trophyText);
+    trophyLog.push(trophyText.replace(/\s+/g, ' '));
+    check(`[desktop] 第 ${m + 1} 場結算顯示獎盃增減並存到本機`, (await page.isVisible('#result-trophies')) && signOk && shownTotal === savedTotal, trophyText);
     const before = await page.evaluate(() => window.__btd.game().towers(0).map((t) => t.hp).join(','));
     await page.evaluate(() => window.__btd.fastForward(5));
     await sleep(200);
@@ -426,6 +434,11 @@ if (run('2')) {
   }
   await page.waitForSelector('#screen-home:not([hidden])');
   check('[desktop] 可離開對戰回主畫面，戰績有記錄', ((await page.locator('#home-record').textContent()) ?? '').includes('勝'));
+  const homeTrophies = Number(await page.locator('#home-trophies').textContent());
+  const savedTrophies = await page.evaluate(() => window.__btd.settings.trophies);
+  const arenaName = await page.locator('#home-arena').textContent();
+  results.trophies = { log: trophyLog, home: homeTrophies, arena: arenaName };
+  check('[desktop] 主畫面顯示目前獎盃與競技場', homeTrophies === savedTrophies && !!arenaName, `獎盃 ${homeTrophies}，${arenaName}`);
   await ctx.close();
 }
 

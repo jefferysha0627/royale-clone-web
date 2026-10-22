@@ -46,13 +46,21 @@
       <!-- 主畫面 -->
       <section id="screen-home" class="screen home" hidden>
         <header class="home-bar">
-          <div class="player-chip"><span class="lvl-badge">11</span><span class="player-meta"><b>你</b><small id="home-record">還沒有戰績</small></span></div>
+          <div class="player-chip">
+            <span class="lvl-badge">11</span>
+            <span class="player-meta"><b>你 <span class="trophy-count"><svg class="trophy-ico" viewBox="0 0 20 20" aria-hidden="true"><path d="M5 2h10v3h3v2a4 4 0 0 1-4 4h-.4A4.5 4.5 0 0 1 11 13.4V15h3v3H6v-3h3v-1.6A4.5 4.5 0 0 1 6.4 11H6a4 4 0 0 1-4-4V5h3zM4 7a2 2 0 0 0 1.2 1.8A9 9 0 0 1 5 7zm11 0c0 .6-.1 1.2-.2 1.8A2 2 0 0 0 16 7z" /></svg><span id="home-trophies">0</span></span></b><small id="home-record">還沒有戰績</small></span>
+          </div>
           <button id="btn-mute-home" class="chip-btn" type="button" aria-pressed="false">音效：開</button>
         </header>
         <div class="home-main">
           <div class="home-hero">
             <h1 class="title">皇室戰爭<span class="title-sub">克隆</span></h1>
             <p class="tagline">出牌派兵、過橋推塔・三分鐘一局</p>
+            <div class="arena-banner" aria-live="polite">
+              <span class="arena-name" id="home-arena">綠野競技場</span>
+              <div class="arena-bar" aria-hidden="true"><i id="home-arena-fill"></i></div>
+              <small id="home-arena-next"></small>
+            </div>
             <div class="hero-art"><img id="hero-img" alt="" hidden /><div class="hero-fallback" id="hero-fallback"></div></div>
           </div>
           <div class="home-actions">
@@ -178,6 +186,7 @@
         <div id="ov-vs" class="vs" hidden>
           <div class="vs-side enemy"><span class="vs-name" id="vs-name-enemy">電腦</span><span class="vs-sub" id="vs-sub-enemy"></span></div>
           <div class="vs-mid">VS</div>
+          <div class="vs-arena" id="vs-arena"></div>
           <div class="vs-side me"><span class="vs-name">你</span><span class="vs-sub" id="vs-sub-me"></span></div>
         </div>
 
@@ -203,6 +212,7 @@
               <div class="result-crowns" id="result-crowns-enemy"></div>
             </div>
             <h2 id="result-title" class="result-title">勝利！</h2>
+            <p id="result-trophies" class="result-trophies" hidden></p>
             <div class="result-row me" id="result-row-me">
               <span class="result-winner">勝利者</span>
               <span class="result-name">你</span>

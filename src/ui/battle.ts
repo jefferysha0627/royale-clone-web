@@ -145,9 +145,15 @@ export class Battle {
 
   // ───────── 生命週期 ─────────
 
+  /** 目前競技場的配色編號、名稱與玩家獎盃（主畫面依獎盃設定）。 */
+  arenaTheme = 0;
+  arenaName = '';
+  playerTrophies = 0;
+
   start(deck: string[], level: AiLevel, seed?: number): void {
     this.deck = [...deck];
     this.level = level;
+    this.renderer.setArenaTheme?.(this.arenaTheme);
     this.seed = seed ?? Math.floor(Math.random() * 2 ** 31);
     const pick = new Rng(this.seed ^ 0x5bd1e995);
     const aiDeck = pick.pick(AI_DECKS);
@@ -177,7 +183,8 @@ export class Battle {
     this.nameEnemy.textContent = enemyName;
     $('vs-name-enemy').textContent = enemyName;
     $('vs-sub-enemy').textContent = `牌組：${aiDeck.name}`;
-    $('vs-sub-me').textContent = `平均 ${(deck.reduce((s, id) => s + CARDS[id].cost, 0) / deck.length).toFixed(1)} 能量`;
+    $('vs-sub-me').textContent = `獎盃 ${this.playerTrophies}・平均 ${(deck.reduce((s, id) => s + CARDS[id].cost, 0) / deck.length).toFixed(1)} 能量`;
+    $('vs-arena').textContent = this.arenaName;
     crownSlots(this.crownsMe, 3, 0);
     crownSlots(this.crownsEnemy, 3, 0);
     this.shownCrowns = [0, 0];
