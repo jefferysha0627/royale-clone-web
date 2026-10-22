@@ -136,6 +136,8 @@ export class UnitView {
 
   dispose(): void {
     this.inst.mesh.removeFromParent();
+    // 每個骨架都有自己的骨頭貼圖，要釋放，否則長時間遊玩會累積顯示記憶體
+    this.inst.mesh.skeleton.dispose();
     this.mat.dispose();
     this.removed = true;
   }
@@ -204,7 +206,9 @@ export class TowerView {
 
   dispose(): void {
     this.inst.mesh.removeFromParent();
+    this.inst.mesh.skeleton.dispose();
     this.rubble?.removeFromParent();
+    (this.rubble?.material as MeshLambertMaterial | undefined)?.dispose();
     this.mat.dispose();
   }
 }
@@ -279,11 +283,18 @@ const GLOW: Record<string, { color: string; r: number; trail: 'fire' | 'magic' |
 
 const glowGeo = new SphereGeometry(1, 10, 8);
 const sharedLambert = new MeshLambertMaterial({ vertexColors: true });
+const glowMats = new Map<string, MeshBasicMaterial>();
 
 export function makeProjectileMesh(visual: string): Mesh {
   const glow = GLOW[visual];
   if (glow) {
-    const m = new Mesh(glowGeo, new MeshBasicMaterial({ color: glow.color, transparent: true, opacity: 0.95, blending: AdditiveBlending, depthWrite: false }));
+    // 同一種發光投射物共用材質，避免每發子彈都建立新材質
+    let mat = glowMats.get(visual);
+    if (!mat) {
+      mat = new MeshBasicMaterial({ color: glow.color, transparent: true, opacity: 0.95, blending: AdditiveBlending, depthWrite: false });
+      glowMats.set(visual, mat);
+    }
+    const m = new Mesh(glowGeo, mat);
     m.scale.setScalar(glow.r);
     m.userData.trail = glow.trail;
     return m;

@@ -94,6 +94,10 @@ export class Renderer3D implements BattleRenderer {
   private poisonGeo = new CircleGeometry(1, 40);
   private poisonRingGeo = new RingGeometry(0.95, 1, 48);
   private bombMat = new MeshLambertMaterial({ vertexColors: true, emissive: '#000000' });
+  private fireballGeo = new SphereGeometry(0.5, 14, 10);
+  private fireballCoreGeo = new SphereGeometry(0.3, 10, 8);
+  private fireballMat = new MeshBasicMaterial({ color: '#ff9a3a' });
+  private fireballCoreMat = new MeshBasicMaterial({ color: '#fff2a8' });
 
   constructor(canvas: HTMLCanvasElement, overlayCanvas: HTMLCanvasElement) {
     const coarse = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
@@ -131,6 +135,12 @@ export class Renderer3D implements BattleRenderer {
 
   get effectCount(): number {
     return this.fx.count + this.rain.filter((r) => r.t < 1).length + this.flights.size + this.projs.size;
+  }
+
+  /** GPU 資源數量（多場穩定性測試用）。 */
+  get gpuStats(): { geometries: number; textures: number; programs: number; calls: number; triangles: number } {
+    const i = this.gl.info;
+    return { geometries: i.memory.geometries, textures: i.memory.textures, programs: i.programs?.length ?? 0, calls: i.render.calls, triangles: i.render.triangles };
   }
 
   get qualityLevel(): Quality {
@@ -221,13 +231,13 @@ export class Renderer3D implements BattleRenderer {
     this.projs.clear();
     for (const f of this.flights.values()) f.group.removeFromParent();
     this.flights.clear();
-    for (const a of this.areas.values()) a.removeFromParent();
+    for (const a of this.areas.values()) this.disposeArea(a);
     this.areas.clear();
     for (const l of this.logs.values()) l.removeFromParent();
     this.logs.clear();
-    for (const b of this.bombs.values()) b.removeFromParent();
+    for (const b of this.bombs.values()) this.disposeMesh(b);
     this.bombs.clear();
-    for (const b of this.beams.values()) b.removeFromParent();
+    for (const b of this.beams.values()) this.disposeMesh(b);
     this.beams.clear();
     for (const r of this.rain) r.mesh.removeFromParent();
     this.rain = [];
@@ -606,9 +616,20 @@ export class Renderer3D implements BattleRenderer {
   private removeBeam(id: number): void {
     const b = this.beams.get(id);
     if (b) {
-      b.removeFromParent();
+      this.disposeMesh(b);
       this.beams.delete(id);
     }
+  }
+
+  /** 移除只屬於這個物件的材質（共用的幾何與材質不釋放）。 */
+  private disposeMesh(m: Mesh): void {
+    m.removeFromParent();
+    (m.material as MeshBasicMaterial).dispose();
+  }
+
+  private disposeArea(g: Group): void {
+    g.removeFromParent();
+    for (const c of g.children) ((c as Mesh).material as MeshBasicMaterial).dispose();
   }
 
   private heightOfSource(unit: string): number {
@@ -664,9 +685,8 @@ export class Renderer3D implements BattleRenderer {
         const group = new Group();
         const meshes: Mesh[] = [];
         if (s.cardId === 'fireball') {
-          const m = new Mesh(new SphereGeometry(0.5, 14, 10), new MeshBasicMaterial({ color: '#ff9a3a' }));
-          const core = new Mesh(new SphereGeometry(0.3, 10, 8), new MeshBasicMaterial({ color: '#fff2a8' }));
-          m.add(core);
+          const m = new Mesh(this.fireballGeo, this.fireballMat);
+          m.add(new Mesh(this.fireballCoreGeo, this.fireballCoreMat));
           meshes.push(m);
         } else if (s.cardId === 'rocket') meshes.push(makeProjectileMesh('rocket'));
         else if (s.cardId === 'goblin_barrel') meshes.push(makeProjectileMesh('barrel'));
@@ -738,7 +758,7 @@ export class Renderer3D implements BattleRenderer {
     }
     for (const [id, g] of this.areas) {
       if (liveA.has(id)) continue;
-      g.removeFromParent();
+      this.disposeArea(g);
       this.areas.delete(id);
     }
 
@@ -784,7 +804,7 @@ export class Renderer3D implements BattleRenderer {
     }
     for (const [id, m] of this.bombs) {
       if (liveB.has(id)) continue;
-      m.removeFromParent();
+      this.disposeMesh(m);
       this.bombs.delete(id);
     }
   }

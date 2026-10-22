@@ -343,6 +343,7 @@ for (const vp of VIEWPORTS) {
   await page.click('#btn-howto-ok');
   await page.waitForSelector('#screen-battle:not([hidden])');
   const domCounts = [];
+  const gpuCounts = [];
   const matchLog = [];
   for (let m = 0; m < 4; m++) {
     await page.evaluate(() => window.__btd.autoplay(600));
@@ -371,6 +372,7 @@ for (const vp of VIEWPORTS) {
       check('[desktop] 結算「分享戰績」在無原生分享時改為複製連結', btnText.includes('已複製') && clip === BASE, `按鈕「${btnText}」，剪貼簿「${clip}」`);
     }
     domCounts.push(await page.evaluate(() => document.getElementsByTagName('*').length));
+    gpuCounts.push(await page.evaluate(() => window.__btd.battle.gpuStats));
     await page.click('#btn-again');
     await sleep(500);
     const r = await state(page);
@@ -383,6 +385,12 @@ for (const vp of VIEWPORTS) {
   }
   results.matches = matchLog;
   results.domCountsAcrossMatches = domCounts;
+  results.gpuAcrossMatches = gpuCounts;
+  check(
+    '[desktop] 連續多場 GPU 幾何／貼圖數沒有持續增加',
+    gpuCounts.length > 2 && gpuCounts[gpuCounts.length - 1].textures <= gpuCounts[1].textures + 2 && gpuCounts[gpuCounts.length - 1].geometries <= gpuCounts[1].geometries + 6,
+    gpuCounts.map((g) => `${g.geometries}g/${g.textures}t`).join(' → '),
+  );
   check('[desktop] 連續多場 DOM 節點數沒有持續增加', domCounts[domCounts.length - 1] - domCounts[0] <= 5 && Math.max(...domCounts) - Math.min(...domCounts) <= 8, domCounts.join(' → '));
   const mem = await page.evaluate(() => {
     const g = window.__btd;

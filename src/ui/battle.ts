@@ -240,6 +240,10 @@ export class Battle {
     return { showZone: this.renderer.showZone, preview: this.renderer.preview };
   }
 
+  get gpuStats(): unknown {
+    return (this.renderer as { gpuStats?: unknown }).gpuStats ?? null;
+  }
+
   get qualityLevel(): string {
     return (this.renderer as { qualityLevel?: string }).qualityLevel ?? '2d';
   }

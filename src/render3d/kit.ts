@@ -38,6 +38,8 @@ export class Kit {
   bones: BoneDef[] = [];
   /** 之後加入的零件預設綁到這根骨頭。 */
   bone = 0;
+  /** 是否烘焙上下漸層（場地裝飾等大型物件可關閉）。 */
+  gradient = true;
 
   addBone(name: string, parent: number, at: V3): number {
     this.bones.push({ name, parent, at });
@@ -72,10 +74,29 @@ export class Kit {
     const si = new Uint16Array(n * 4);
     const sw = new Float32Array(n * 4);
     const bone = o.bone ?? this.bone;
+    // 烘焙的上下漸層：零件底部略暗、頂部略亮，模擬環境光遮蔽與手繪感
+    const pos = g.attributes.position;
+    let minY = Infinity;
+    let maxY = -Infinity;
     for (let i = 0; i < n; i++) {
-      col[i * 3] = tmpColor.r;
-      col[i * 3 + 1] = tmpColor.g;
-      col[i * 3 + 2] = tmpColor.b;
+      const y = pos.getY(i);
+      if (y < minY) minY = y;
+      if (y > maxY) maxY = y;
+    }
+    const span = maxY - minY;
+    const grad = this.gradient && span > 0.06;
+    for (let i = 0; i < n; i++) {
+      let f = 1;
+      if (grad) {
+        const t = (pos.getY(i) - minY) / span;
+        f = 0.8 + 0.26 * t;
+      }
+      // 貼近地面的部分再暗一點（腳底、建築底座）
+      const y = pos.getY(i);
+      if (this.gradient && y < 0.12) f *= 0.86 + (y / 0.12) * 0.14;
+      col[i * 3] = tmpColor.r * f;
+      col[i * 3 + 1] = tmpColor.g * f;
+      col[i * 3 + 2] = tmpColor.b * f;
       si[i * 4] = bone;
       sw[i * 4] = 1;
     }

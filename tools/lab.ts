@@ -31,6 +31,15 @@ const S: Record<string, { at: [number, number]; setup: () => void }> = {
   riders: { at: [9, 15], setup: () => { put(0, 'wolf_rider', 3.5, 18.5); put(0, 'lancer', 13.5, 21.5); put(1, 'cannon', 9, 10); } },
   spawners: { at: [9, 20], setup: () => { put(0, 'witch', 9.5, 21.5); put(0, 'tombstone', 12, 22); put(0, 'ice_spirit', 6.5, 18.5); put(0, 'fire_spirit', 7.5, 18.5); put(1, 'knight', 6.5, 13.5); put(1, 'goblins', 9.5, 13.5); } },
   towers: { at: [9, 16], setup: () => { put(0, 'iron_swordsman', 3.5, 17.5); put(0, 'bomber', 14.5, 18.5); put(0, 'spear_goblins', 14.5, 20.5); } },
+  stress: {
+    at: [9, 16],
+    setup: () => {
+      put(0, 'skeleton_army', 6.5, 19.5); put(0, 'barbarians', 11.5, 19.5); put(0, 'witch', 9.5, 22.5); put(0, 'bats', 4.5, 21.5); put(0, 'goblins', 14.5, 19.5);
+      put(1, 'skeleton_army', 6.5, 12.5); put(1, 'barbarians', 11.5, 12.5); put(1, 'witch', 9.5, 9.5); put(1, 'gargoyles', 4.5, 10.5); put(1, 'spear_goblins', 14.5, 12.5);
+      setTimeout(() => { put(0, 'fireball', 9.5, 13.5); put(1, 'poison', 9.5, 18.5); }, 2500);
+      setTimeout(() => { put(0, 'arrows', 6.5, 14.5); put(1, 'zap', 11.5, 17.5); }, 3500);
+    },
+  },
 };
 const sc = S[scenario] ?? S.melee;
 
