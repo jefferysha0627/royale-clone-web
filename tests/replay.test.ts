@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { AI_DECKS, AI_LEVELS, AiController, DEFAULT_PLAYER_DECK, Game, Rng, decodeReplay, encodeReplay, runReplay, type Replay } from '../src/sim';
+import { dcos, dsin, len } from '../src/sim/dmath';
 
 /** 模仿正式對戰：電腦用遊戲主亂數分出的亂數流；「玩家」用另一個獨立亂數（真人輸入不會動到遊戲亂數）。 */
 function playMatch(seed: number, deckB: string[]): Game {
@@ -46,5 +47,16 @@ describe('對戰重播', () => {
     expect(decodeReplay(s.replace(/^r1\./, 'r0.'))).toBeNull();
     expect(decodeReplay('r1.abc')).toBeNull();
     expect(decodeReplay(s.replace('knight', 'nope_card'))).toBeNull();
+  });
+});
+
+describe('跨引擎一致的數學（模擬只用加減乘除與 sqrt）', () => {
+  it('dsin／dcos 與 Math.sin／cos 的差距 < 1e-10，len 與 Math.hypot 的差距 < 1e-12', () => {
+    for (let i = -200; i <= 200; i++) {
+      const x = i * 0.0731;
+      expect(Math.abs(dsin(x) - Math.sin(x))).toBeLessThan(1e-10);
+      expect(Math.abs(dcos(x) - Math.cos(x))).toBeLessThan(1e-10);
+      expect(Math.abs(len(x, x * 0.37 - 1) - Math.hypot(x, x * 0.37 - 1))).toBeLessThan(1e-12);
+    }
   });
 });

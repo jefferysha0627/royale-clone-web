@@ -1,5 +1,6 @@
 import { ARENA, DEPLOY, DT, KING_ACTIVATION_TIME, KNOCKBACK_TIME, MATCH, SEPARATION_STRENGTH, TOWERS, TOWER_LAYOUT } from './config';
 import { CARDS, UNITS, type CardDef, type ProjectileVisual, type SpellStats, type UnitStats } from './cards';
+import { dcos, dsin, len } from './dmath';
 import { Rng } from './rng';
 import type { ReplayAction } from './replay';
 
@@ -193,7 +194,7 @@ export function viewY(team: Team, y: number): number {
 }
 
 function dist(ax: number, ay: number, bx: number, by: number): number {
-  return Math.hypot(ax - bx, ay - by);
+  return len(ax - bx, ay - by);
 }
 
 /** 點到實體的距離：建築與塔以方形佔地計算，部隊以圓計算（都是到邊緣）。 */
@@ -201,7 +202,7 @@ export function distTo(px: number, py: number, e: Entity): number {
   if (e.half > 0) {
     const dx = Math.max(0, Math.abs(px - e.x) - e.half);
     const dy = Math.max(0, Math.abs(py - e.y) - e.half);
-    return Math.hypot(dx, dy);
+    return len(dx, dy);
   }
   return Math.max(0, dist(px, py, e.x, e.y) - e.stats.radius);
 }
@@ -230,12 +231,12 @@ export function formation(count: number): [number, number][] {
       const inner = Math.min(6, count - 1);
       for (let i = 0; i < inner; i++) {
         const a = (i / inner) * Math.PI * 2;
-        out.push([Math.cos(a) * 0.9, Math.sin(a) * 0.9]);
+        out.push([dcos(a) * 0.9, dsin(a) * 0.9]);
       }
       const outer = count - 1 - inner;
       for (let i = 0; i < outer; i++) {
         const a = (i / outer) * Math.PI * 2 + 0.3;
-        out.push([Math.cos(a) * 1.75, Math.sin(a) * 1.75]);
+        out.push([dcos(a) * 1.75, dsin(a) * 1.75]);
       }
       return out;
     }
@@ -733,7 +734,7 @@ export class Game {
       if (e.stats.flying && !s.hitsAir) continue;
       const dx = a.x - e.x;
       const dy = a.y - e.y;
-      const d = Math.hypot(dx, dy);
+      const d = len(dx, dy);
       if (d > a.radius + e.stats.radius || d < 0.05) continue;
       const m = Math.min(step, d);
       e.x = Math.max(e.stats.radius, Math.min(ARENA.width - e.stats.radius, e.x + (dx / d) * m));
@@ -752,8 +753,8 @@ export class Game {
     for (let tries = 0; tries < 6; tries++) {
       const ang = this.rng.next() * Math.PI * 2;
       const rr = Math.sqrt(this.rng.next()) * a.radius;
-      const x = Math.max(0.5, Math.min(ARENA.width - 0.5, a.x + Math.cos(ang) * rr));
-      const y = Math.max(0.5, Math.min(ARENA.height - 0.5, a.y + Math.sin(ang) * rr));
+      const x = Math.max(0.5, Math.min(ARENA.width - 0.5, a.x + dcos(ang) * rr));
+      const y = Math.max(0.5, Math.min(ARENA.height - 0.5, a.y + dsin(ang) * rr));
       if (y > ARENA.riverTop - 0.3 && y < ARENA.riverBottom + 0.3) continue;
       if (this.entities.some((o) => o.alive && o.kind !== 'troop' && distTo(x, y, o) < 0.4)) continue;
       this.spawnUnit(a.team, gy.unit, a.cardId, x, y, 0.3, 'death');
@@ -938,7 +939,7 @@ export class Game {
   private updateTunnel(e: Entity): void {
     const dx = e.tunnelX - e.x;
     const dy = e.tunnelY - e.y;
-    const d = Math.hypot(dx, dy);
+    const d = len(dx, dy);
     const step = (e.stats.tunnelSpeed ?? 10) * DT;
     if (d > step) {
       e.x += (dx / d) * step;
@@ -1007,8 +1008,8 @@ export class Game {
       y = e.y + fwd * (e.half + 0.6);
     } else {
       const a = (i / n) * Math.PI * 2 + Math.PI / 4;
-      x = e.x + Math.cos(a) * 1.1;
-      y = e.y + Math.sin(a) * 1.1;
+      x = e.x + dcos(a) * 1.1;
+      y = e.y + dsin(a) * 1.1;
     }
     this.spawnUnit(e.team, sp.unit, sp.unit, x, y, 0.3, 'spawner');
   }
@@ -1138,7 +1139,7 @@ export class Game {
     if (e.stats.ignorePushback && !force) return;
     let dx = e.x - fx;
     let dy = e.y - fy;
-    let d = Math.hypot(dx, dy);
+    let d = len(dx, dy);
     if (d < 1e-6) {
       dx = 0;
       dy = e.team === 0 ? 1 : -1;
@@ -1201,7 +1202,7 @@ export class Game {
       for (let i = 0; i < n; i++) {
         const a = (i / n) * Math.PI * 2 + Math.PI / 2;
         const r = t.half > 0 ? t.half * 0.6 : 0.6;
-        this.spawnUnit(t.team, s.deathSpawn.unit, s.deathSpawn.unit, t.x + Math.cos(a) * r, t.y + Math.sin(a) * r, 0.5, 'death');
+        this.spawnUnit(t.team, s.deathSpawn.unit, s.deathSpawn.unit, t.x + dcos(a) * r, t.y + dsin(a) * r, 0.5, 'death');
       }
     }
   }
@@ -1318,7 +1319,7 @@ export class Game {
     const ny = ux * e.avoidSide;
     const ax = block.x + nx * R - e.x;
     const ay = block.y + ny * R - e.y;
-    const al = Math.hypot(ax, ay);
+    const al = len(ax, ay);
     if (al < 1e-6) return [ux, uy];
     return [ax / al, ay / al];
   }
@@ -1377,7 +1378,7 @@ export class Game {
       const cy = Math.max(-o.half, Math.min(o.half, dy));
       const ox = dx - cx;
       const oy = dy - cy;
-      const od = Math.hypot(ox, oy);
+      const od = len(ox, oy);
       if (od > 0 && od < r) {
         e.x = o.x + cx + (ox / od) * r;
         e.y = o.y + cy + (oy / od) * r;
