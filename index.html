@@ -73,7 +73,10 @@
             <p class="mode-note">單人對電腦・免安裝・免登入</p>
           </div>
           <div class="home-deck">
-            <div class="home-deck-head"><span>目前牌組</span><span id="home-avg"></span></div>
+            <div class="home-deck-head">
+              <span class="home-deck-title">牌組<span id="home-deck-tabs" class="slot-tabs mini" role="tablist" aria-label="切換牌組"></span></span>
+              <span id="home-avg"></span>
+            </div>
             <div id="home-deck-cards" class="mini-deck"></div>
           </div>
           <button id="btn-share-home" class="btn ghost" type="button">分享遊戲連結給朋友</button>
@@ -97,6 +100,7 @@
           <span id="deck-count" class="deck-count"></span>
           <button id="btn-deck-done" class="btn small primary" type="button">完成</button>
         </div>
+        <div id="deck-tabs" class="slot-tabs" role="tablist" aria-label="牌組欄位"></div>
         <div class="deck-current">
           <div id="deck-slots" class="deck-slots"></div>
           <div class="deck-meta">

@@ -493,6 +493,23 @@ if (run('3')) {
   await page.waitForSelector('#screen-home:not([hidden])');
   const deckIds = await page.$$eval('#home-deck-cards .card', (els) => els.map((e) => e.dataset.card));
   check('[360x640] 牌組儲存在本機，重新整理後保留', deckIds.includes('golem') && deckIds.includes('wolf_rider') && !deckIds.includes('giant'), deckIds.join(','));
+  // 牌組欄位：換到第 2 組並完成 → 主畫面改用第 2 組；主畫面的小分頁可切回第 1 組；重新整理後保留
+  const homeDeck = () => page.$$eval('#home-deck-cards .card', (els) => els.map((e) => e.dataset.card));
+  await page.click('#btn-deck');
+  await page.waitForSelector('#screen-deck:not([hidden])');
+  await page.click('#deck-tabs .slot-tab[data-slot="1"]');
+  const deck2 = await page.$$eval('#deck-slots .card', (els) => els.map((e) => e.dataset.card));
+  await page.click('#btn-deck-done');
+  await page.waitForSelector('#screen-home:not([hidden])');
+  const home2 = await homeDeck();
+  const tab2 = await page.getAttribute('#home-deck-tabs .slot-tab[data-slot="1"]', 'aria-selected');
+  check('[360x640] 牌組欄位：換到第 2 組並按完成，主畫面改用第 2 組', deck2.length === 8 && deck2.join() === home2.join() && !deck2.includes('golem') && tab2 === 'true', home2.join(','));
+  await page.click('#home-deck-tabs .slot-tab[data-slot="0"]');
+  const home1 = await homeDeck();
+  await page.reload();
+  await page.waitForSelector('#screen-home:not([hidden])');
+  const homeAfter = await homeDeck();
+  check('[360x640] 主畫面的牌組分頁可切回第 1 組，重新整理後保留', home1.includes('golem') && homeAfter.join() === home1.join(), homeAfter.join(','));
   await ctx.close();
 }
 

@@ -1,10 +1,10 @@
 import './style.css';
-import { AiController, AI_LEVELS, CARD_IDS, CARDS, DEFAULT_PLAYER_DECK, UNITS, canHitAir, isValidDeck, type AiLevel, type CardDef } from './sim';
+import { AiController, AI_LEVELS, CARD_IDS, CARDS, UNITS, canHitAir, isValidDeck, type AiLevel, type CardDef } from './sim';
 import { Sound } from './ui/audio';
 import { Battle } from './ui/battle';
 import { avgCost, cardTags, fillCard, rarityName, refreshPortraits } from './ui/cardview';
 import { ARENAS, arenaIndex, arenaOf, arenaProgress, trophyDelta } from './ui/progress';
-import { loadSettings, saveSettings } from './ui/settings';
+import { DECK_PRESETS, DECK_SLOTS, loadSettings, saveSettings, useSlot } from './ui/settings';
 import { shareGame, shareUrl } from './ui/share';
 import { ARENA_THEMES, themeIndex } from './render3d/arena';
 import { portraits } from './render3d/portraits';
@@ -25,6 +25,9 @@ const howto = $('ov-howto');
 const cardSheet = $('ov-card');
 
 let deckReturn: 'home' | 'battle-result' = 'home';
+/** 牌組畫面裡三個欄位的草稿（按「完成」才存）；draftDeck 指向目前欄位那一副。 */
+let draftDecks: string[][] = [];
+let draftSlot = 0;
 let draftDeck: string[] = [];
 let afterHowto: (() => void) | null = null;
 /** 牌組已滿時選了「使用」：等玩家點一張牌組內的卡來替換。 */
@@ -147,6 +150,12 @@ function renderHome(): void {
     box.appendChild(el);
   }
   $('home-avg').textContent = `平均 ${avgCost(settings.deck).toFixed(1)} 能量`;
+  renderSlotTabs($('home-deck-tabs'), settings.slot, (i) => {
+    useSlot(settings, i);
+    saveSettings(settings);
+    sound.play('tap');
+    renderHome();
+  });
   const { win, lose, draw } = settings.record;
   $('home-record').textContent = win + lose + draw > 0 ? `本機戰績 ${win} 勝 ${lose} 敗${draw ? ` ${draw} 平` : ''}` : '還沒有戰績';
   $('home-trophies').textContent = String(settings.trophies);
@@ -345,16 +354,58 @@ $('btn-share-home').addEventListener('click', async () => {
 
 // ───────── 牌組編輯 ─────────
 
+/** 牌組欄位分頁（主畫面與牌組畫面共用）。 */
+function renderSlotTabs(box: HTMLElement, active: number, onPick: (i: number) => void): void {
+  if (box.childElementCount !== DECK_SLOTS) {
+    box.innerHTML = '';
+    for (let i = 0; i < DECK_SLOTS; i++) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'slot-tab';
+      b.setAttribute('role', 'tab');
+      b.dataset.slot = String(i);
+      b.innerHTML = box.classList.contains('mini') ? `<span>${i + 1}</span>` : `<span>牌組 ${i + 1}</span>`;
+      b.setAttribute('aria-label', `牌組 ${i + 1}`);
+      b.addEventListener('click', () => onPick(Number(b.dataset.slot)));
+      box.appendChild(b);
+    }
+  }
+  box.querySelectorAll<HTMLButtonElement>('.slot-tab').forEach((b, i) => {
+    b.setAttribute('aria-selected', String(i === active));
+    b.classList.toggle('active', i === active);
+  });
+}
+
 function openDeck(ret: 'home' | 'battle-result'): void {
   deckReturn = ret;
-  draftDeck = [...settings.deck];
+  draftDecks = settings.decks.map((d) => [...d]);
+  draftSlot = settings.slot;
+  draftDeck = draftDecks[draftSlot];
   swapIn = null;
   home.hidden = true;
   deckScreen.hidden = false;
   renderDeck();
 }
 
+function pickDraftSlot(i: number): void {
+  if (i === draftSlot) return;
+  // 目前這副還沒補滿 8 張時不能換欄位（避免留下不完整的牌組）
+  if (draftDeck.length !== 8) {
+    const hint = $('deck-hint');
+    hint.textContent = '先把這副牌補滿 8 張，才能換到其他牌組。';
+    hint.classList.add('warn');
+    sound.play('error');
+    return;
+  }
+  draftSlot = i;
+  draftDeck = draftDecks[i];
+  swapIn = null;
+  sound.play('tap');
+  renderDeck();
+}
+
 function renderDeck(): void {
+  renderSlotTabs($('deck-tabs'), draftSlot, pickDraftSlot);
   const slots = $('deck-slots');
   slots.innerHTML = '';
   for (let i = 0; i < 8; i++) {
@@ -516,15 +567,18 @@ $('btn-info-use').addEventListener('click', () => {
 });
 
 $('btn-deck-done').addEventListener('click', () => {
-  if (!isValidDeck(draftDeck)) return;
-  settings.deck = [...draftDeck];
+  if (!draftDecks.every((d) => isValidDeck(d))) return;
+  // 存下三個欄位，並改用目前選的那一副
+  settings.decks = draftDecks.map((d) => [...d]);
+  useSlot(settings, draftSlot);
   saveSettings(settings);
   swapIn = null;
   if (deckReturn === 'battle-result') startBattle();
   else showHome();
 });
 $('btn-deck-reset').addEventListener('click', () => {
-  draftDeck = [...DEFAULT_PLAYER_DECK];
+  draftDecks[draftSlot] = [...DECK_PRESETS[draftSlot]];
+  draftDeck = draftDecks[draftSlot];
   swapIn = null;
   renderDeck();
 });

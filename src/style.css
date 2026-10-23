@@ -163,7 +163,7 @@ button { cursor: pointer; touch-action: manipulation; }
 .seg-btn[aria-checked="true"] { background: linear-gradient(#4f8ff0, #2a5fbf); color: #fff; text-shadow: 0 1px 1px #000; }
 
 .home-deck { background: rgba(0, 0, 0, .22); border: 1px solid rgba(255, 255, 255, .1); border-radius: 14px; padding: 10px; }
-.home-deck-head { display: flex; justify-content: space-between; font-size: 14px; font-weight: 700; color: #d6e2ff; margin-bottom: 8px; }
+.home-deck-head { display: flex; justify-content: space-between; align-items: center; font-size: 14px; font-weight: 700; color: #d6e2ff; margin-bottom: 8px; }
 .mini-deck { display: grid; grid-template-columns: repeat(8, 1fr); gap: 4px; }
 .record { margin: 0; text-align: center; font-size: 14px; color: var(--muted); min-height: 1em; }
 .foot { margin-top: auto; text-align: center; font-size: 12px; color: #74818d; padding-top: 6px; }
@@ -826,3 +826,15 @@ p.small { font-size: 12px; line-height: 1.45; margin: -2px 0 2px; }
   .unlock-panel, .unlock-art img { animation-duration: .01s; }
   .unlock-rays { animation: none; }
 }
+
+/* 牌組欄位分頁 */
+.slot-tabs { display: flex; gap: 6px; margin: 0 0 8px; }
+.slot-tab { flex: 1 1 0; min-height: 44px; padding: 0 6px; border: 2px solid rgba(255, 255, 255, .14); border-radius: 12px; background: rgba(0, 0, 0, .25); color: #c9d6ef; font: inherit; font-size: 14px; font-weight: 800; cursor: pointer; }
+.slot-tab.active { background: linear-gradient(#3f7fe8, #2a5fc4); border-color: #8fb6ff; color: #fff; box-shadow: 0 3px 0 rgba(0, 0, 0, .35); }
+.slot-tab:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
+/* 主畫面的小分頁：看起來是小方鈕，觸控區仍有 44px */
+.home-deck-title { display: inline-flex; align-items: center; }
+.slot-tabs.mini { display: inline-flex; gap: 0; margin: -12px 0 -12px 4px; }
+.slot-tabs.mini .slot-tab { flex: 0 0 auto; width: 40px; min-width: 44px; min-height: 44px; padding: 0; border: 0; background: none; box-shadow: none; display: inline-flex; align-items: center; justify-content: center; }
+.slot-tabs.mini .slot-tab span { width: 26px; height: 26px; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; background: rgba(0, 0, 0, .3); border: 1.5px solid rgba(255, 255, 255, .18); font-size: 13px; color: #c9d6ef; }
+.slot-tabs.mini .slot-tab.active span { background: linear-gradient(#3f7fe8, #2a5fc4); border-color: #8fb6ff; color: #fff; }
