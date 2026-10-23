@@ -27,9 +27,9 @@ export function buildCannon(team: TeamPal): ModelAsset {
   k.box(0.5, 0.32, 0.55, { at: [0, 0.55, -0.05], color: WOOD });
   for (const sx of [1, -1]) k.cyl(0.18, 0.18, 0.08, { at: [sx * 0.3, 0.5, 0.05], rot: [0, 0, Math.PI / 2], color: '#3a2a1e' }, 10);
   k.bone = barrel;
-  k.cyl(0.15, 0.2, 0.85, { at: [0, 0.68, 0.3], rot: [Math.PI / 2 - 0.15, 0, 0], color: '#363a42' }, 12);
-  k.torus(0.16, 0.04, { at: [0, 0.74, 0.68], rot: [-0.15, 0, 0], color: '#555b66' }, 12);
-  k.sphere(0.2, { at: [0, 0.62, -0.08], color: '#2c3036' }, 10);
+  k.cyl(0.15, 0.2, 0.85, { at: [0, 0.68, 0.3], rot: [Math.PI / 2 - 0.15, 0, 0], color: '#363a42', shine: 0.7 }, 12);
+  k.torus(0.16, 0.04, { at: [0, 0.74, 0.68], rot: [-0.15, 0, 0], color: '#555b66', shine: 0.8 }, 12);
+  k.sphere(0.2, { at: [0, 0.62, -0.08], color: '#2c3036', shine: 0.7 }, 10);
   return k.build(1.0);
 }
 
@@ -51,8 +51,8 @@ export function buildInferno(team: TeamPal): ModelAsset {
     k.cone(0.07, 0.3, { at: [Math.cos(a) * 0.42, 1.55, Math.sin(a) * 0.42], rot: [Math.sin(a) * 0.4, 0, -Math.cos(a) * 0.4], color: '#2c2624' }, 5);
   }
   k.bone = crystal;
-  k.gem(0.3, { at: [0, 1.75, 0], scale: [0.8, 1.4, 0.8], color: '#ff6a1f' });
-  k.gem(0.16, { at: [0, 1.78, 0], scale: [0.8, 1.4, 0.8], color: '#ffd36b' });
+  k.gem(0.3, { at: [0, 1.75, 0], scale: [0.8, 1.4, 0.8], color: '#ff6a1f', shine: 1 });
+  k.gem(0.16, { at: [0, 1.78, 0], scale: [0.8, 1.4, 0.8], color: '#ffd36b', shine: 1 });
   return k.build(2.0);
 }
 
@@ -107,9 +107,9 @@ export function buildCollector(team: TeamPal): ModelAsset {
   k.cyl(0.04, 0.04, 0.08, { at: [-0.95, 0.27, 0.5], color: '#8a5a2e' }, 6);
   // 會旋轉的能量水晶
   k.bone = crystal;
-  k.gem(0.3, { at: [0, 1.32, 0], scale: [0.85, 1.45, 0.85], color: '#e25ae8' });
-  k.gem(0.17, { at: [0, 1.34, 0], scale: [0.85, 1.45, 0.85], color: '#ffd0ff' });
-  k.torus(0.26, 0.03, { at: [0, 1.32, 0], rot: [Math.PI / 2, 0, 0], color: '#f2b233' }, 14);
+  k.gem(0.3, { at: [0, 1.32, 0], scale: [0.85, 1.45, 0.85], color: '#e25ae8', shine: 1 });
+  k.gem(0.17, { at: [0, 1.34, 0], scale: [0.85, 1.45, 0.85], color: '#ffd0ff', shine: 1 });
+  k.torus(0.26, 0.03, { at: [0, 1.32, 0], rot: [Math.PI / 2, 0, 0], color: '#f2b233', shine: 0.9 }, 14);
   return k.build(2.0);
 }
 
@@ -315,9 +315,9 @@ export function buildKingTower(team: TeamPal): ModelAsset {
     const x = sx * BX;
     const y = 0.3 + BH + 0.2;
     k.cyl(0.32, 0.36, 0.16, { at: [x, y - 0.06, BZ], color: WOOD_D }, 10);
-    k.cyl(0.17, 0.23, 0.95, { at: [x, y + 0.16, BZ + 0.3], rot: [Math.PI / 2 - 0.1, 0, 0], color: '#3a3530' }, 12);
-    k.torus(0.19, 0.05, { at: [x, y + 0.21, BZ + 0.76], rot: [-0.1, 0, 0], color: '#b87333' }, 12);
-    k.sphere(0.22, { at: [x, y + 0.12, BZ - 0.12], color: '#3a3530' }, 10);
+    k.cyl(0.17, 0.23, 0.95, { at: [x, y + 0.16, BZ + 0.3], rot: [Math.PI / 2 - 0.1, 0, 0], color: '#3a3530', shine: 0.65 }, 12);
+    k.torus(0.19, 0.05, { at: [x, y + 0.21, BZ + 0.76], rot: [-0.1, 0, 0], color: '#b87333', shine: 0.85 }, 12);
+    k.sphere(0.22, { at: [x, y + 0.12, BZ - 0.12], color: '#3a3530', shine: 0.65 }, 10);
   }
   k.bone = root;
   addHumanoid(k, commanderSpec(team, 'sleepy'), team, root, [0, FLOOR, KZ + 0.15]);

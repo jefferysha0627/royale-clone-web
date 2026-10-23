@@ -307,7 +307,7 @@ export function buildLancer(team: TeamPal): ModelAsset {
   const { body, saddleY } = addMount(k, { len: 1.25, height: 0.75, color: '#7a4a2a', color2: '#5c3820', mane: '#2a1a10', kind: 'horse' }, team);
   const rider: HumanoidSpec = {
     height: 0.95, skin: '#f2c9a0', face: 'dot', torso: '#c9d1dc', torso2: '#f2b233', legs: '#8a96a6', boots: '#5a6472', hands: '#c9d1dc',
-    hat: 'helmet', hatColor: '#d6dde6', plume: true, weapon: 'lance', offhand: 'buckler', pads: true,
+    hat: 'helmet', hatColor: '#d6dde6', plume: true, weapon: 'lance', offhand: 'buckler', pads: true, metal: 0.6,
   };
   addHumanoid(k, rider, team, body, [0, saddleY - 0.15, -0.08], true);
   return k.build(1.75);

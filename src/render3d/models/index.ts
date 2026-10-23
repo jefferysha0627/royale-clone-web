@@ -27,7 +27,7 @@ const BONE = '#efe8d8';
 const HUMANOIDS: Record<string, (t: TeamPal) => HumanoidSpec> = {
   knight: () => ({
     height: 1.3, build: 1.1, skin: SKIN, face: 'dot', hat: 'helmet', hatColor: '#c9d1dc', plume: true, torso: '#9aa6b5', torso2: '#6b4426', legs: '#5a5f6b',
-    boots: '#3a3f4a', arms: '#9aa6b5', hands: '#c9d1dc', pads: true, cape: true, tabard: true, weapon: 'sword', offhand: 'shield',
+    boots: '#3a3f4a', arms: '#9aa6b5', hands: '#c9d1dc', pads: true, cape: true, tabard: true, weapon: 'sword', offhand: 'shield', metal: 0.55,
   }),
   archer: () => ({
     height: 1.1, skin: SKIN, face: 'dot', hair: { style: 'bob', color: '#d9894a' }, hat: 'hood', hatColor: '#3f7a4a', torso: '#4f8a5a', torso2: '#7a5230',
@@ -59,7 +59,7 @@ const HUMANOIDS: Record<string, (t: TeamPal) => HumanoidSpec> = {
   }),
   iron_swordsman: () => ({
     height: 1.2, build: 1.15, skin: '#3a3f4a', face: 'visor', eyeColor: '#ffb347', hat: 'iron', hatColor: '#7d8ca3', torso: '#7d8ca3', torso2: '#3a3f4a',
-    legs: '#5d6b80', boots: '#3a3f4a', arms: '#7d8ca3', hands: '#5d6b80', pads: true, weapon: 'greatsword',
+    legs: '#5d6b80', boots: '#3a3f4a', arms: '#7d8ca3', hands: '#5d6b80', pads: true, weapon: 'greatsword', metal: 0.75,
   }),
   axe_dwarf: () => ({
     height: 1.05, build: 1.4, skin: SKIN, face: 'angry', beard: { color: '#d9692a', size: 1.3 }, mustache: '#c45a1e', hat: 'winged', hatColor: '#b8bec8',

@@ -22,6 +22,8 @@ export interface PartOpts {
   scale?: V3;
   color: string;
   bone?: number;
+  /** 光澤度 0～1（金屬、寶石的鏡面高光；布料、皮膚為 0）。 */
+  shine?: number;
 }
 
 export interface ModelAsset {
@@ -38,6 +40,8 @@ export class Kit {
   bones: BoneDef[] = [];
   /** 之後加入的零件預設綁到這根骨頭。 */
   bone = 0;
+  /** 之後加入的零件預設光澤度。 */
+  shine = 0;
   /** 是否烘焙上下漸層（場地裝飾等大型物件可關閉）。 */
   gradient = true;
 
@@ -79,6 +83,7 @@ export class Kit {
     const si = new Uint16Array(n * 4);
     const sw = new Float32Array(n * 4);
     const bone = o.bone ?? this.bone;
+    const shine = new Float32Array(n).fill(o.shine ?? this.shine);
     // 烘焙的上下漸層：零件底部略暗、頂部略亮，模擬環境光遮蔽與手繪感
     const pos = g.attributes.position;
     let minY = Infinity;
@@ -106,6 +111,7 @@ export class Kit {
       sw[i * 4] = 1;
     }
     g.setAttribute('color', new BufferAttribute(col, 3));
+    g.setAttribute('shine', new BufferAttribute(shine, 1));
     g.setAttribute('skinIndex', new BufferAttribute(si, 4));
     g.setAttribute('skinWeight', new BufferAttribute(sw, 4));
     this.geos.push(g);

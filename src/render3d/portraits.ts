@@ -320,7 +320,7 @@ class PortraitStore {
     const pose = EMOTE_POSES[id];
     const pal = TEAM_RGB[team];
     const asset = buildHumanoid(commanderSpec(pal, pose.face, 0.55), pal);
-    const inst = instantiate(asset, toonMaterial({ rim: 0.5 }));
+    const inst = instantiate(asset, toonMaterial({ rim: 0.5, spec: 0.3 }));
     const st = newAnimState();
     st.t = 0.2;
     animate(inst, profileOf('knight'), st, 0.016);
@@ -469,7 +469,7 @@ function renderArenaArt(c: RenderCtx, theme: number): string {
   g.add(new Mesh(k.build(1).geometry, new MeshLambertMaterial({ vertexColors: true })));
   if (glow.parts > 0) g.add(new Mesh(glow.build(1).geometry, new MeshBasicMaterial({ vertexColors: true })));
   const put = (unit: string, team: 0 | 1, x: number, z: number, rotY: number, sc = 1, y = 0, pose = 0.3) => {
-    const inst = instantiate(getAsset(unit, team), toonMaterial({ rim: 0.45 }));
+    const inst = instantiate(getAsset(unit, team), toonMaterial({ rim: 0.45, spec: 0.3 }));
     const st = newAnimState();
     st.t = pose;
     st.windup = pose > 1 ? 0.8 : -1;
@@ -522,7 +522,7 @@ function buildSubject(cardId: string): Group {
   // 飛行單位離地，卡面上看得出是在空中
   const lift = UNITS[unit].stats.flying ? Math.max(0.45, (prof.hover ?? 0.8) * 0.75) : 0;
   offsets.forEach(([ox, oy, oz], i) => {
-    const inst = instantiate(getAsset(unit, 0), toonMaterial({ rim: 0.5 }));
+    const inst = instantiate(getAsset(unit, 0), toonMaterial({ rim: 0.5, spec: 0.3 }));
     const st = newAnimState();
     // 最前面那隻擺出出手前的蓄力姿勢，其他的稍微錯開，卡面比較有動感
     st.t = 0.3 + i * 0.7;
