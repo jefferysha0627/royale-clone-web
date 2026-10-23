@@ -15,7 +15,7 @@ const units = only ?? [
   'knight', 'archer', 'giant', 'goblin', 'spear_goblin', 'skeleton', 'musketeer', 'wizard', 'iron_swordsman', 'axe_dwarf', 'lancer', 'bomber',
   'barbarian', 'golem', 'golemite', 'giant_skeleton', 'ice_spirit', 'fire_spirit', 'witch', 'baby_dragon', 'bat', 'gargoyle', 'bomb_blimp',
   'wolf_rider', 'tunneler', 'cannon', 'inferno', 'tombstone', 'elixir_collector', 'mega_gargoyle', 'siege_ram', 'siege_giant', 'berserker',
-  'blowgun_goblin', 'spirit_hut', 'bomb_turret',
+  'blowgun_goblin', 'spirit_hut', 'bomb_turret', 'lava_hound', 'lava_pup', 'mortar',
 ];
 const towers = params.get('towers') === '1';
 

@@ -105,9 +105,9 @@ export class Kit {
         const t = (pos.getY(i) - minY) / span;
         f = 0.8 + 0.26 * t;
       }
-      // 貼近地面的部分再暗一點（腳底、建築底座）
+      // 貼近地面的部分再暗一點（腳底、建築底座）；地面以下（河岸、法術圖示的下半部）不再更暗
       const y = pos.getY(i);
-      if (this.gradient && y < 0.12) f *= 0.86 + (y / 0.12) * 0.14;
+      if (this.gradient && y < 0.12) f *= 0.86 + (Math.max(0, y) / 0.12) * 0.14;
       col[i * 3] = tmpColor.r * f;
       col[i * 3 + 1] = tmpColor.g * f;
       col[i * 3 + 2] = tmpColor.b * f;

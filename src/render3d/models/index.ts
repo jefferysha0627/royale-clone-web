@@ -2,7 +2,7 @@ import { TEAM_RGB } from '../coords';
 import { Kit, type ModelAsset } from '../kit';
 import { buildCannon, buildCollector, buildInferno, buildKingTower, buildPrincessTower, buildRubble, buildTombstone } from './buildings';
 import { buildBabyDragon, buildBat, buildBlimp, buildGargoyle, buildGolem, buildLancer, buildSpirit, buildWolfRider } from './creatures';
-import { buildBombTurret, buildHeavyGargoyle, buildSiegeRam, buildSpiritHut } from './extra';
+import { buildBombTurret, buildHeavyGargoyle, buildLavaBeast, buildMortar, buildSiegeRam, buildSpiritHut } from './extra';
 import { addHumanoid, buildHumanoid, type HumanoidSpec } from './humanoid';
 
 export type Rig = 'biped' | 'mount' | 'flyer' | 'blob' | 'blimp' | 'cannon' | 'inferno' | 'tomb' | 'princess' | 'king' | 'static';
@@ -142,6 +142,9 @@ export const PROFILES: Record<string, AnimProfile> = {
   blowgun_goblin: { rig: 'biped', attack: 'shoot', cadence: 1.6 },
   spirit_hut: { rig: 'inferno', attack: 'none' },
   bomb_turret: { rig: 'cannon', attack: 'fire' },
+  lava_hound: { rig: 'flyer', attack: 'spit', hover: 1.7 },
+  lava_pup: { rig: 'flyer', attack: 'spit', hover: 1.3 },
+  mortar: { rig: 'cannon', attack: 'fire' },
   princess: { rig: 'princess', attack: 'bow' },
   king: { rig: 'king', attack: 'fire' },
 };
@@ -183,6 +186,9 @@ function buildAsset(unit: string, team: 0 | 1): ModelAsset {
     case 'siege_ram': return buildSiegeRam(t);
     case 'spirit_hut': return buildSpiritHut(t);
     case 'bomb_turret': return buildBombTurret(t);
+    case 'lava_hound': return buildLavaBeast(t, false);
+    case 'lava_pup': return buildLavaBeast(t, true);
+    case 'mortar': return buildMortar(t);
     case 'princess': return buildPrincessTower(t);
     case 'king': return buildKingTower(t);
     case 'rubble-princess': return buildRubble(3);

@@ -41,6 +41,7 @@ const THEMES: Record<string, Theme> = {
   toxic: { top: '#24521c', mid: '#acdf6c', glow: '#f3ffb6', ground: null },
   blaze: { top: '#8a1f14', mid: '#ff9a4a', glow: '#fff0a0', ground: null },
   timber: { top: '#3d6f3a', mid: '#e3eebd', glow: '#fff6cc', ground: '#6b9a44' },
+  grave: { top: '#2a1f40', mid: '#9a8ac0', glow: '#efe4ff', ground: null },
 };
 
 const CARD_THEME: Record<string, string> = {
@@ -55,6 +56,7 @@ const CARD_THEME: Record<string, string> = {
   freeze: 'frost', rage: 'blaze', tunneler: 'canyon', elixir_collector: 'dusk',
   mega_gargoyle: 'storm', gargoyle_horde: 'sky', siege_ram: 'canyon', siege_giant: 'steel', berserkers: 'ember', blowgun_goblin: 'forest',
   spirit_hut: 'ember', bomb_turret: 'canyon', lightning: 'storm',
+  tornado: 'sky', graveyard: 'grave', lava_hound: 'ember', mortar: 'canyon',
 };
 
 function themeOf(cardId: string): Theme {
@@ -705,6 +707,47 @@ function spellIcon(cardId: string): Group {
         g.add(m);
       }
       break;
+    case 'tornado': {
+      // 龍捲風：一圈圈細環由上往下收窄、左右扭動成漏斗，外層半透明氣旋，周圍捲著碎片
+      for (let i = 0; i < 13; i++) {
+        const t = i / 12;
+        const r = 0.7 - t * 0.56;
+        const sway = Math.sin(t * 5.5) * 0.12 * (0.4 + t);
+        k.torus(r, 0.035 + (1 - t) * 0.02, { at: [sway, 0.85 - t * 1.7, 0.05], rot: [Math.PI / 2 - 0.5, 0, sway * 0.6], color: i % 3 === 0 ? '#ffffff' : i % 3 === 1 ? '#cfe4f4' : '#a8c4dc' }, 22);
+      }
+      for (let i = 0; i < 7; i++) {
+        const a2 = i * 0.95;
+        const y = 0.65 - i * 0.2;
+        const rr = 0.78 - i * 0.07;
+        k.box(0.09, 0.05, 0.04, { at: [Math.cos(a2) * rr, y, Math.sin(a2) * 0.25 + 0.25], rot: [a2, a2 * 0.7, a2 * 1.3], color: ['#8a5a2e', '#6a8a4a', '#9a958a'][i % 3] });
+      }
+      glow('#eef8ff', 0.75, 0, 0.2, -0.45, 0.13, true);
+      glow('#ffffff', 0.32, 0, 0.75, -0.2, 0.2, true);
+      break;
+    }
+    case 'graveyard': {
+      // 亡靈墓地：土丘上一大一小兩塊圓頂墓碑，前方地裡伸出骷髏手，墓碑後透出紫色鬼火
+      glow('#9a6cff', 0.42, 0.0, 0.2, -0.9, 0.16, true);
+      k.sphere(0.95, { at: [0, -1.12, -0.45], scale: [1.3, 0.34, 0.7], color: '#6a5a48' }, 18);
+      for (const [x, z, r] of [[-0.75, 0.05, 0.12], [0.7, 0.1, 0.1], [0.05, 0.25, 0.08]] as const) k.rock(r, { at: [x, -0.7, z], color: '#7a6e60' });
+      const stone = (x: number, z: number, w: number, h: number, rz: number, color: string) => {
+        k.box(w, h, 0.16, { at: [x, -0.55 + h / 2, z], rot: [0, 0, rz], color });
+        k.cyl(w / 2, w / 2, 0.16, { at: [x - Math.sin(rz) * h, -0.55 + h * Math.cos(rz), z], rot: [Math.PI / 2, 0, rz], color }, 16);
+        k.box(w * 0.5, 0.04, 0.17, { at: [x - Math.sin(rz) * h * 0.55, -0.55 + h * 0.6, z + 0.005], rot: [0, 0, rz], color: '#55524c' });
+        k.box(0.04, w * 0.35, 0.17, { at: [x - Math.sin(rz) * h * 0.62, -0.55 + h * 0.7, z + 0.005], rot: [0, 0, rz], color: '#55524c' });
+      };
+      stone(-0.3, -0.35, 0.5, 0.78, 0.1, '#c2bcae');
+      stone(0.42, -0.5, 0.38, 0.58, -0.14, '#aaa497');
+      // 骷髏手：手腕、手掌與五根指骨（張開往上抓）
+      k.cyl(0.055, 0.065, 0.36, { at: [0.12, -0.42, 0.42], rot: [0.25, 0, -0.2], color: '#efe8d8' }, 8);
+      k.blob(0.22, 0.18, 0.09, { at: [0.17, -0.18, 0.46], rot: [0.2, 0, -0.2], color: '#efe8d8' }, 10);
+      for (let i = 0; i < 5; i++) {
+        const ang = (i - 2) * 0.28 - 0.2 + (i === 0 ? 0.75 : 0);
+        k.cyl(0.02, 0.026, 0.22, { at: [0.17 - Math.sin(ang) * 0.14, -0.02 + Math.cos(ang) * 0.06, 0.46], rot: [0.2, 0, ang], color: '#efe8d8' }, 6);
+      }
+      for (const [x, y] of [[-0.6, 0.15], [0.62, 0.0], [-0.1, 0.42]] as const) glow('#c6a6ff', 0.07, x, y, 0.1, 0.9, true);
+      break;
+    }
     case 'lightning': {
       // 落雷：厚厚的紫灰色雷雲，底下劈出三道白紫色閃電，落點有光暈
       const cloud: [number, number, number, number][] = [[0, 0.62, 0, 0.42], [-0.42, 0.55, -0.05, 0.32], [0.44, 0.56, 0, 0.34], [-0.2, 0.78, -0.1, 0.32], [0.22, 0.8, -0.12, 0.3]];

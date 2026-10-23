@@ -164,3 +164,77 @@ export function buildBombTurret(team: TeamPal): ModelAsset {
   k.sphere(0.24, { at: [0, 1.32, 0.0], color: '#33363c', shine: 0.6 }, 10);
   return k.build(1.75);
 }
+
+/** 熔岩飛獸（大／小）：玄武岩外殼、發光的熔岩裂縫、蝠翼與短尾；大的戴隊伍色項圈。 */
+export function buildLavaBeast(team: TeamPal, small: boolean): ModelAsset {
+  const S = small ? 0.5 : 1;
+  const k = new Kit();
+  const root = k.addBone('root', -1, [0, 0, 0]);
+  const body = k.addBone('body', root, [0, 0.55 * S, 0]);
+  const head = k.addBone('head', body, [0, 0.75 * S, 0.45 * S]);
+  const wingL = k.addBone('wingL', body, [0.42 * S, 0.85 * S, -0.05 * S]);
+  const wingR = k.addBone('wingR', body, [-0.42 * S, 0.85 * S, -0.05 * S]);
+  const tail = k.addBone('tail', body, [0, 0.55 * S, -0.55 * S]);
+  const rock = '#3e3530';
+  const rockL = '#5a4a40';
+  const lava = '#ff7a2a';
+  const glow = '#ffc04a';
+  k.bone = body;
+  k.blob(1.0 * S, 0.85 * S, 1.05 * S, { at: [0, 0.62 * S, 0], color: rock }, 16);
+  k.blob(0.7 * S, 0.45 * S, 0.75 * S, { at: [0, 0.4 * S, 0.06 * S], color: lava }, 12); // 發光的腹部
+  // 背上的岩板與裂縫
+  for (let i = 0; i < 7; i++) {
+    const a = (i / 7) * Math.PI * 2;
+    k.rock(0.17 * S, { at: [Math.cos(a) * 0.36 * S, 0.95 * S, Math.sin(a) * 0.36 * S - 0.05 * S], scale: [1.2, 0.6, 1], color: rockL });
+    k.box(0.05 * S, 0.03 * S, 0.22 * S, { at: [Math.cos(a + 0.4) * 0.3 * S, 0.99 * S, Math.sin(a + 0.4) * 0.3 * S], rot: [0, -a, 0], color: glow });
+  }
+  for (const sx of [1, -1]) k.box(0.04 * S, 0.22 * S, 0.06 * S, { at: [sx * 0.46 * S, 0.62 * S, 0.22 * S], rot: [0, 0, sx * 0.4], color: glow });
+  if (!small) k.torus(0.36, 0.05, { at: [0, 0.82, 0.32], rot: [Math.PI / 2 - 0.6, 0, 0], color: team.main }, 16);
+  // 短短的爪子
+  for (const sx of [1, -1]) {
+    k.capsule(0.07 * S, 0.12 * S, { at: [sx * 0.24 * S, 0.18 * S, 0.12 * S], color: rockL }, 6);
+    k.cone(0.05 * S, 0.1 * S, { at: [sx * 0.24 * S, 0.06 * S, 0.22 * S], rot: [Math.PI / 2, 0, 0], color: '#d8d0bc' }, 4);
+  }
+  k.bone = head;
+  k.blob(0.48 * S, 0.4 * S, 0.46 * S, { at: [0, 0.82 * S, 0.62 * S], color: rock }, 14);
+  k.blob(0.32 * S, 0.16 * S, 0.24 * S, { at: [0, 0.7 * S, 0.8 * S], color: lava }, 10); // 熔岩嘴
+  for (const sx of [1, -1]) {
+    k.sphere(0.06 * S, { at: [sx * 0.12 * S, 0.9 * S, 0.82 * S], scale: [1.2, 0.8, 0.6], color: glow }, 8);
+    k.cone(0.06 * S, 0.24 * S, { at: [sx * 0.15 * S, 1.06 * S, 0.56 * S], rot: [-0.5, 0, -sx * 0.5], color: '#d8d0bc' }, 5);
+  }
+  for (const [bone, sx] of [[wingL, 1], [wingR, -1]] as const) {
+    k.capsule(0.05 * S, 0.7 * S, { at: [sx * 0.75 * S, 0.95 * S, -0.05 * S], rot: [0, 0, sx * 1.35], color: rockL, bone }, 5);
+    k.blob(0.9 * S, 0.07 * S, 0.6 * S, { at: [sx * 0.8 * S, 0.88 * S, -0.15 * S], rot: [0, sx * 0.25, 0], color: '#6a3a2a', bone }, 8);
+    k.cone(0.045 * S, 0.14 * S, { at: [sx * 1.2 * S, 1.05 * S, -0.05 * S], rot: [0, 0, -sx * 0.4], color: '#d8d0bc', bone }, 4);
+  }
+  k.bone = tail;
+  k.cone(0.16 * S, 0.6 * S, { at: [0, 0.55 * S, -0.82 * S], rot: [-Math.PI / 2 - 0.3, 0, 0], color: rock }, 8);
+  k.sphere(0.07 * S, { at: [0, 0.68 * S, -1.1 * S], color: glow }, 6);
+  return k.build(small ? 0.8 : 1.55);
+}
+
+/** 迫擊砲：寬石台＋木架上的大口徑短砲管（朝前上方），砲台邊堆沙包與砲彈。 */
+export function buildMortar(team: TeamPal): ModelAsset {
+  const k = new Kit();
+  const root = k.addBone('root', -1, [0, 0, 0]);
+  const turret = k.addBone('turret', root, [0, 0.5, 0]);
+  const barrel = k.addBone('barrel', turret, [0, 0.85, 0.05]);
+  k.bone = root;
+  k.cyl(0.95, 1.0, 0.3, { at: [0, 0.15, 0], color: STONE_D }, 12);
+  k.cyl(0.85, 0.92, 0.12, { at: [0, 0.36, 0], color: STONE }, 12);
+  for (let i = 0; i < 9; i++) {
+    const a = (i / 9) * Math.PI * 2;
+    k.blob(0.34, 0.18, 0.22, { at: [Math.cos(a) * 0.82, 0.5, Math.sin(a) * 0.82], rot: [0, -a, 0], color: i % 2 ? '#c9b48a' : '#b8a27a' }, 8);
+  }
+  k.torus(0.9, 0.04, { at: [0, 0.42, 0], rot: [Math.PI / 2, 0, 0], color: team.main }, 18);
+  for (const [x, z] of [[0.5, -0.5], [0.62, -0.32]] as const) k.sphere(0.13, { at: [x, 0.6, z], color: '#2a2c33', shine: 0.5 }, 8);
+  k.bone = turret;
+  k.cyl(0.5, 0.55, 0.14, { at: [0, 0.48, 0], color: WOOD_D }, 12);
+  for (const sx of [1, -1]) k.box(0.1, 0.42, 0.5, { at: [sx * 0.34, 0.72, 0.0], color: WOOD });
+  k.bone = barrel;
+  k.cyl(0.3, 0.36, 0.78, { at: [0, 0.98, 0.16], rot: [0.7, 0, 0], color: '#3a3d44', shine: 0.65 }, 14);
+  k.torus(0.31, 0.06, { at: [0, 1.28, 0.42], rot: [-0.87, 0, 0], color: '#b87333', shine: 0.85 }, 14);
+  k.torus(0.37, 0.05, { at: [0, 0.75, -0.06], rot: [-0.87, 0, 0], color: '#b87333', shine: 0.85 }, 14);
+  k.sphere(0.3, { at: [0, 0.75, -0.08], color: '#33363c', shine: 0.6 }, 12);
+  return k.build(1.5);
+}

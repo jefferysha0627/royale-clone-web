@@ -37,6 +37,10 @@ const S: Record<string, { at: [number, number]; setup: () => void }> = {
   ram: { at: [3.5, 10], setup: () => { put(0, 'siege_ram', 3.5, 17.5); put(0, 'blowgun_goblin', 4.5, 20.5); put(0, 'mega_gargoyle', 2.5, 19.5); } },
   lightning: { at: [9, 11], setup: () => { put(1, 'giant', 9.5, 10.5); put(1, 'knight', 8.5, 11.5); put(1, 'archers', 10.5, 11.5); setTimeout(() => put(0, 'lightning', 9.5, 11), 1300); } },
   siege: { at: [9, 20], setup: () => { put(0, 'bomb_turret', 9, 22); put(0, 'spirit_hut', 13, 22); put(1, 'siege_giant', 9.5, 13.5); put(1, 'berserkers', 5.5, 13.5); put(1, 'gargoyle_horde', 13.5, 13.5); } },
+  hound: { at: [9, 12], setup: () => { put(0, 'lava_hound', 9.5, 20.5); put(1, 'musketeer', 9.5, 9.5); put(1, 'archers', 7.5, 9.5); } },
+  tornado: { at: [9, 11], setup: () => { put(1, 'barbarians', 9.5, 9.5); put(1, 'goblins', 5.5, 11.5); setTimeout(() => put(0, 'tornado', 8.5, 11.5), 1300); } },
+  grave: { at: [3.5, 8], setup: () => { setTimeout(() => put(0, 'graveyard', 3.5, 6.5), 400); } },
+  mortar: { at: [9, 18], setup: () => { put(0, 'mortar', 9, 24); put(1, 'knight', 9.5, 12.5); put(1, 'goblins', 6.5, 13.5); } },
   collapse: {
     at: [3.5, 8],
     setup: () => {

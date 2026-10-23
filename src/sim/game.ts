@@ -106,6 +106,8 @@ export interface AreaEffect {
   duration: number;
   tickTimer: number;
   ticksLeft: number;
+  spawnTimer?: number; // 墓地：下一隻冒出來的倒數
+  spawnsLeft?: number;
 }
 
 /** 滾動法術（滾木）。 */
@@ -480,7 +482,8 @@ export class Game {
         this.events.push({ type: 'spellCast', team, cardId: card.id, x, y, fromX: king.x, fromY: king.y, delay: 0 });
         this.areas.push({
           id: this.nextId++, team, cardId: card.id, x, y, radius: s.radius, timeLeft: s.duration!, duration: s.duration!,
-          tickTimer: 0, ticksLeft: s.rage ? 0 : Math.round(s.duration! / (s.tick ?? 1)),
+          tickTimer: 0, ticksLeft: s.rage || s.graveyard ? 0 : Math.round(s.duration! / (s.tick ?? 1)),
+          spawnTimer: s.graveyard?.delay, spawnsLeft: s.graveyard?.count,
         });
         return;
       case 'lightning':
@@ -690,6 +693,11 @@ export class Game {
         }
         continue;
       }
+      if (s.graveyard) {
+        this.updateGraveyard(a, s);
+        continue;
+      }
+      if (s.pull) this.pullIn(a, s);
       for (const e of this.entities) {
         if (!e.alive || e.team === a.team || e.kind !== 'troop' || e.tunneling) continue;
         if (e.stats.flying && !s.hitsAir) continue;
@@ -711,6 +719,42 @@ export class Game {
       }
     }
     this.areas = this.areas.filter((a) => a.timeLeft > 0 || a.ticksLeft > 0);
+  }
+
+  /** 龍捲風：範圍內的敵方部隊（含飛行）往中心拉；地面部隊被拉到河上時由碰撞處理推回岸邊（橋上除外）。 */
+  private pullIn(a: AreaEffect, s: SpellStats): void {
+    const step = s.pull! * DT;
+    for (const e of this.entities) {
+      if (!e.alive || e.team === a.team || e.kind !== 'troop' || e.tunneling) continue;
+      if (e.stats.flying && !s.hitsAir) continue;
+      const dx = a.x - e.x;
+      const dy = a.y - e.y;
+      const d = Math.hypot(dx, dy);
+      if (d > a.radius + e.stats.radius || d < 0.05) continue;
+      const m = Math.min(step, d);
+      e.x = Math.max(e.stats.radius, Math.min(ARENA.width - e.stats.radius, e.x + (dx / d) * m));
+      e.y = Math.max(e.stats.radius, Math.min(ARENA.height - e.stats.radius, e.y + (dy / d) * m));
+    }
+  }
+
+  /** 墓地：延遲後每隔一段時間在範圍內隨機一點冒出一隻（不放在河上或塔上）。 */
+  private updateGraveyard(a: AreaEffect, s: SpellStats): void {
+    const gy = s.graveyard!;
+    if (!a.spawnsLeft || a.spawnsLeft <= 0) return;
+    a.spawnTimer = (a.spawnTimer ?? 0) - DT;
+    if (a.spawnTimer > 0) return;
+    a.spawnTimer += gy.interval;
+    a.spawnsLeft--;
+    for (let tries = 0; tries < 6; tries++) {
+      const ang = this.rng.next() * Math.PI * 2;
+      const rr = Math.sqrt(this.rng.next()) * a.radius;
+      const x = Math.max(0.5, Math.min(ARENA.width - 0.5, a.x + Math.cos(ang) * rr));
+      const y = Math.max(0.5, Math.min(ARENA.height - 0.5, a.y + Math.sin(ang) * rr));
+      if (y > ARENA.riverTop - 0.3 && y < ARENA.riverBottom + 0.3) continue;
+      if (this.entities.some((o) => o.alive && o.kind !== 'troop' && distTo(x, y, o) < 0.4)) continue;
+      this.spawnUnit(a.team, gy.unit, a.cardId, x, y, 0.3, 'death');
+      return;
+    }
   }
 
   private updateRollers(): void {
@@ -776,17 +820,18 @@ export class Game {
     const isStatic = e.stats.speed === 0;
     if (current && e.locked) {
       const d = this.edgeDist(e, current);
-      // 已開打的部隊會追擊；固定建築／塔目標離開射程就換人
-      if (isStatic ? d <= e.stats.range + 0.05 : d <= Math.max(e.stats.sight, e.stats.range) + 1) return current;
+      // 已開打的部隊會追擊；固定建築／塔目標離開射程（或靠得比最小射程還近）就換人
+      if (d >= (e.stats.minRange ?? 0) && (isStatic ? d <= e.stats.range + 0.05 : d <= Math.max(e.stats.sight, e.stats.range) + 1)) return current;
     }
 
     let best: Entity | null = null;
     let bestD = Infinity;
     const sight = isStatic ? e.stats.range : e.stats.sight;
+    const minR = e.stats.minRange ?? 0;
     for (const o of this.entities) {
       if (!this.canTarget(e, o)) continue;
       const d = this.edgeDist(e, o);
-      if (d > sight) continue;
+      if (d > sight || d < minR) continue;
       if (d < bestD) {
         bestD = d;
         best = o;

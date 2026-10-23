@@ -41,6 +41,14 @@ interface RainArrow {
 
 const tmpV = new Vector3();
 
+/** 持續範圍的地面顏色（範圍底色、外圈）。 */
+const AREA_COLORS: Record<'rage' | 'tornado' | 'grave' | 'poison', [string, string]> = {
+  poison: ['#8fd14f', '#d6ff8a'],
+  rage: ['#ff4a6a', '#ffa0b4'],
+  tornado: ['#a8c8e0', '#e8f4ff'],
+  grave: ['#2a2238', '#9a7fd0'],
+};
+
 /** 嘗試建立 3D 渲染器；WebGL 不可用時回傳 null（改用 2D 備援）。 */
 export function tryCreateRenderer3D(canvas: HTMLCanvasElement, overlay: HTMLCanvasElement): Renderer3D | null {
   try {
@@ -96,6 +104,7 @@ export class Renderer3D implements BattleRenderer {
   private beamGeo = new CylinderGeometry(0.09, 0.09, 1, 6, 1, true);
   private poisonGeo = new CircleGeometry(1, 40);
   private poisonRingGeo = new RingGeometry(0.95, 1, 48);
+  private funnelGeo = new CylinderGeometry(1, 0.15, 3.2, 20, 4, true);
   private bombMat = new MeshLambertMaterial({ vertexColors: true, emissive: '#000000' });
   private fireballGeo = new SphereGeometry(0.5, 14, 10);
   private fireballCoreGeo = new SphereGeometry(0.3, 10, 8);
@@ -766,7 +775,7 @@ export class Renderer3D implements BattleRenderer {
     if (unit === 'king') return 2.95;
     const u = UNITS[unit];
     if (!u) return 0.8;
-    if (u.stats.flying) return (unit === 'baby_dragon' ? 1.4 : 1.0) + 0.5;
+    if (u.stats.flying) return (unit === 'baby_dragon' ? 1.4 : unit === 'lava_hound' ? 2.0 : unit === 'lava_pup' ? 1.3 : 1.0) + 0.5;
     return u.stats.half ? 0.9 : 0.8;
   }
 
@@ -883,26 +892,44 @@ export class Renderer3D implements BattleRenderer {
     for (const a of game.areas) {
       liveA.add(a.id);
       let g = this.areas.get(a.id);
+      const kind = a.cardId === 'rage' ? 'rage' : a.cardId === 'tornado' ? 'tornado' : a.cardId === 'graveyard' ? 'grave' : 'poison';
       if (!g) {
         g = new Group();
-        const rage = a.cardId === 'rage';
-        const disc = new Mesh(this.poisonGeo, new MeshBasicMaterial({ color: rage ? '#ff4a6a' : '#8fd14f', transparent: true, opacity: 0.25, depthWrite: false, side: DoubleSide }));
-        const ring = new Mesh(this.poisonRingGeo, new MeshBasicMaterial({ color: rage ? '#ffa0b4' : '#d6ff8a', transparent: true, opacity: 0.7, depthWrite: false, side: DoubleSide }));
+        const [c1, c2] = AREA_COLORS[kind];
+        const disc = new Mesh(this.poisonGeo, new MeshBasicMaterial({ color: c1, transparent: true, opacity: 0.25, depthWrite: false, side: DoubleSide }));
+        const ring = new Mesh(this.poisonRingGeo, new MeshBasicMaterial({ color: c2, transparent: true, opacity: 0.7, depthWrite: false, side: DoubleSide }));
         for (const m of [disc, ring]) {
           m.rotation.x = -Math.PI / 2;
           m.renderOrder = 3;
+          m.scale.setScalar(a.radius);
           g.add(m);
         }
-        g.scale.setScalar(a.radius);
+        if (kind === 'tornado') {
+          // 旋轉的漏斗狀氣旋（兩層、反向旋轉）
+          for (const [r, sp] of [[1, 1], [0.7, -1.4]] as const) {
+            const funnel = new Mesh(this.funnelGeo, new MeshBasicMaterial({ color: '#e8f4ff', transparent: true, opacity: 0.22, depthWrite: false, side: DoubleSide }));
+            funnel.scale.set(r * 1.4, 1, r * 1.4);
+            funnel.position.y = 1.6;
+            funnel.userData.spin = sp;
+            funnel.renderOrder = 6;
+            g.add(funnel);
+          }
+        }
         g.position.set(toX(a.x), 0.07, toZ(a.y));
         this.layer.add(g);
         this.areas.set(a.id, g);
       }
       const fade = Math.min(1, a.timeLeft / 0.5);
       const disc = g.children[0] as Mesh;
-      (disc.material as MeshBasicMaterial).opacity = (0.2 + Math.sin(this.time * 4) * 0.05) * fade;
+      (disc.material as MeshBasicMaterial).opacity = (kind === 'grave' ? 0.34 : 0.2 + Math.sin(this.time * 4) * 0.05) * fade;
       ((g.children[1] as Mesh).material as MeshBasicMaterial).opacity = 0.7 * fade;
-      if (Math.random() < 0.6) this.fx.burst(a.cardId === 'rage' ? 'rage' : 'poison', toX(a.x), 0.05, toZ(a.y), a.radius, 1);
+      for (let i = 2; i < g.children.length; i++) {
+        const f = g.children[i] as Mesh;
+        f.rotation.y += (f.userData.spin as number) * 0.25;
+        (f.material as MeshBasicMaterial).opacity = 0.22 * fade;
+      }
+      const puff = kind === 'rage' ? 'rage' : kind === 'tornado' ? 'dust' : kind === 'grave' ? 'magic' : 'poison';
+      if (Math.random() < (kind === 'tornado' ? 0.9 : 0.6)) this.fx.burst(puff, toX(a.x), 0.05, toZ(a.y), kind === 'tornado' ? a.radius * 0.6 : a.radius, 1);
     }
     for (const [id, g] of this.areas) {
       if (liveA.has(id)) continue;

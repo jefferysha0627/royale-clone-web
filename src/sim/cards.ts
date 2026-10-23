@@ -26,6 +26,7 @@ export interface UnitStats {
   hitSpeed: number; // 攻擊間隔（秒）
   loadTime: number; // 鎖定目標後到第一下命中的準備時間（秒）
   range: number; // 攻擊距離（邊緣到邊緣，格）
+  minRange?: number; // 最小射程：比這更近的目標打不到（迫擊砲）
   sight: number; // 索敵距離（格）
   speed: number; // 格／秒，建築為 0
   radius: number; // 碰撞半徑
@@ -80,6 +81,8 @@ export interface SpellStats {
   freeze?: boolean; // stun 以冰凍呈現（冰凍法術）
   rage?: { mul: number; linger: number }; // 狂暴：範圍內己方移動、攻擊與召喚加速，離開範圍後效果再維持 linger 秒
   bolts?: number; // 落雷：依序劈中範圍內血量最高的幾個目標（每個目標只劈一次，間隔 waveInterval）
+  pull?: number; // 龍捲風：範圍內敵方部隊被拉向中心的速度（格／秒）
+  graveyard?: { unit: string; interval: number; delay: number; count: number }; // 墓地：持續在範圍內隨機冒出部隊
 }
 
 export interface CardDef {
@@ -273,6 +276,27 @@ export const UNITS: Record<string, UnitDef> = {
       deathDamage: { damage: 222, radius: 3, pushback: 0, delay: 3, towerMul: 1, visual: 'bomb' },
     }),
   },
+  // ── v3 第三批
+  lava_hound: {
+    id: 'lava_hound', name: '熔岩飛獸',
+    // 只打建築的飛行單位，倒下分裂成 6 隻小熔岩獸 [R]
+    stats: air({
+      hp: 3811, damage: 54, hitSpeed: 1.3, loadTime: 0.3, range: 3.5, speed: 0.75, flyHeight: 3.5, radius: 0.75, mass: 5, targets: 'buildings',
+      projectile: { speed: 400 / 60, visual: 'fire' }, deathSpawn: { unit: 'lava_pup', count: 6 },
+    }),
+  },
+  lava_pup: {
+    id: 'lava_pup', name: '小熔岩獸',
+    stats: air({ hp: 216, damage: 90, hitSpeed: 1.7, loadTime: 0.7, range: 1.6, speed: 1, flyHeight: 3, radius: 0.45, mass: 5, projectile: { speed: 500 / 60, visual: 'fire' } }),
+  },
+  mortar: {
+    id: 'mortar', name: '迫擊砲',
+    // 射程 11.5、最小射程 3.5、部署 3.5 秒、首發 4 秒、每 5 秒一發、範圍 2、只打地面 [R]；2×2 佔地 [A]
+    stats: ground({
+      hp: 1369, damage: 266, hitSpeed: 5, loadTime: 4, range: 11.5, minRange: 3.5, sight: 11.5, speed: 0, radius: 0.6, mass: 100, deployTime: 3.5, lifetime: 30, half: 1,
+      projectile: { speed: 300 / 60, visual: 'bomb', splash: 2, arc: 4 },
+    }),
+  },
   tombstone: {
     id: 'tombstone', name: '骷髏墓碑',
     stats: ground({
@@ -323,6 +347,8 @@ export const CARDS: Record<string, CardDef> = {
   blowgun_goblin: { id: 'blowgun_goblin', name: '吹管哥布林', glyph: '吹', color: '#4f8a3a', cost: 3, kind: 'troop', rarity: 'rare', role: '射程極遠的快速射手，可打空中', unit: 'blowgun_goblin' },
   spirit_hut: { id: 'spirit_hut', name: '火靈小屋', glyph: '屋', color: '#c8572a', cost: 4, kind: 'building', rarity: 'rare', role: '每 5 秒放出一隻火精靈', unit: 'spirit_hut' },
   bomb_turret: { id: 'bomb_turret', name: '炸彈砲塔', glyph: '彈', color: '#7a6a5a', cost: 4, kind: 'building', rarity: 'rare', role: '範圍轟炸地面部隊，倒下時留下炸彈', unit: 'bomb_turret' },
+  lava_hound: { id: 'lava_hound', name: '熔岩飛獸', glyph: '熔', color: '#c8502a', cost: 7, kind: 'troop', rarity: 'legendary', role: '只打建築的飛行巨獸，倒下分裂成 6 隻小熔岩獸', unit: 'lava_hound' },
+  mortar: { id: 'mortar', name: '迫擊砲', glyph: '迫', color: '#7a7060', cost: 4, kind: 'building', rarity: 'common', role: '射程極遠的範圍砲擊，太近的敵人打不到', unit: 'mortar' },
   fireball: {
     id: 'fireball', name: '火球', glyph: '球', color: '#e0782f', cost: 4, kind: 'spell', rarity: 'rare', role: '中範圍高傷害並擊退',
     spell: { kind: 'projectile', radius: 2.5, damage: 689, towerPct: 0.3, speed: 10, hitsAir: true, pushback: 1 },
@@ -364,6 +390,16 @@ export const CARDS: Record<string, CardDef> = {
     // 每道 1056、半徑 3.5、最多 3 個目標、間隔 0.46 秒、暈眩 0.5 秒、對塔 30% [R]
     spell: { kind: 'lightning', radius: 3.5, damage: 1056, towerPct: 0.3, speed: 0, hitsAir: true, stun: 0.5, bolts: 3, waveInterval: 0.46 },
   },
+  tornado: {
+    id: 'tornado', name: '龍捲風', glyph: '旋', color: '#8ab0c8', cost: 3, kind: 'spell', rarity: 'epic', role: '把範圍內的敵方部隊捲向中心，並造成少量傷害',
+    // 半徑 5.5、持續 1.05 秒、每 0.5 秒 85、對塔 17% [R]；拉力每秒 3.6 格 [A]（資料集 attract_percentage 360，單位不明）
+    spell: { kind: 'area', radius: 5.5, damage: 85, towerPct: 0.17, speed: 0, hitsAir: true, duration: 1.05, tick: 0.5, pull: 3.6 },
+  },
+  graveyard: {
+    id: 'graveyard', name: '亡靈墓地', glyph: '墳', color: '#5a4a6a', cost: 5, kind: 'spell', rarity: 'legendary', role: '9 秒內在範圍裡陸續冒出骷髏兵',
+    // 半徑 4、持續 9.5 秒、2.2 秒後開始每 0.5 秒一隻骷髏（共 15 隻）[R]
+    spell: { kind: 'area', radius: 4, damage: 0, towerPct: 0, speed: 0, hitsAir: false, duration: 9.5, graveyard: { unit: 'skeleton', interval: 0.5, delay: 2.2, count: 15 } },
+  },
   goblin_barrel: {
     id: 'goblin_barrel', name: '哥布林飛桶', glyph: '桶', color: '#8a6a3a', cost: 3, kind: 'spell', rarity: 'epic', role: '把三隻哥布林丟到任何地方',
     spell: { kind: 'barrel', radius: 1.5, damage: 0, towerPct: 1, speed: 400 / 60, hitsAir: false, spawn: { unit: 'goblin', count: 3, deployTime: 1.1 } },
@@ -385,6 +421,8 @@ export const AI_DECKS: { name: string; cards: string[] }[] = [
   { name: '地道控場', cards: ['tunneler', 'musketeer', 'skeletons', 'bomber', 'tombstone', 'log', 'fireball', 'knight'] },
   { name: '衝車連攻', cards: ['siege_ram', 'blowgun_goblin', 'mega_gargoyle', 'bomb_turret', 'zap', 'fireball', 'skeletons', 'knight'] },
   { name: '攻城砲擊', cards: ['siege_giant', 'spirit_hut', 'gargoyle_horde', 'lightning', 'log', 'bomber', 'ice_spirit', 'archers'] },
+  { name: '熔岩空襲', cards: ['lava_hound', 'mega_gargoyle', 'bats', 'musketeer', 'fireball', 'zap', 'skeletons', 'tombstone'] },
+  { name: '墓地迫擊', cards: ['graveyard', 'mortar', 'tornado', 'poison', 'knight', 'blowgun_goblin', 'archers', 'bomb_turret'] },
 ];
 
 export function isValidDeck(deck: readonly string[]): boolean {

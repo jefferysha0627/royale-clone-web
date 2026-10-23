@@ -98,7 +98,8 @@ function evalPoint(ctx: SpellCtx, cardId: string, s: SpellStats, foes: Foe[], x:
   // 飛得越久，移動目標的落點越不準（火箭只適合打定點）
   const trust = Math.max(0.35, Math.min(1, 1.25 - 0.25 * land));
   const plan: SpellPlan = { cardId, x, y, land, value: 0, hits: [], towerDmg: 0, tower: null };
-  const lastWave = land + (s.waves ?? 1) * (s.waveInterval ?? 0);
+  // 持續型法術（毒霧）會打到之後才出現的目標（例如墓地陸續冒出的骷髏）
+  const lastWave = land + (s.kind === 'area' ? (s.duration ?? 0) * 0.8 : (s.waves ?? 1) * (s.waveInterval ?? 0));
   for (const f of foes) {
     if (f.appear > wait + lastWave + 0.02) continue; // 法術生效時還沒落地（飛桶）
     const [px, py] = foePos(g, f, lead);

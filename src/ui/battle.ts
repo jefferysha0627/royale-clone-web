@@ -511,7 +511,7 @@ export class Battle {
           break;
         case 'spellCast':
           this.sound.play(
-            ev.cardId === 'zap' ? 'zap' : ev.cardId === 'log' ? 'log' : ev.cardId === 'poison' ? 'poison' : ev.cardId === 'rage' ? 'rage' : ev.cardId === 'freeze' ? 'freeze' : ev.cardId === 'lightning' ? 'thunder' : 'whoosh',
+            ev.cardId === 'zap' ? 'zap' : ev.cardId === 'log' ? 'log' : ev.cardId === 'poison' ? 'poison' : ev.cardId === 'rage' ? 'rage' : ev.cardId === 'freeze' ? 'freeze' : ev.cardId === 'lightning' ? 'thunder' : ev.cardId === 'graveyard' ? 'magic' : 'whoosh',
           );
           break;
         case 'strike':

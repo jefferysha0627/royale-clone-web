@@ -549,6 +549,8 @@ function statRows(c: CardDef): [string, string][] {
     rows.push(['範圍', s.kind === 'roll' ? `寬 ${(s.radius * 2).toFixed(1)}・長 ${s.rollRange} 格` : `半徑 ${s.radius} 格`]);
     if (s.stun) rows.push([s.freeze ? '冰凍' : '暈眩', `${s.stun} 秒`]);
     if (s.bolts) rows.push(['劈擊', `範圍內血量最高的 ${s.bolts} 個目標，每個 1 道`]);
+    if (s.pull) rows.push(['拉力', `把敵方部隊拉向中心（每秒 ${s.pull} 格）`]);
+    if (s.graveyard) rows.push(['召喚', `${UNITS[s.graveyard.unit].name} ×${s.graveyard.count}（${s.graveyard.delay} 秒後每 ${s.graveyard.interval} 秒一隻）`]);
     if (s.rage) rows.push(['加速', `移動與攻擊 +${Math.round((s.rage.mul - 1) * 100)}%，離開後再 ${s.rage.linger} 秒`]);
     if (s.duration) rows.push(['持續', `${s.duration} 秒`]);
     if (s.slow) rows.push(['緩速', `${Math.round(s.slow * 100)}%`]);
@@ -561,7 +563,7 @@ function statRows(c: CardDef): [string, string][] {
   if (u.ramp) rows.push(['傷害', u.ramp.damages.join(' → ')]);
   else if (u.damage > 0) rows.push([u.splash || u.projectile?.splash ? '範圍傷害' : '傷害', String(u.damage)]);
   if (u.damage > 0 && !u.kamikaze) rows.push(['攻擊間隔', `${u.hitSpeed} 秒`]);
-  if (u.damage > 0) rows.push(['射程', u.range >= 2 ? `${u.range} 格` : `近戰（${u.range}）`]);
+  if (u.damage > 0) rows.push(['射程', u.range >= 2 ? `${u.range} 格${u.minRange ? `（${u.minRange} 格內打不到）` : ''}` : `近戰（${u.range}）`]);
   if (u.speed > 0) rows.push(['移動速度', speedName(u.speed)]);
   if (u.damage > 0 || u.ramp) rows.push(['目標', u.targets === 'buildings' ? '只打建築' : u.targets === 'ground' ? '地面' : '空中與地面']);
   rows.push(['部署時間', `${u.deployTime} 秒`]);

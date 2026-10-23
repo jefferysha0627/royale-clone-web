@@ -194,9 +194,12 @@ export class AiController {
     }
     this.maxSeen = top;
     for (const s of g.spells) if (s.team !== this.team && !this.seenAt.has(s.id)) this.seenAt.set(s.id, g.time);
+    for (const a of g.areas) if (a.team !== this.team && !this.seenAt.has(a.id)) this.seenAt.set(a.id, g.time);
     if (g.time - this.lastPrune > 10) {
       this.lastPrune = g.time;
-      for (const [id, t] of this.seenAt) if (g.time - t > 5 && !g.get(id) && !g.spells.some((s) => s.id === id)) this.seenAt.delete(id);
+      for (const [id, t] of this.seenAt) {
+        if (g.time - t > 5 && !g.get(id) && !g.spells.some((s) => s.id === id) && !g.areas.some((a) => a.id === id)) this.seenAt.delete(id);
+      }
     }
   }
 
@@ -364,6 +367,21 @@ export class AiController {
         out.push({
           e: null, unit: st.spawn.unit, cardId: sp.cardId, st: ust, kind: 'troop', x: sp.x + ox, y: sp.y + oy, hp: ust.hp, maxHp: ust.hp,
           value: unitValue(st.spawn.unit, sp.cardId), appear: Math.max(0, sp.delay), deploy: st.spawn.deployTime, pred: new Map(),
+        });
+      }
+    }
+    // 對手的墓地：還沒冒出來的骷髏也算威脅（之後會在範圍內陸續出現），毒霧這類持續法術才會想到要蓋上去
+    for (const a of g.areas) {
+      if (a.team === this.team || !a.spawnsLeft) continue;
+      const gy = CARDS[a.cardId]?.spell?.graveyard;
+      if (!gy) continue;
+      const seen = this.seenAt.get(a.id);
+      if (seen === undefined || g.time - seen < delay) continue;
+      const ust = UNITS[gy.unit].stats;
+      for (let i = 0; i < a.spawnsLeft; i++) {
+        out.push({
+          e: null, unit: gy.unit, cardId: a.cardId, st: ust, kind: 'troop', x: a.x, y: a.y, hp: ust.hp, maxHp: ust.hp,
+          value: CARDS[a.cardId].cost / gy.count, appear: Math.max(0, a.spawnTimer ?? 0) + i * gy.interval, deploy: 0.3, pred: new Map(),
         });
       }
     }
@@ -950,7 +968,7 @@ export class AiController {
     for (const h of s.hand) {
       const ci = h.ci;
       if (ci.cost > room || ci.cost > s.elixir) continue;
-      if (ci.kind === 'building' || (ci.kind === 'spell' && ci.spell?.kind !== 'barrel')) continue;
+      if (ci.kind === 'building' || (ci.kind === 'spell' && ci.spell?.kind !== 'barrel' && !ci.spell?.graveyard)) continue;
       if (punish && !(ci.win || ci.bruiser || ci.tank)) continue;
       if (tankOnly && !ci.tank) continue;
       const v = this.pushScore(ci, s, punish);
@@ -970,8 +988,8 @@ export class AiController {
 
   private pushScore(ci: CardInfo, s: Sit, punish: boolean): number {
     let v: number;
-    if (ci.spell?.kind === 'barrel') {
-      // 飛桶是這副牌主要的勝利條件：對手小法術可能在手上時價值降低，但仍要定期丟出去逼對手交法術
+    if (ci.spell?.kind === 'barrel' || ci.spell?.graveyard) {
+      // 飛桶、墓地是這副牌主要的勝利條件：對手小法術可能在手上時價值降低，但仍要定期丟出去逼對手交法術
       v = 2.2 + (punish ? 2.5 : 0);
       if (this.opts.track >= 0.5) {
         let answers = 0;
@@ -1002,6 +1020,12 @@ export class AiController {
     const bx = ARENA.bridgeXs[lane];
     const tc = lane === 0 ? 1 : -1;
     if (ci.tunnel) return this.deployTunnel(h, lane);
+    if (ci.spell?.graveyard) {
+      // 墓地：蓋在塔上，骷髏從塔的四周冒出來
+      const p = g.towers(this.enemy).find((t) => t.unit === 'princess' && t.lane === lane && t.alive);
+      const t = p ?? g.king(this.enemy);
+      return this.castSpell(h, t.x, t.y, true);
+    }
     if (ci.spell?.kind === 'barrel') {
       const p = g.towers(this.enemy).find((t) => t.unit === 'princess' && t.lane === lane && t.alive);
       const t = p ?? g.king(this.enemy);

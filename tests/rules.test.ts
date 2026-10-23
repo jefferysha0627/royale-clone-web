@@ -775,6 +775,71 @@ describe('v3 第二批：衝車、落雷、火靈小屋、炸彈砲塔、攻城�
   });
 });
 
+describe('v3 第三批：龍捲風、墓地、熔岩飛獸、迫擊砲', () => {
+  it('龍捲風：把範圍內的敵方部隊拉向中心並造成兩次傷害；建築不受影響', () => {
+    const g = newGame();
+    const [kn] = place(g, 1, 'knight', 13.5, 8.5);
+    const [cannon] = place(g, 1, 'cannon', 9, 8);
+    run(g, 1.1);
+    const cx = 9.5;
+    const cy = 9.5;
+    const d0 = Math.hypot(kn.x - cx, kn.y - cy);
+    const cannonPos = [cannon.x, cannon.y];
+    const hp0 = kn.hp;
+    hold(g, 0, 'tornado');
+    expect(g.deploy(0, 0, cx, cy).ok).toBe(true);
+    run(g, 1.1);
+    const d1 = Math.hypot(kn.x - cx, kn.y - cy);
+    expect(d0 - d1).toBeGreaterThan(2);
+    expect(hp0 - kn.hp).toBeGreaterThanOrEqual(85 * 2);
+    expect([cannon.x, cannon.y]).toEqual(cannonPos);
+  });
+
+  it('亡靈墓地：2.2 秒後開始，每 0.5 秒在範圍內冒出一隻骷髏，共 15 隻（不會冒在河上）', () => {
+    const g = newGame();
+    hold(g, 0, 'graveyard');
+    expect(g.deploy(0, 0, 9.5, 12.5).ok).toBe(true);
+    const spawns: { x: number; y: number; t: number }[] = [];
+    run(g, 10, (ev) => ev.forEach((v) => v.type === 'spawn' && v.team === 0 && v.unit === 'skeleton' && spawns.push({ x: v.x, y: v.y, t: g.time })));
+    expect(spawns).toHaveLength(15);
+    expect(spawns[0].t).toBeGreaterThan(2.1);
+    expect(spawns.every((s) => Math.hypot(s.x - 9.5, s.y - 12.5) <= 4.01)).toBe(true);
+    expect(spawns.every((s) => s.y <= ARENA.riverTop - 0.3 || s.y >= ARENA.riverBottom + 0.3)).toBe(true);
+  });
+
+  it('熔岩飛獸：只打建築的飛行單位，倒下分裂成 6 隻會打空中與地面的小熔岩獸', () => {
+    const g = newGame();
+    const [hound] = place(g, 0, 'lava_hound', 9.5, 24.5);
+    expect(hound.stats.flying).toBe(true);
+    expect(hound.stats.targets).toBe('buildings');
+    run(g, 1.1);
+    g.applyDamage(hound, hound.hp);
+    const pups = g.entities.filter((e) => e.alive && e.unit === 'lava_pup' && e.team === 0);
+    expect(pups).toHaveLength(6);
+    expect(pups.every((p) => p.stats.flying && p.stats.targets === 'air-ground')).toBe(true);
+  });
+
+  it('迫擊砲：射程很遠但打不到最小射程（3.5 格）以內的敵人', () => {
+    const g = newGame();
+    const [m] = place(g, 0, 'mortar', 9, 24);
+    run(g, 3.6); // 部署 3.5 秒
+    const near = place(g, 1, 'skeletons', 9.5, 14.5); // 河對岸，離迫擊砲約 8 格
+    let shotNear = false;
+    run(g, 6, (ev) => ev.forEach((v) => v.type === 'attack' && v.id === m.id && near.some((n) => n.id === v.targetId) && (shotNear = true)));
+    expect(shotNear).toBe(true);
+    // 貼近迫擊砲的敵人不會被鎖定
+    const g2 = newGame();
+    const [m2] = place(g2, 0, 'mortar', 9, 24);
+    run(g2, 3.6);
+    const [close] = place(g2, 1, 'knight', 9.5, 14.5);
+    close.x = 9;
+    close.y = 21.6; // 邊緣距離不到 3.5 格
+    close.deployTimer = 0;
+    run(g2, 0.2);
+    expect(m2.targetId).not.toBe(close.id);
+  });
+});
+
 describe('卡池', () => {
   it('至少 30 張卡，每張都有對應單位或法術資料', () => {
     const ids = Object.keys(CARDS);
