@@ -89,6 +89,7 @@
         <nav class="tabbar" aria-label="主選單">
           <button id="btn-deck" class="tab" type="button"><span class="tab-ico">🂠</span>牌組</button>
           <button class="tab active" type="button" aria-current="page"><span class="tab-ico">⚔</span>對戰</button>
+          <button id="btn-events" class="tab" type="button"><span class="tab-ico">★</span>活動</button>
           <button id="btn-howto" class="tab" type="button"><span class="tab-ico">?</span>玩法</button>
         </nav>
       </section>
@@ -143,6 +144,16 @@
           <p class="road-note">贏電腦拿獎盃（難度越高拿越多），累積到門檻就換到下一座競技場。</p>
           <ol id="road-list" class="road-list"></ol>
           <button id="btn-road-close" class="btn" type="button">關閉</button>
+        </div>
+      </div>
+
+      <!-- 活動對戰 -->
+      <div id="ov-events" class="overlay top sheet" hidden>
+        <div class="panel sheet-panel events-panel" role="dialog" aria-labelledby="events-title">
+          <div class="road-head"><h3 id="events-title">活動對戰</h3></div>
+          <p id="events-note" class="road-note"></p>
+          <ul id="events-list" class="events-list"></ul>
+          <button id="btn-events-close" class="btn" type="button">關閉</button>
         </div>
       </div>
 

@@ -172,7 +172,7 @@ button { cursor: pointer; touch-action: manipulation; }
 .tabbar {
   flex: 0 0 auto;
   display: grid;
-  grid-template-columns: 1fr 1.25fr 1fr;
+  grid-template-columns: 1fr 1.25fr 1fr 1fr;
   gap: 4px;
   padding: 6px calc(8px + var(--safe-r)) calc(6px + var(--safe-b)) calc(8px + var(--safe-l));
   background: linear-gradient(#22345a, #141f38);
@@ -785,6 +785,22 @@ p.small { font-size: 12px; line-height: 1.45; margin: -2px 0 2px; }
 /* 表情貼圖（3D 指揮官表情） */
 .emote-picker button .em-img { width: 34px; height: 34px; display: block; pointer-events: none; }
 .emote-bubble .em-img { width: 40px; height: 40px; display: inline-block; vertical-align: middle; margin: -8px 4px -8px -4px; pointer-events: none; }
+
+/* 活動對戰 */
+.events-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.event-card { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 12px; padding: 12px 12px 12px 14px; border-radius: 14px; border: 2px solid rgba(0, 0, 0, .4); box-shadow: inset 0 2px 0 rgba(255, 255, 255, .22), 0 3px 0 rgba(0, 0, 0, .35); }
+.event-card.ev-double { background: linear-gradient(120deg, #a63fd0, #5e1f96); }
+.event-card.ev-triple { background: linear-gradient(120deg, #e0418f, #861a63); }
+.event-card.ev-sudden { background: linear-gradient(120deg, #d8582a, #861d17); }
+.event-card .elixir-drop { width: 42px; height: 42px; margin: 4px; }
+.event-card .elixir-drop span { font-size: 18px; }
+.ev-crown { width: 50px; height: 50px; display: flex; align-items: center; justify-content: center; border-radius: 50%; background: radial-gradient(circle at 40% 35%, #ffe9a6, #f0b52b 60%, #a8700e); border: 2px solid #fff; box-shadow: 0 2px 3px rgba(0, 0, 0, .5); }
+.ev-crown svg { width: 30px; height: 26px; fill: #7a3a07; }
+.ev-body { min-width: 0; }
+.ev-body b { display: block; font-size: 18px; color: #fff; text-shadow: 0 2px 0 rgba(0, 0, 0, .45); }
+.ev-body small { display: block; margin-top: 3px; font-size: 12px; line-height: 1.4; color: rgba(255, 255, 255, .9); text-wrap: pretty; }
+.ev-go { min-width: 66px; }
+.log-delta.event { font-size: 12px; color: #ffb3f2; }
 
 /* 獎盃之路 */
 .road-panel { max-height: calc(var(--app-h) - 24px - var(--safe-t) - var(--safe-b)); overflow: hidden; }

@@ -1,4 +1,4 @@
-import { CARDS, DEFAULT_PLAYER_DECK, isValidDeck, type AiLevel, type Team } from '../sim';
+import { CARDS, DEFAULT_PLAYER_DECK, GAME_MODES, isValidDeck, type AiLevel, type GameMode, type Team } from '../sim';
 import { load, save } from './storage';
 
 // 只存在本機瀏覽器；儲存失敗時使用預設值，不影響開戰。
@@ -15,6 +15,7 @@ export interface BattleLogEntry {
   d: number; // 獎盃增減
   t: number; // 打完後的獎盃
   rep?: string; // 重播（encodeReplay 的字串）
+  m?: GameMode; // 活動模式（省略 = 一般對戰）
 }
 
 export const LOG_MAX = 20;
@@ -96,7 +97,8 @@ function validEntry(e: unknown): e is BattleLogEntry {
   return (
     typeof x.at === 'number' && (x.w === 0 || x.w === 1 || x.w === null) && Array.isArray(c) && c.length === 2 && c.every((n) => typeof n === 'number') &&
     (x.lvl === 'easy' || x.lvl === 'normal' || x.lvl === 'hard') && typeof x.foe === 'string' && validCards(x.foeCards) && validCards(x.deck) &&
-    typeof x.d === 'number' && typeof x.t === 'number' && (x.rep === undefined || typeof x.rep === 'string')
+    typeof x.d === 'number' && typeof x.t === 'number' && (x.rep === undefined || typeof x.rep === 'string') &&
+    (x.m === undefined || GAME_MODES.includes(x.m as GameMode))
   );
 }
 

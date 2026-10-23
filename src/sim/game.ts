@@ -180,9 +180,19 @@ export interface MatchResult {
 export type DeployFailReason = 'ended' | 'card' | 'elixir' | 'zone';
 export type DeployResult = { ok: true; x: number; y: number } | { ok: false; reason: DeployFailReason };
 
+/**
+ * 活動模式（規則細節為本作設定 [A]）：
+ * - double 雙倍能量：一般時間全程 2 倍、延長賽 3 倍
+ * - triple 三倍能量：全程 3 倍
+ * - sudden 驟死對決：一開場就是延長賽規則（先推倒任一座塔獲勝、能量 2 倍、最後 60 秒 3 倍），時間 3 分鐘；時間到仍平手就進決勝扣血
+ */
+export type GameMode = 'normal' | 'double' | 'triple' | 'sudden';
+export const GAME_MODES: readonly GameMode[] = ['normal', 'double', 'triple', 'sudden'];
+
 export interface GameOptions {
   seed: number;
   decks: [string[], string[]];
+  mode?: GameMode;
 }
 
 const W = ARENA.width;
@@ -246,6 +256,7 @@ export function formation(count: number): [number, number][] {
 export class Game {
   readonly rng: Rng;
   readonly seed: number;
+  readonly mode: GameMode;
   time = 0;
   tick = 0;
   /** 雙方每次成功出牌的紀錄（對戰重播用，見 replay.ts）。 */
@@ -267,6 +278,8 @@ export class Game {
 
   constructor(opts: GameOptions) {
     this.seed = opts.seed;
+    this.mode = opts.mode ?? 'normal';
+    if (this.mode === 'sudden') this.phase = 'overtime';
     this.rng = new Rng(opts.seed);
     this.players = [this.makePlayer(opts.decks[0]), this.makePlayer(opts.decks[1])];
     for (const team of [0, 1] as Team[]) {
@@ -278,6 +291,8 @@ export class Game {
         e.active = t.type === 'princess';
       }
     }
+    // 開場就加倍的模式不發「能量加倍」事件（由開場畫面說明規則）
+    this.lastMult = this.elixirMultiplier();
   }
 
   private makePlayer(deck: string[]): PlayerState {
@@ -323,6 +338,9 @@ export class Game {
   }
 
   elixirMultiplier(): number {
+    if (this.mode === 'triple') return 3;
+    if (this.mode === 'double') return this.phase === 'overtime' ? 3 : 2;
+    if (this.mode === 'sudden') return this.timeLeft <= MATCH.tripleElixirAt ? 3 : 2;
     if (this.phase === 'overtime') return this.timeLeft <= MATCH.tripleElixirAt ? 3 : 2;
     if (this.phase === 'regular' && this.timeLeft <= MATCH.doubleElixirAt) return 2;
     return 1;

@@ -1,8 +1,9 @@
 import './style.css';
-import { AiController, AI_LEVELS, CARD_IDS, CARDS, Rng, UNITS, canHitAir, decodeReplay, encodeReplay, isValidDeck, runReplay, type AiLevel, type CardDef, type Replay } from './sim';
+import { AiController, AI_LEVELS, CARD_IDS, CARDS, Rng, UNITS, canHitAir, decodeReplay, encodeReplay, isValidDeck, runReplay, type AiLevel, type CardDef, type GameMode, type Replay } from './sim';
 import { Sound } from './ui/audio';
 import { Battle } from './ui/battle';
-import { avgCost, cardTags, fillCard, rarityName, refreshPortraits } from './ui/cardview';
+import { avgCost, cardTags, crownSvg, fillCard, rarityName, refreshPortraits } from './ui/cardview';
+import { EVENT_MODES, modeInfo } from './ui/modes';
 import { profileRows, recordBattle, renderBattleLog } from './ui/profile';
 import { ARENAS, arenaIndex, arenaOf, arenaProgress, trophyDelta } from './ui/progress';
 import { DECK_PRESETS, DECK_SLOTS, loadSettings, saveSettings, useSlot } from './ui/settings';
@@ -46,12 +47,15 @@ const battle = new Battle(sound, {
     else if (r.winner === 1) settings.record.lose++;
     else settings.record.draw++;
     const before = settings.trophies;
-    const delta = trophyDelta(settings.level, r.winner, r.crowns[0], before);
+    // 活動對戰不計獎盃（戰績與對戰紀錄照記）
+    const ev = modeInfo(battle.mode);
+    const delta = ev ? 0 : trophyDelta(settings.level, r.winner, r.crowns[0], before);
     settings.trophies = Math.max(0, before + delta);
     const rep = battle.replayData();
     recordBattle(settings, r, battle.matchInfo(), settings.trophies - before, Date.now(), rep ? encodeReplay(rep) : undefined);
     saveSettings(settings);
-    showTrophyResult(delta, before, settings.trophies);
+    if (ev) showEventResult(ev.name);
+    else showTrophyResult(delta, before, settings.trophies);
     // 升到新競技場：回主畫面時播放解鎖畫面（先準備好場景圖）
     if (arenaIndex(settings.trophies) > arenaIndex(before)) {
       pendingUnlock = arenaIndex(settings.trophies);
@@ -131,6 +135,13 @@ function showTrophyResult(delta: number, before: number, after: number): void {
   el.style.animation = 'none';
   void el.offsetWidth;
   el.style.animation = '';
+}
+
+function showEventResult(name: string): void {
+  const el = $('result-trophies');
+  el.innerHTML = `${name}<small>活動對戰不計獎盃</small>`;
+  el.classList.remove('down');
+  el.hidden = false;
 }
 
 // ───────── 主畫面 ─────────
@@ -266,6 +277,46 @@ function fillUnlockArt(): void {
   img.parentElement!.style.background = '';
 }
 
+// ───────── 活動對戰 ─────────
+
+const eventsOv = $('ov-events');
+
+function openEvents(): void {
+  $('events-note').textContent = `特殊規則的對戰，用你目前的牌組對${LEVEL_TEXT[settings.level]}電腦。活動對戰不計獎盃，戰績、對戰紀錄與重播照常保存。`;
+  const list = $('events-list');
+  list.innerHTML = '';
+  for (const m of EVENT_MODES) {
+    const li = document.createElement('li');
+    li.className = `event-card ev-${m.id}`;
+    const badge = m.id === 'sudden' ? `<span class="ev-crown" aria-hidden="true">${crownSvg()}</span>` : `<span class="elixir-drop" aria-hidden="true"><span>${m.badge}</span></span>`;
+    li.innerHTML = `${badge}<div class="ev-body"><b>${m.name}</b><small>${m.desc}</small></div>`;
+    const go = document.createElement('button');
+    go.type = 'button';
+    go.className = 'btn primary small ev-go';
+    go.dataset.mode = m.id;
+    go.textContent = '開打';
+    go.setAttribute('aria-label', `開始${m.name}對戰`);
+    go.addEventListener('click', () => {
+      eventsOv.hidden = true;
+      sound.unlock();
+      if (!settings.howtoSeen) showHowto(() => startBattle(m.id));
+      else startBattle(m.id);
+    });
+    li.appendChild(go);
+    list.appendChild(li);
+  }
+  eventsOv.hidden = false;
+  sound.play('tap');
+}
+
+$('btn-events').addEventListener('click', openEvents);
+$('btn-events-close').addEventListener('click', () => {
+  eventsOv.hidden = true;
+});
+eventsOv.addEventListener('click', (e) => {
+  if (e.target === eventsOv) eventsOv.hidden = true;
+});
+
 // ───────── 個人資料與對戰紀錄 ─────────
 
 const profileOv = $('ov-profile');
@@ -327,7 +378,8 @@ function offerSharedReplay(): void {
   invited = rep;
   const r = runReplay(rep).result;
   const outcome = !r ? '' : r.winner === 0 ? `朋友 ${r.crowns[0]}:${r.crowns[1]} 獲勝` : r.winner === 1 ? `朋友 ${r.crowns[0]}:${r.crowns[1]} 落敗` : `雙方 ${r.crowns[0]}:${r.crowns[1]} 平手`;
-  $('replay-invite-info').textContent = `對手：${LEVEL_TEXT[rep.lvl]}電腦（${rep.foe}）${outcome ? `・${outcome}` : ''}`;
+  const ev = modeInfo(rep.mode);
+  $('replay-invite-info').textContent = `${ev ? `${ev.name}活動・` : ''}對手：${LEVEL_TEXT[rep.lvl]}電腦（${rep.foe}）${outcome ? `・${outcome}` : ''}`;
   const decks = $('replay-invite-decks');
   decks.innerHTML = '';
   rep.decks.forEach((d, i) => {
@@ -393,14 +445,14 @@ function toggleMute(): void {
   renderMute();
 }
 
-function startBattle(): void {
+function startBattle(mode: GameMode = 'normal'): void {
   // 音訊必須在使用者點擊的處理函式內啟用；失敗時維持無聲繼續
   sound.unlock();
   home.hidden = true;
   deckScreen.hidden = true;
   syncArena();
   battle.coach = !settings.coachDone;
-  battle.start(settings.deck, settings.level, fixedSeed);
+  battle.start(settings.deck, settings.level, fixedSeed, mode);
   pushBattleEntry();
 }
 

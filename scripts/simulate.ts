@@ -4,7 +4,8 @@
 //   --deck=名稱：雙方固定使用這副電腦牌組（鏡像對戰）；--deck=甲/乙：難度 0 用甲、難度 1 用乙
 //   --log：印出電腦每次出牌的理由與塔被推倒的時間（建議只跑 1 場）
 //   --a=鍵:值,鍵:值／--b=…：覆寫難度 0／難度 1 的 AiOptions（調參實驗用，例如 --a=skill:0.8,noise:0.5）
-import { AI_DECKS, AI_LEVELS, AiController, Game, Rng, type AiLevel, type AiOptions } from '../src/sim';
+//   --mode=double|triple|sudden：活動模式
+import { AI_DECKS, AI_LEVELS, AiController, Game, Rng, type AiLevel, type AiOptions, type GameMode } from '../src/sim';
 
 const args = process.argv.slice(2);
 const pos = args.filter((a) => !a.startsWith('--'));
@@ -17,6 +18,7 @@ const quiet = !!flag('quiet');
 const swap = !!flag('swap');
 const fixedDeck = flag('deck')?.split('=')[1];
 const log = !!flag('log');
+const mode = (flag('mode')?.split('=')[1] ?? 'normal') as GameMode;
 const override = (name: string, base: AiOptions): AiOptions => {
   const spec = flag(name)?.split('=')[1];
   if (!spec) return base;
@@ -66,7 +68,7 @@ for (let i = 0; i < games; i++) {
   const a = fixed ? fixed[0] : pick.pick(AI_DECKS);
   const b = fixed ? (fixed[1] ?? fixed[0]) : pick.pick(AI_DECKS);
   const [d0, d1] = flip ? [b, a] : [a, b];
-  const g = new Game({ seed, decks: [[...d0.cards], [...d1.cards]] });
+  const g = new Game({ seed, decks: [[...d0.cards], [...d1.cards]], mode });
   const ais = [new AiController(g, 0, g.rng.fork(), optsOf[levels[0]]), new AiController(g, 1, g.rng.fork(), optsOf[levels[1]])];
   if (log) {
     ais.forEach((ai, t) => {

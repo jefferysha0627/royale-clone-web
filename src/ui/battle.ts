@@ -2,9 +2,10 @@ import { Renderer2D } from '../render/renderer2d';
 import type { BattleRenderer } from '../render/types';
 import { portraits } from '../render3d/portraits';
 import { tryCreateRenderer3D } from '../render3d/renderer3d';
-import { AI_DECKS, AI_LEVELS, AiController, ARENA, applyReplayStep, CARDS, DT, encodeReplay, Game, MATCH, newReplayGame, Rng, type AiLevel, type GameEvent, type MatchResult, type Replay } from '../sim';
+import { AI_DECKS, AI_LEVELS, AiController, ARENA, applyReplayStep, CARDS, DT, encodeReplay, Game, MATCH, newReplayGame, Rng, type AiLevel, type GameEvent, type GameMode, type MatchResult, type Replay } from '../sim';
 import type { Sound } from './audio';
 import { crownSlots, crownSvg, fillCard } from './cardview';
+import { modeInfo } from './modes';
 import { shareGame, shareUrl } from './share';
 
 export interface BattleHost {
@@ -32,12 +33,12 @@ function fmtTime(sec: number): string {
 
 const LEVEL_NAME: Record<AiLevel, string> = { easy: '簡單', normal: '普通', hard: '困難' };
 
-const REASON_TEXT: Record<MatchResult['reason'], (winner: 0 | 1 | null) => string> = {
+const REASON_TEXT: Record<MatchResult['reason'], (winner: 0 | 1 | null, sudden: boolean) => string> = {
   king: (w) => (w === 0 ? '你推倒了對方的國王塔！' : '我方國王塔被推倒了'),
   time: () => '時間到，皇冠較多的一方獲勝',
-  overtime: () => '延長賽中率先推倒塔的一方獲勝',
-  tiebreak: () => '延長賽結束：塔同步扣血，最低血量的塔先倒',
-  draw: () => '延長賽結束，雙方塔血量相同',
+  overtime: (_, sd) => (sd ? '驟死對決：率先推倒塔的一方獲勝' : '延長賽中率先推倒塔的一方獲勝'),
+  tiebreak: (_, sd) => `${sd ? '時間到' : '延長賽結束'}：塔同步扣血，最低血量的塔先倒`,
+  draw: (_, sd) => `${sd ? '時間到' : '延長賽結束'}，雙方塔血量相同`,
 };
 
 /** 表情（原創文字＋系統表情符號）。 */
@@ -72,6 +73,8 @@ export class Battle {
   private resultShown = false;
   private deck: string[] = [];
   private level: AiLevel = 'normal';
+  /** 這場的模式（活動對戰，或一般對戰 'normal'）。 */
+  mode: GameMode = 'normal';
   private aiDeckName = '';
   private aiDeckCards: string[] = [];
   /** 這場玩家每張卡出了幾次（寫進對戰紀錄與「最常出的卡」）。 */
@@ -170,12 +173,13 @@ export class Battle {
   arenaName = '';
   playerTrophies = 0;
 
-  start(deck: string[], level: AiLevel, seed?: number): void {
+  start(deck: string[], level: AiLevel, seed?: number, mode: GameMode = 'normal'): void {
     this.replay = null;
+    this.mode = mode;
     this.seed = seed ?? Math.floor(Math.random() * 2 ** 31);
     const pick = new Rng(this.seed ^ 0x5bd1e995);
     const aiDeck = pick.pick(AI_DECKS);
-    const game = new Game({ seed: this.seed, decks: [[...deck], [...aiDeck.cards]] });
+    const game = new Game({ seed: this.seed, decks: [[...deck], [...aiDeck.cards]], mode });
     this.ai = new AiController(game, 1, game.rng.fork(), AI_LEVELS[level]);
     this.begin(game, deck, level, aiDeck.name, aiDeck.cards);
   }
@@ -186,6 +190,7 @@ export class Battle {
     this.replayCursor = 0;
     this.replaySpeed = 1;
     this.replayOwner = owner;
+    this.mode = rep.mode ?? 'normal';
     this.seed = rep.seed;
     this.arenaTheme = rep.arena;
     this.begin(newReplayGame(rep), rep.decks[0], rep.lvl, rep.foe, rep.decks[1]);
@@ -194,7 +199,9 @@ export class Battle {
   /** 剛打完（或正在打）的這場的重播資料；重播模式下回傳 null。 */
   replayData(): Replay | null {
     if (this.replay) return null;
-    return { seed: this.seed, decks: [[...this.deck], [...this.aiDeckCards]], actions: [...this.game.actions], foe: this.aiDeckName, lvl: this.level, arena: this.arenaTheme };
+    const rep: Replay = { seed: this.seed, decks: [[...this.deck], [...this.aiDeckCards]], actions: [...this.game.actions], foe: this.aiDeckName, lvl: this.level, arena: this.arenaTheme };
+    if (this.mode !== 'normal') rep.mode = this.mode;
+    return rep;
   }
 
   get isReplay(): boolean {
@@ -238,7 +245,8 @@ export class Battle {
     $('btn-replay-speed').textContent = '1×';
     $('btn-emote').hidden = replaying;
     $('vs-sub-me').textContent = `獎盃 ${this.playerTrophies}・平均 ${(deck.reduce((s, id) => s + CARDS[id].cost, 0) / deck.length).toFixed(1)} 能量`;
-    $('vs-arena').textContent = this.arenaName;
+    const ev = modeInfo(this.mode);
+    $('vs-arena').textContent = ev ? `${ev.name}・${this.arenaName}` : this.arenaName;
     crownSlots(this.crownsMe, 3, 0);
     crownSlots(this.crownsEnemy, 3, 0);
     this.shownCrowns = [0, 0];
@@ -259,7 +267,10 @@ export class Battle {
     const noIntro = this.skipIntro || replaying;
     this.intro = noIntro ? 0 : INTRO_VS + INTRO_COUNT * 4;
     this.sound.stopMusic();
-    if (noIntro) this.sound.startMusic();
+    if (noIntro) {
+      this.startMusic();
+      this.modeBanner();
+    }
     this.introStep = -1;
     this.ovVs.hidden = noIntro;
     this.ovVs.classList.remove('out');
@@ -402,7 +413,8 @@ export class Battle {
     if (this.intro <= 0) {
       this.countdownEl.hidden = true;
       this.last = performance.now();
-      this.sound.startMusic();
+      this.startMusic();
+      this.modeBanner();
     }
   }
 
@@ -492,8 +504,8 @@ export class Battle {
   }
 
   /** 這場的對手與出牌統計（結算時寫進對戰紀錄）。 */
-  matchInfo(): { foe: string; foeCards: string[]; level: AiLevel; deck: string[]; plays: Record<string, number> } {
-    return { foe: this.aiDeckName, foeCards: [...this.aiDeckCards], level: this.level, deck: [...this.deck], plays: { ...this.plays } };
+  matchInfo(): { foe: string; foeCards: string[]; level: AiLevel; deck: string[]; plays: Record<string, number>; mode: GameMode } {
+    return { foe: this.aiDeckName, foeCards: [...this.aiDeckCards], level: this.level, deck: [...this.deck], plays: { ...this.plays }, mode: this.mode };
   }
 
   /** 推進一個固定步長（AI 先決策，再模擬）。 */
@@ -585,13 +597,15 @@ export class Battle {
         case 'elixirRate':
           this.sound.play('phase');
           this.sound.setMusicIntensity(ev.mult >= 3 ? 2 : 1);
-          this.banner(ev.mult === 3 ? '能量三倍！' : '能量加倍！', ev.mult === 3 ? '延長賽最後 60 秒' : this.game.phase === 'overtime' ? '' : '最後 60 秒', 'pink');
+          // 雙倍能量模式進延長賽時同時變 3 倍：由延長賽的橫幅一起說明
+          if (this.mode === 'double') break;
+          this.banner(ev.mult === 3 ? '能量三倍！' : '能量加倍！', ev.mult === 3 ? (this.mode === 'sudden' ? '最後 60 秒' : '延長賽最後 60 秒') : this.game.phase === 'overtime' ? '' : '最後 60 秒', 'pink');
           break;
         case 'phase':
           if (ev.phase === 'overtime') {
             this.sound.play('overtime');
             this.sound.setMusicIntensity(1);
-            this.banner('延長賽！', '先推倒任一座塔就獲勝', 'gold');
+            this.banner('延長賽！', this.mode === 'double' ? '能量三倍・先推倒任一座塔就獲勝' : '先推倒任一座塔就獲勝', 'gold');
           } else if (ev.phase === 'tiebreak') {
             this.sound.play('overtime');
             this.banner('決勝！', '雙方塔同步扣血，最低的塔先倒', 'gold');
@@ -780,7 +794,7 @@ export class Battle {
     this.hudKey = key;
     this.elixirNum.textContent = String(whole);
     this.timer.textContent = fmtTime(g.timeLeft);
-    this.timeLabel.textContent = ot ? '延長賽' : g.phase === 'tiebreak' ? '決勝' : '剩餘時間';
+    this.timeLabel.textContent = ot ? (this.mode === 'sudden' ? '驟死' : '延長賽') : g.phase === 'tiebreak' ? '決勝' : '剩餘時間';
     this.timeBox.classList.toggle('overtime', ot || g.phase === 'tiebreak');
     this.timeBox.classList.toggle('urgent', g.timeLeft <= 10 && g.playing);
     this.mult.hidden = mult <= 1;
@@ -996,7 +1010,7 @@ export class Battle {
   /** 「再戰一場」：一般對戰重新開打；重播模式下從頭再看一次。 */
   private again(): void {
     if (this.replay) this.startReplay(this.replay, this.replayOwner);
-    else this.start(this.deck, this.level);
+    else this.start(this.deck, this.level, undefined, this.mode);
   }
 
   pause(note = ''): void {
@@ -1024,11 +1038,20 @@ export class Battle {
     this.ovPause.hidden = true;
     this.acc = 0;
     this.last = performance.now();
-    if (this.intro <= 0 && this.game.playing) {
-      this.sound.startMusic();
-      const m = this.game.elixirMultiplier();
-      this.sound.setMusicIntensity(m >= 3 ? 2 : m >= 2 ? 1 : 0);
-    }
+    if (this.intro <= 0 && this.game.playing) this.startMusic();
+  }
+
+  /** 活動對戰開打時用橫幅提醒規則。 */
+  private modeBanner(): void {
+    const ev = modeInfo(this.mode);
+    if (ev) this.banner(`${ev.name}！`, ev.rule, this.mode === 'sudden' ? 'gold' : 'pink');
+  }
+
+  /** 背景音樂的節奏跟著能量倍率（開場就加倍的活動模式也一樣）。 */
+  private startMusic(): void {
+    this.sound.startMusic();
+    const m = this.game.elixirMultiplier();
+    this.sound.setMusicIntensity(m >= 3 ? 2 : m >= 2 ? 1 : 0);
   }
 
   private showResult(): void {
@@ -1057,10 +1080,11 @@ export class Battle {
         this.sound.play('crown');
       }, 350 + i * 380);
     }
-    $('result-reason').textContent = REASON_TEXT[r.reason](r.winner);
+    $('result-reason').textContent = REASON_TEXT[r.reason](r.winner, this.mode === 'sudden');
     const who = this.replay && this.replayOwner === 'friend' ? '朋友' : '你';
+    const ev = modeInfo(this.mode);
     $('result-stats').textContent =
-      `對手：${LEVEL_NAME[this.level]}電腦（${this.aiDeckName}）\n${who}出牌 ${p.cardsPlayed} 張、花費 ${Math.round(p.elixirSpent)} 能量・對戰 ${fmtTime(r.time)}`;
+      `${ev ? `${ev.name}・` : ''}對手：${LEVEL_NAME[this.level]}電腦（${this.aiDeckName}）\n${who}出牌 ${p.cardsPlayed} 張、花費 ${Math.round(p.elixirSpent)} 能量・對戰 ${fmtTime(r.time)}`;
     $('btn-share-result').textContent = '分享戰績給朋友';
     $('share-manual-result').hidden = true;
     // 重播：不計獎盃與戰績，按鈕改成「再看一次」
@@ -1081,12 +1105,14 @@ export class Battle {
     if (!r) return;
     const [a, b] = r.crowns;
     const lv = LEVEL_NAME[this.level];
+    const ev = modeInfo(this.mode);
+    const where = ev ? `《皇室戰爭克隆》的「${ev.name}」活動` : '《皇室戰爭克隆》';
     const text =
       r.winner === 0
-        ? `我在《皇室戰爭克隆》以 ${a}:${b} 打贏${lv}電腦！三分鐘一局，點開就能玩：`
+        ? `我在${where}以 ${a}:${b} 打贏${lv}電腦！三分鐘一局，點開就能玩：`
         : r.winner === 1
-          ? `我在《皇室戰爭克隆》以 ${a}:${b} 輸給${lv}電腦了，換你來挑戰：`
-          : `我在《皇室戰爭克隆》和${lv}電腦打成平手，你能贏嗎？`;
+          ? `我在${where}以 ${a}:${b} 輸給${lv}電腦了，換你來挑戰：`
+          : `我在${where}和${lv}電腦打成平手，你能贏嗎？`;
     const btn = $('btn-share-result');
     // 分享的連結附上這場的重播：朋友點開可以先看你怎麼打，再自己玩
     const rep = this.replayData();

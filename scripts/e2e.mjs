@@ -514,6 +514,53 @@ if (run('2')) {
   await page.waitForSelector('#ov-profile:not([hidden])');
   await page.click('#btn-profile-close');
   check('[desktop] 個人資料可關閉', await page.isHidden('#ov-profile'));
+  // 活動對戰：底部「活動」分頁 → 三倍能量；全程 3 倍、不計獎盃，對戰紀錄記下模式，重播也照模式重跑
+  await page.click('#btn-events');
+  await page.waitForSelector('#ov-events:not([hidden])');
+  const evCards = await page.locator('#events-list .event-card').count();
+  await sleep(400); // 等面板滑入動畫結束再截圖
+  await shot(page, `${vp.name}-21-events`);
+  const trophiesBefore = await page.evaluate(() => window.__btd.settings.trophies);
+  await page.evaluate(() => window.__btd.skipIntro(true));
+  await page.click('.ev-go[data-mode="triple"]');
+  await page.waitForSelector('#screen-battle:not([hidden])');
+  await sleep(400);
+  const evStart = await page.evaluate(() => {
+    const g = window.__btd.game();
+    return { mode: g.mode, mult: g.elixirMultiplier(), badge: document.getElementById('hud-mult-text').textContent, badgeShown: !document.getElementById('hud-mult').hidden };
+  });
+  await page.evaluate(() => window.__btd.autoplay(600));
+  await page.waitForSelector('#ov-result:not([hidden])', { timeout: 15000 });
+  const evEnd = await page.evaluate(() => ({
+    trophyText: document.getElementById('result-trophies').innerText,
+    trophies: window.__btd.settings.trophies,
+    log0: window.__btd.settings.log[0],
+    result: window.__btd.game().result,
+  }));
+  check(
+    '[desktop] 活動對戰（三倍能量）：從「活動」分頁開打，全程 3 倍能量，結算不計獎盃，對戰紀錄記下模式',
+    evCards === 3 && evStart.mode === 'triple' && evStart.mult === 3 && evStart.badgeShown && evStart.badge === 'x3' &&
+      evEnd.trophyText.includes('不計獎盃') && evEnd.trophies === trophiesBefore && evEnd.log0.m === 'triple' && evEnd.log0.d === 0,
+    `${evCards} 個活動，${JSON.stringify(evStart)}，獎盃 ${trophiesBefore}→${evEnd.trophies}`,
+  );
+  await page.click('#btn-result-home');
+  await page.waitForSelector('#screen-home:not([hidden])');
+  await page.click('#btn-profile');
+  await page.waitForSelector('#ov-profile:not([hidden])');
+  const evDelta = await page.locator('#profile-log .log-item:first-child .log-delta').textContent();
+  await page.click('#profile-log .log-item:first-child .log-replay');
+  await page.waitForSelector('#screen-battle:not([hidden])');
+  const evReplayMode = await page.evaluate(() => window.__btd.game().mode);
+  await page.evaluate(() => window.__btd.fastForward(600));
+  await page.waitForSelector('#ov-result:not([hidden])', { timeout: 10000 });
+  const evReplay = await page.evaluate(() => window.__btd.game().result);
+  check(
+    '[desktop] 活動對戰的紀錄顯示活動名稱，重播以同一模式重跑、結果相同',
+    evDelta === '三倍能量' && evReplayMode === 'triple' && evReplay.crowns.join() === evEnd.result.crowns.join() && evReplay.winner === evEnd.result.winner,
+    `紀錄「${evDelta}」，當時 ${evEnd.result.crowns.join(':')}、重播 ${evReplay.crowns.join(':')}`,
+  );
+  await page.click('#btn-result-home');
+  await page.waitForSelector('#screen-home:not([hidden])');
   await ctx.close();
 }
 
