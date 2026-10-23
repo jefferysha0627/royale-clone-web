@@ -663,6 +663,118 @@ describe('冰凍、狂暴、能量收集器、地道挖掘者', () => {
   });
 });
 
+describe('v3 第二批：衝車、落雷、火靈小屋、炸彈砲塔、攻城巨人', () => {
+  it('攻城衝車：直線跑一段後衝刺，撞到塔造成衝刺傷害後解體並放出 2 名蠻族戰士', () => {
+    const g = newGame();
+    const t = princess(g, 1, 0);
+    const [ram] = place(g, 0, 'siege_ram', 3.5, 20.5);
+    const hits: number[] = [];
+    let charged = false;
+    let freed = 0;
+    run(g, 25, (ev) =>
+      ev.forEach((v) => {
+        if (v.type === 'hit' && v.id === t.id && v.team === 1) hits.push(v.amount);
+        if (v.type === 'charge' && v.id === ram.id) charged = true;
+        if (v.type === 'spawn' && v.source === 'death' && v.unit === 'barbarian' && v.team === 0) freed++;
+      }),
+    );
+    expect(charged).toBe(true);
+    expect(ram.alive).toBe(false);
+    // 第一下是衝車的衝刺傷害（之後的命中來自放出的蠻族戰士）
+    expect(hits[0]).toBe(UNITS.siege_ram.stats.charge!.damage);
+    expect(freed).toBe(2);
+    // 半路被打掉也會放出 2 名蠻族戰士
+    const g2 = newGame();
+    const [ram2] = place(g2, 0, 'siege_ram', 9.5, 24.5);
+    run(g2, 1.2);
+    g2.applyDamage(ram2, ram2.hp);
+    expect(g2.entities.filter((e) => e.alive && e.unit === 'barbarian' && e.team === 0)).toHaveLength(2);
+  });
+
+  it('落雷：依序劈中範圍內血量最高的 3 個目標各一次（同一目標不重複），並暈眩', () => {
+    const g = newGame();
+    const [giant] = place(g, 1, 'giant', 9.5, 10.5);
+    const [kn] = place(g, 1, 'knight', 8.5, 11.5);
+    const arch = place(g, 1, 'archers', 10.5, 11.5);
+    const skel = place(g, 1, 'skeletons', 9.5, 12.5);
+    run(g, 1.1); // 部署完成
+    hold(g, 0, 'lightning');
+    expect(g.deploy(0, 0, 9.5, 11.5).ok).toBe(true);
+    const struck: number[] = [];
+    run(g, 1.6, (ev) => ev.forEach((v) => v.type === 'strike' && struck.push(v.targetId)));
+    expect(struck).toHaveLength(3);
+    expect(struck[0]).toBe(giant.id);
+    expect(struck[1]).toBe(kn.id);
+    expect(arch.map((a) => a.id)).toContain(struck[2]);
+    expect(new Set(struck).size).toBe(3);
+    expect(skel.every((s) => s.hp === s.maxHp)).toBe(true);
+    expect(giant.maxHp - giant.hp).toBeGreaterThanOrEqual(1056);
+    // 對塔只有 30%
+    const g2 = newGame();
+    const t = princess(g2, 1, 0);
+    hold(g2, 0, 'lightning');
+    g2.deploy(0, 0, t.x, t.y);
+    const hits: number[] = [];
+    run(g2, 1.6, (ev) => ev.forEach((v) => v.type === 'hit' && v.id === t.id && hits.push(v.amount)));
+    expect(hits).toEqual([Math.round(1056 * 0.3)]);
+  });
+
+  it('火靈小屋：每 5 秒放出 1 隻火精靈，被摧毀時再放 1 隻', () => {
+    const g = newGame();
+    const [hut] = place(g, 0, 'spirit_hut', 14, 30);
+    let spawned = 0;
+    run(g, 1 + 5 * 2 + 0.3, (ev) => ev.forEach((v) => v.type === 'spawn' && v.source === 'spawner' && v.unit === 'fire_spirit' && spawned++));
+    expect(spawned).toBe(3);
+    const n = g.entities.filter((e) => e.alive && e.unit === 'fire_spirit' && e.team === 0).length;
+    g.applyDamage(hut, hut.hp);
+    expect(g.entities.filter((e) => e.alive && e.unit === 'fire_spirit' && e.team === 0).length).toBe(n + 1);
+  });
+
+  it('炸彈砲塔：只打地面（不理會蝙蝠），倒下時留下 3 秒後爆炸的炸彈', () => {
+    const g = newGame();
+    const [bt] = place(g, 0, 'bomb_turret', 9, 22);
+    run(g, 1.2);
+    const bats = place(g, 1, 'bats', 9.5, 13.5);
+    let aimedAtBat = false;
+    let nearest = 99;
+    run(g, 4, () => {
+      if (bats.some((b) => b.id === bt.targetId)) aimedAtBat = true;
+      for (const b of bats) if (b.alive) nearest = Math.min(nearest, Math.hypot(b.x - bt.x, b.y - bt.y));
+    });
+    expect(nearest).toBeLessThan(6); // 蝙蝠確實飛進射程
+    expect(aimedAtBat).toBe(false);
+    const g2 = newGame();
+    const [bt2] = place(g2, 0, 'bomb_turret', 9, 22);
+    run(g2, 1.2);
+    const [foe] = place(g2, 1, 'giant', 9.5, 14.5);
+    let dropped = false;
+    let blasted = -1;
+    g2.applyDamage(bt2, bt2.hp);
+    run(g2, 3.4, (ev) =>
+      ev.forEach((v) => {
+        if (v.type === 'bombDrop') dropped = true;
+        if (v.type === 'blast' && v.unit === 'bomb_turret') blasted = g2.time;
+      }),
+    );
+    expect(dropped).toBe(true);
+    expect(blasted).toBeGreaterThan(2.9);
+    expect(foe.alive).toBe(true);
+  });
+
+  it('攻城巨人：只打建築，停在約 5 格外用砲轟塔', () => {
+    const g = newGame();
+    const t = princess(g, 1, 0);
+    const [rg] = place(g, 0, 'siege_giant', 3.5, 20.5);
+    const hits: number[] = [];
+    run(g, 20, (ev) => ev.forEach((v) => v.type === 'hit' && v.id === t.id && v.team === 1 && hits.push(v.amount)));
+    expect(hits.length).toBeGreaterThan(0);
+    expect(hits.every((h) => h === 307)).toBe(true);
+    const edge = Math.max(0, Math.abs(rg.y - t.y) - t.half) - rg.stats.radius;
+    expect(edge).toBeGreaterThan(3.5);
+    expect(edge).toBeLessThanOrEqual(5.05);
+  });
+});
+
 describe('卡池', () => {
   it('至少 30 張卡，每張都有對應單位或法術資料', () => {
     const ids = Object.keys(CARDS);

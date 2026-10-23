@@ -401,6 +401,12 @@ export class Renderer3D implements BattleRenderer {
               this.units.delete(ev.id);
             } else if (v.dyingT < 0) v.dyingT = 0;
           }
+          // 攻城衝車撞完解體：木屑與塵土
+          if (ev.kamikaze && ev.unit === 'siege_ram') {
+            fx.burst('splinter', toX(ev.x), 0.5, toZ(ev.y), 1.2, 22);
+            fx.burst('dust', toX(ev.x), 0, toZ(ev.y), 1.2, 14);
+            this.shake(0.08);
+          }
           if (ev.kind !== 'tower') {
             const X = toX(ev.x);
             const Z = toZ(ev.y);
@@ -451,7 +457,27 @@ export class Renderer3D implements BattleRenderer {
           fx.burst('elixir', X, 1.3, Z, 1, 12);
           break;
         }
+        case 'strike': {
+          // 落雷：從雷雲劈下兩道鋸齒閃電，落點閃光與暈眩火花
+          const X = toX(ev.x);
+          const Z = toZ(ev.y);
+          fx.bolt(X, Z, '#e2d6ff');
+          fx.bolt(X + 0.15, Z, '#ffffff');
+          fx.flash(X, 0.8, Z, 0.3, 1.5, '#efe6ff', 0.24);
+          fx.ring(X, Z, 0.3, 1.5, '#c9b8ff', 0.35);
+          fx.burst('stun', X, 0.4, Z, 1, 12);
+          this.shake(0.1);
+          this.stop(0.04);
+          break;
+        }
         case 'spellCast':
+          if (ev.cardId === 'lightning') {
+            // 雷雲在落點上空聚集（之後依序劈下）
+            const X = toX(ev.x);
+            const Z = toZ(ev.y);
+            fx.burst('smoke', X, 6.4, Z, 2.6, 26);
+            fx.ring(X, Z, 0.4, 3.5, '#b9a8ff', 0.6, 0.6);
+          }
           if (ev.cardId === 'rage') {
             const X = toX(ev.x);
             const Z = toZ(ev.y);

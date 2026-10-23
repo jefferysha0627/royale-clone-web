@@ -519,7 +519,8 @@ export class AiController {
     for (const sp of g.spells) {
       if (sp.team !== this.team) continue;
       const st = CARDS[sp.cardId].spell!;
-      if (st.kind !== 'barrel' && distTo(sp.x, sp.y, t) <= st.radius) d += Math.round(st.damage * st.towerPct) * sp.wavesLeft;
+      // 落雷每個目標只劈一次
+      if (st.kind !== 'barrel' && distTo(sp.x, sp.y, t) <= st.radius) d += Math.round(st.damage * st.towerPct) * (st.bolts ? 1 : sp.wavesLeft);
     }
     for (const a of g.areas) {
       if (a.team !== this.team || distTo(a.x, a.y, t) > a.radius) continue;

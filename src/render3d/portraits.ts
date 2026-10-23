@@ -53,6 +53,8 @@ const CARD_THEME: Record<string, string> = {
   bomb_blimp: 'sky', arrows: 'sky', rocket: 'sky',
   zap: 'storm', poison: 'toxic', fireball: 'blaze', log: 'timber',
   freeze: 'frost', rage: 'blaze', tunneler: 'canyon', elixir_collector: 'dusk',
+  mega_gargoyle: 'storm', gargoyle_horde: 'sky', siege_ram: 'canyon', siege_giant: 'steel', berserkers: 'ember', blowgun_goblin: 'forest',
+  spirit_hut: 'ember', bomb_turret: 'canyon', lightning: 'storm',
 };
 
 function themeOf(cardId: string): Theme {
@@ -703,11 +705,36 @@ function spellIcon(cardId: string): Group {
         g.add(m);
       }
       break;
+    case 'lightning': {
+      // 落雷：厚厚的紫灰色雷雲，底下劈出三道白紫色閃電，落點有光暈
+      const cloud: [number, number, number, number][] = [[0, 0.62, 0, 0.42], [-0.42, 0.55, -0.05, 0.32], [0.44, 0.56, 0, 0.34], [-0.2, 0.78, -0.1, 0.32], [0.22, 0.8, -0.12, 0.3]];
+      for (const [x, y, z, r] of cloud) k.sphere(r, { at: [x, y, z], scale: [1.2, 0.8, 0.9], color: '#5a5070' }, 12);
+      for (const [x, y, z, r] of cloud) k.sphere(r * 0.6, { at: [x + 0.05, y + r * 0.35, z + 0.15], scale: [1.1, 0.6, 0.6], color: '#8a80a8' }, 10);
+      const bolts: [number, number][][] = [
+        [[-0.42, 0.35], [-0.28, -0.05], [-0.46, -0.15], [-0.3, -0.75]],
+        [[0.05, 0.3], [0.2, -0.1], [-0.02, -0.22], [0.12, -0.95]],
+        [[0.45, 0.35], [0.34, 0.0], [0.52, -0.12], [0.4, -0.65]],
+      ];
+      for (const pts of bolts) {
+        for (let i = 0; i < pts.length - 1; i++) {
+          const [x0, y0] = pts[i];
+          const [x1, y1] = pts[i + 1];
+          const len = Math.hypot(x1 - x0, y1 - y0);
+          const ang = Math.atan2(y1 - y0, x1 - x0) - Math.PI / 2;
+          k.box(0.12, len + 0.06, 0.08, { at: [(x0 + x1) / 2, (y0 + y1) / 2, 0.2], rot: [0, 0, ang], color: '#c9b8ff' });
+          k.box(0.05, len + 0.03, 0.1, { at: [(x0 + x1) / 2, (y0 + y1) / 2, 0.22], rot: [0, 0, ang], color: '#ffffff' });
+        }
+        const [ex, ey] = pts[pts.length - 1];
+        glow('#d9ccff', 0.16, ex, ey, 0.2, 0.55, true);
+      }
+      glow('#b9a8ff', 0.75, 0, 0.1, -0.5, 0.12, true);
+      break;
+    }
     default:
       glow('#ffffff', 0.4);
   }
-  const asset = k.build(1);
-  if (asset.geometry.attributes.position.count > 0) {
+  if (k.parts > 0) {
+    const asset = k.build(1);
     const m = new Mesh(asset.geometry, new MeshLambertMaterial({ vertexColors: true }));
     g.add(m);
   }

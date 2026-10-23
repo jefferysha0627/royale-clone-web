@@ -2,6 +2,7 @@ import { TEAM_RGB } from '../coords';
 import { Kit, type ModelAsset } from '../kit';
 import { buildCannon, buildCollector, buildInferno, buildKingTower, buildPrincessTower, buildRubble, buildTombstone } from './buildings';
 import { buildBabyDragon, buildBat, buildBlimp, buildGargoyle, buildGolem, buildLancer, buildSpirit, buildWolfRider } from './creatures';
+import { buildBombTurret, buildHeavyGargoyle, buildSiegeRam, buildSpiritHut } from './extra';
 import { addHumanoid, buildHumanoid, type HumanoidSpec } from './humanoid';
 
 export type Rig = 'biped' | 'mount' | 'flyer' | 'blob' | 'blimp' | 'cannon' | 'inferno' | 'tomb' | 'princess' | 'king' | 'static';
@@ -20,6 +21,7 @@ export interface AnimProfile {
 type TeamPal = { main: string; dark: string; light: string };
 
 const SKIN = '#f2c9a0';
+const IRON_BRACER = '#6b6f78';
 const GOBLIN = '#7cbf4a';
 const BONE = '#efe8d8';
 
@@ -82,6 +84,21 @@ const HUMANOIDS: Record<string, (t: TeamPal) => HumanoidSpec> = {
     hatColor: '#e8b830', torso: '#7a6a52', torso2: '#3a2a1e', legs: '#4a5f7a', boots: '#3a2a1e', arms: '#7a6a52', hands: '#8a6a4a',
     strap: '#5a3a1e', bracers: '#5a4a3a', weapon: 'pickaxe', scarf: true,
   }),
+  // v3 第二批
+  siege_giant: (t) => ({
+    height: 2.1, build: 1.3, headScale: 0.62, torsoScale: 1.25, legScale: 1.15, skin: '#d99f78', face: 'angry', nose: 'ball', ears: 'round',
+    mustache: '#4a2e1e', hair: { style: 'mohawk', color: '#4a2e1e' }, torso: '#6a7484', torso2: '#3a2a1e', tabard: true, legs: '#5a5148', boots: '#3a2e26',
+    arms: '#d99f78', hands: '#7a5a3a', pads: true, bracers: IRON_BRACER, belly: true, weapon: 'handcannon', strap: t.dark,
+  }),
+  berserker: () => ({
+    height: 1.25, build: 1.12, skin: '#e8b07a', face: 'angry', hair: { style: 'mohawk', color: '#c4532a' }, beard: { color: '#c4532a', size: 0.85 },
+    torso: '#5a3a24', torso2: '#3a2a1e', arms: '#e8b07a', legs: '#4a3a2a', boots: '#3a2a1e', bracers: IRON_BRACER, pads: true, strap: '#3a2a1e',
+    weapon: 'handaxe', offhand: 'handaxe',
+  }),
+  blowgun_goblin: () => ({
+    height: 0.85, skin: '#8ac45a', ears: 'pointy', nose: 'long', face: 'dot', eyeColor: '#2a1d10', hat: 'hood', hatColor: '#4a6a32',
+    torso: '#6a4a2a', torso2: '#3a2a1e', legs: '#4a3a24', boots: '#3a2a1e', strap: '#5a3a1e', weapon: 'blowpipe',
+  }),
   giant_skeleton: () => ({
     height: 2.0, build: 1.25, headScale: 0.8, torsoScale: 1.15, skin: BONE, face: 'skull', bones: true, torso: '#e6dfcc', legs: '#e6dfcc', boots: '#d9d2c0',
     hands: BONE, scarf: true,
@@ -118,6 +135,13 @@ export const PROFILES: Record<string, AnimProfile> = {
   tombstone: { rig: 'tomb', attack: 'none' },
   tunneler: { rig: 'biped', attack: 'chop', cadence: 1.2 },
   elixir_collector: { rig: 'inferno', attack: 'none' },
+  mega_gargoyle: { rig: 'flyer', attack: 'spit', hover: 1.0 },
+  siege_ram: { rig: 'mount', attack: 'none', cadence: 1.2 },
+  siege_giant: { rig: 'biped', attack: 'shoot', stride: 0.8, cadence: 0.6 },
+  berserker: { rig: 'biped', attack: 'chop', cadence: 1.4 },
+  blowgun_goblin: { rig: 'biped', attack: 'shoot', cadence: 1.6 },
+  spirit_hut: { rig: 'inferno', attack: 'none' },
+  bomb_turret: { rig: 'cannon', attack: 'fire' },
   princess: { rig: 'princess', attack: 'bow' },
   king: { rig: 'king', attack: 'fire' },
 };
@@ -155,6 +179,10 @@ function buildAsset(unit: string, team: 0 | 1): ModelAsset {
     case 'inferno': return buildInferno(t);
     case 'tombstone': return buildTombstone(t);
     case 'elixir_collector': return buildCollector(t);
+    case 'mega_gargoyle': return buildHeavyGargoyle(t);
+    case 'siege_ram': return buildSiegeRam(t);
+    case 'spirit_hut': return buildSpiritHut(t);
+    case 'bomb_turret': return buildBombTurret(t);
     case 'princess': return buildPrincessTower(t);
     case 'king': return buildKingTower(t);
     case 'rubble-princess': return buildRubble(3);

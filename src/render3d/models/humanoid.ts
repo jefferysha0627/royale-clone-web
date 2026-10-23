@@ -7,7 +7,8 @@ import { Kit, type ModelAsset, type V3 } from '../kit';
 export type Hat =
   | 'none' | 'helmet' | 'horned' | 'wizard' | 'hood' | 'cap' | 'band' | 'iron' | 'winged' | 'skull' | 'bandana' | 'witch' | 'crest' | 'goggles' | 'royal' | 'hardhat';
 export type Weapon =
-  | 'none' | 'sword' | 'greatsword' | 'axe2' | 'club' | 'spear' | 'musket' | 'staff' | 'skullstaff' | 'bow' | 'bomb' | 'lance' | 'mace' | 'crossbow' | 'cleaver' | 'scepter' | 'pickaxe';
+  | 'none' | 'sword' | 'greatsword' | 'axe2' | 'club' | 'spear' | 'musket' | 'staff' | 'skullstaff' | 'bow' | 'bomb' | 'lance' | 'mace' | 'crossbow' | 'cleaver' | 'scepter' | 'pickaxe'
+  | 'handcannon' | 'handaxe' | 'blowpipe';
 export type Face = 'dot' | 'angry' | 'skull' | 'visor' | 'glow' | 'sleepy' | 'happy' | 'laugh' | 'wink' | 'wow';
 
 export interface HumanoidSpec {
@@ -43,7 +44,7 @@ export interface HumanoidSpec {
   metal?: number; // 盔甲光澤（軀幹、手臂、手套、腿），0 = 布料
   plume?: boolean; // 頭盔羽飾（隊伍色）
   weapon?: Weapon;
-  offhand?: 'none' | 'shield' | 'bow' | 'buckler' | 'lantern';
+  offhand?: 'none' | 'shield' | 'bow' | 'buckler' | 'lantern' | 'handaxe';
   bones?: boolean; // 骷髏：細骨頭四肢與肋骨
   belly?: boolean;
   torsoScale?: number; // 軀幹長度倍率（巨人比例較成人）
@@ -420,8 +421,23 @@ function addWeapon(k: Kit, w: Weapon, h: V3, armR: number, H: number, team: { ma
       k.cone(0.13 * H, 0.18 * H, { at: [x, y + 0.1 * H, z + 0.02], rot: [-Math.PI / 2, 0, 0], color: team.main, bone: armR, shine: 0.5 }, 10);
       break;
     case 'musket':
-      k.cyl(0.03 * H, 0.03 * H, 0.75 * H, { at: [x + 0.08 * H, y + 0.08 * H, z + 0.3 * H], rot: [Math.PI / 2, 0, 0], color: '#2c2f36', bone: armR, shine: 0.75 }, 8);
-      k.box(0.07 * H, 0.1 * H, 0.32 * H, { at: [x + 0.08 * H, y + 0.04 * H, z - 0.02 * H], color: wood, bone: armR });
+      // 槍管沿著手臂朝下：手臂抬起瞄準時槍口正好朝前（以前做成朝前，瞄準時反而變成朝天）
+      k.cyl(0.03 * H, 0.03 * H, 0.75 * H, { at: [x + 0.06 * H, y - 0.06 * H, z + 0.05], color: '#2c2f36', bone: armR, shine: 0.75 }, 8);
+      k.box(0.07 * H, 0.3 * H, 0.1 * H, { at: [x + 0.06 * H, y + 0.36 * H, z + 0.05], color: wood, bone: armR });
+      break;
+    case 'handcannon':
+      // 扛在手上的大砲（同樣沿手臂朝下，瞄準時朝前）：砲管、銅箍、木托
+      k.cyl(0.12 * H, 0.1 * H, 0.56 * H, { at: [x + 0.04 * H, y - 0.12 * H, z + 0.1 * H], color: '#3a3d44', bone: armR, shine: 0.7 }, 12);
+      for (const yy of [-0.38, 0.1]) k.torus(0.115 * H, 0.03 * H, { at: [x + 0.04 * H, y + yy * H, z + 0.1 * H], rot: [Math.PI / 2, 0, 0], color: '#b87333', bone: armR, shine: 0.85 }, 12);
+      k.box(0.14 * H, 0.22 * H, 0.14 * H, { at: [x + 0.04 * H, y + 0.24 * H, z + 0.1 * H], color: wood, bone: armR });
+      break;
+    case 'blowpipe':
+      // 長吹管：握在中段，瞄準時後端靠近嘴、前端朝前
+      k.cyl(0.022 * H, 0.026 * H, 0.62 * H, { at: [x + 0.02 * H, y - 0.04 * H, z + 0.06], color: '#8a6a3a', bone: armR }, 6);
+      for (const yy of [-0.3, 0.2]) k.torus(0.03 * H, 0.012 * H, { at: [x + 0.02 * H, y + yy * H, z + 0.06], rot: [Math.PI / 2, 0, 0], color: '#c9a24a', bone: armR, shine: 0.8 }, 8);
+      break;
+    case 'handaxe':
+      handAxe(k, x, y, z, H, armR, -1);
       break;
     case 'crossbow':
       k.box(0.06 * H, 0.06 * H, 0.42 * H, { at: [x, y + 0.04 * H, z + 0.16 * H], color: wood, bone: armR });
@@ -488,9 +504,21 @@ function addOffhand(k: Kit, o: NonNullable<HumanoidSpec['offhand']>, h: V3, armL
     case 'lantern':
       k.box(0.12 * H, 0.16 * H, 0.12 * H, { at: [x, y - 0.06 * H, z + 0.04], color: '#ffd36b', bone: armL });
       break;
+    case 'handaxe':
+      handAxe(k, x, y, z, H, armL, 1);
+      break;
     default:
       break;
   }
+}
+
+/** 單手斧：木柄＋朝外側的半月斧刃（side：1 = 往 +X、−1 = 往 −X）。 */
+function handAxe(k: Kit, x: number, y: number, z: number, H: number, bone: number, side: number): void {
+  k.cyl(0.025 * H, 0.03 * H, 0.44 * H, { at: [x, y + 0.13 * H, z + 0.05], color: '#7a5230', bone }, 6);
+  k.add(new CylinderGeometry(0.15 * H, 0.15 * H, 0.03 * H, 12, 1, false, side > 0 ? 0 : Math.PI, Math.PI), {
+    at: [x + side * 0.02 * H, y + 0.3 * H, z + 0.05], rot: [Math.PI / 2, 0, 0], color: '#dfe5ec', bone, shine: 1,
+  });
+  k.box(0.05 * H, 0.1 * H, 0.05 * H, { at: [x, y + 0.3 * H, z + 0.05], color: '#5d636e', bone, shine: 0.7 });
 }
 
 /** 調亮（amt>0）或調暗（amt<0）hex 色。 */

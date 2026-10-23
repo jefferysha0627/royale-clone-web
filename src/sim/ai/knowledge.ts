@@ -57,7 +57,7 @@ export function cardInfo(id: string): CardInfo {
     swarm: !!st && count >= 3 && st.hp <= 400,
     tank: !!st && def.kind === 'troop' && count === 1 && st.hp >= 2500,
     bruiser: !!st && def.kind === 'troop' && count === 1 && st.hp >= 1200 && st.hp < 2500 && st.targets !== 'buildings',
-    spirit: !!st?.kamikaze,
+    spirit: !!st?.kamikaze && !!st.projectile, // 撲上去自爆的小精靈（攻城衝車雖然也會解體，但它是推進卡）
     win: st?.targets === 'buildings' || spell?.kind === 'barrel' || !!st?.charge || !!st?.tunnelSpeed,
     damageSpell: def.kind === 'spell' && !!spell && spell.kind !== 'barrel' && spell.damage > 0 && !spell.freeze && !spell.rage,
     freeze: !!spell?.freeze,

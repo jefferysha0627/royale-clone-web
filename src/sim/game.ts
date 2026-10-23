@@ -91,6 +91,7 @@ export interface PendingSpell {
   totalDelay: number;
   wavesLeft: number;
   waveTimer: number;
+  struck?: number[]; // 落雷已劈過的目標
 }
 
 /** 持續範圍（毒霧）。 */
@@ -147,6 +148,7 @@ export type GameEvent =
   | { type: 'charge'; id: number }
   | { type: 'stun'; id: number; freeze: boolean }
   | { type: 'emerge'; id: number; team: Team; x: number; y: number }
+  | { type: 'strike'; team: Team; cardId: string; x: number; y: number; targetId: number }
   | { type: 'elixir'; team: Team; x: number; y: number; amount: number }
   | { type: 'phase'; phase: Phase }
   | { type: 'elixirRate'; mult: number }
@@ -481,6 +483,11 @@ export class Game {
           tickTimer: 0, ticksLeft: s.rage ? 0 : Math.round(s.duration! / (s.tick ?? 1)),
         });
         return;
+      case 'lightning':
+        // 落雷：在落點上空依序劈下（第一道稍微延遲，讓畫面先出現雷雲）
+        this.events.push({ type: 'spellCast', team, cardId: card.id, x, y, fromX: x, fromY: y, delay: 0 });
+        this.spells.push({ id: this.nextId++, team, cardId: card.id, x, y, fromX: x, fromY: y, delay: 0.2, totalDelay: 0.2, wavesLeft: s.bolts ?? 3, waveTimer: 0, struck: [] });
+        return;
       case 'roll': {
         const dir = team === 0 ? -1 : 1;
         this.events.push({ type: 'spellCast', team, cardId: card.id, x, y, fromX: x, fromY: y, delay: 0 });
@@ -617,7 +624,10 @@ export class Game {
       const card = CARDS[s.cardId];
       const st = card.spell!;
       const wave = (st.waves ?? 1) - s.wavesLeft + 1;
-      if (st.kind === 'barrel') {
+      if (st.kind === 'lightning') {
+        // 沒有可劈的目標就提早結束
+        if (!this.strike(s, st)) s.wavesLeft = 1;
+      } else if (st.kind === 'barrel') {
         this.events.push({ type: 'spell', team: s.team, cardId: s.cardId, x: s.x, y: s.y, radius: st.radius, wave });
         const sp = st.spawn!;
         const offs = formation(sp.count);
@@ -629,6 +639,23 @@ export class Game {
       s.waveTimer = st.waveInterval ?? 0;
     }
     this.spells = this.spells.filter((s) => s.wavesLeft > 0);
+  }
+
+  /** 落雷的一道：劈中範圍內目前血量最高、還沒被劈過的敵方目標（部隊、建築或塔）。 */
+  private strike(sp: PendingSpell, st: SpellStats): boolean {
+    let best: Entity | null = null;
+    for (const e of this.entities) {
+      if (!e.alive || e.team === sp.team || e.tunneling || sp.struck?.includes(e.id)) continue;
+      if (e.stats.flying && !st.hitsAir) continue;
+      if (distTo(sp.x, sp.y, e) > st.radius) continue;
+      if (!best || e.hp > best.hp) best = e;
+    }
+    if (!best) return false;
+    (sp.struck ??= []).push(best.id);
+    this.events.push({ type: 'strike', team: sp.team, cardId: sp.cardId, x: best.x, y: best.y, targetId: best.id });
+    this.applyDamage(best, best.kind === 'tower' ? Math.round(st.damage * st.towerPct) : st.damage);
+    if (best.alive && st.stun) this.stun(best, st.stun, false);
+    return true;
   }
 
   private applySpell(team: Team, cardId: string, s: SpellStats, x: number, y: number, wave: number): void {
@@ -948,10 +975,17 @@ export class Game {
       e.chargeDist = 0;
     }
     if (s.kamikaze) {
-      this.launch(e, t, s.damage);
+      if (ranged) this.launch(e, t, s.damage);
+      else {
+        // 近戰自爆（攻城衝車）：撞一下（衝刺中傷害較高）就解體，死亡效果照常（放出蠻族戰士）
+        let dmg = charged ? s.charge!.damage : s.damage;
+        if (t.kind === 'tower' && s.towerMul !== undefined) dmg = Math.round(dmg * s.towerMul);
+        this.applyDamage(t, dmg);
+      }
       e.alive = false;
       e.hp = 0;
       this.events.push({ type: 'death', id: e.id, team: e.team, kind: e.kind, unit: e.unit, x: e.x, y: e.y, kamikaze: true });
+      this.deathEffects(e);
       return;
     }
     if (ranged) {

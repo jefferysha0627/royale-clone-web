@@ -58,7 +58,7 @@ export interface UnitDef {
   stats: UnitStats;
 }
 
-export type SpellKind = 'projectile' | 'instant' | 'area' | 'roll' | 'barrel';
+export type SpellKind = 'projectile' | 'instant' | 'area' | 'roll' | 'barrel' | 'lightning';
 
 export interface SpellStats {
   kind: SpellKind;
@@ -79,6 +79,7 @@ export interface SpellStats {
   spawn?: { unit: string; count: number; deployTime: number };
   freeze?: boolean; // stun 以冰凍呈現（冰凍法術）
   rage?: { mul: number; linger: number }; // 狂暴：範圍內己方移動、攻擊與召喚加速，離開範圍後效果再維持 linger 秒
+  bolts?: number; // 落雷：依序劈中範圍內血量最高的幾個目標（每個目標只劈一次，間隔 waveInterval）
 }
 
 export interface CardDef {
@@ -229,6 +230,49 @@ export const UNITS: Record<string, UnitDef> = {
     // 地底移動速度 650（約每秒 10.8 格）、對塔 25% [R]
     stats: ground({ hp: 1210, damage: 193, hitSpeed: 1.2, loadTime: 0.7, range: 1.2, sight: 5.5, speed: 1.5, mass: 6, towerMul: 0.25, tunnelSpeed: 650 / 60 }),
   },
+  // ── v3 第二批（數值同一份快照，見上層 reference/analysis/cr-stats-l11.json）
+  mega_gargoyle: {
+    id: 'mega_gargoyle', name: '重甲石像鬼',
+    stats: air({ hp: 837, damage: 311, hitSpeed: 1.5, loadTime: 1.1, range: 1.6, speed: 1, flyHeight: 1.5, radius: 0.6, mass: 6, projectile: { speed: 1000 / 60, visual: 'spit' } }),
+  },
+  siege_ram: {
+    id: 'siege_ram', name: '攻城衝車',
+    // 撞到建築就解體（自爆式），衝刺時傷害加倍；倒下或撞完都放出 2 名蠻族戰士 [R]；衝刺距離與衝鋒騎士相同以 3 格近似 [A]
+    stats: ground({
+      hp: 966, damage: 286, hitSpeed: 0.4, loadTime: 0.05, range: 0.5, speed: 1, radius: 0.75, mass: 6, targets: 'buildings', kamikaze: true,
+      charge: { distance: 3, speedMul: 2, damage: 571 }, deathSpawn: { unit: 'barbarian', count: 2 },
+    }),
+  },
+  siege_giant: {
+    id: 'siege_giant', name: '攻城巨人',
+    stats: ground({
+      hp: 3072, damage: 307, hitSpeed: 1.7, loadTime: 0.8, range: 5, speed: 0.75, sight: 7.5, radius: 0.75, mass: 18, targets: 'buildings', ignorePushback: true,
+      projectile: { speed: 1000 / 60, visual: 'cannonball', arc: 0.4 },
+    }),
+  },
+  berserker: { id: 'berserker', name: '雙斧狂戰士', stats: ground({ hp: 1341, damage: 384, hitSpeed: 1.4, loadTime: 0.9, range: 1.2, speed: 1.5, sight: 6, mass: 4 }) },
+  blowgun_goblin: {
+    id: 'blowgun_goblin', name: '吹管哥布林',
+    stats: ground({ hp: 260, damage: 131, hitSpeed: 0.7, loadTime: 0.35, range: 6.5, speed: 2, sight: 7.5, mass: 3, targets: 'air-ground', projectile: { speed: 800 / 60, visual: 'arrow' } }),
+  },
+  spirit_hut: {
+    id: 'spirit_hut', name: '火靈小屋',
+    // 每 5 秒放出 1 隻火精靈、存在 28 秒、倒下再放 1 隻 [R]
+    stats: ground({
+      hp: 848, damage: 0, hitSpeed: 10, loadTime: 0, range: 0, sight: 0, speed: 0, radius: 1, mass: 100, lifetime: 28, half: 1,
+      spawner: { unit: 'fire_spirit', count: 1, start: 0, pause: 5, interval: 0 },
+      deathSpawn: { unit: 'fire_spirit', count: 1 },
+    }),
+  },
+  bomb_turret: {
+    id: 'bomb_turret', name: '炸彈砲塔',
+    // 只打地面、範圍 1.5；倒下留下 3 秒後爆炸的炸彈（死亡炸彈傷害以稀有度倍率換算）[R＋A]；2×2 佔地 [A]
+    stats: ground({
+      hp: 1356, damage: 222, hitSpeed: 1.6, loadTime: 1.1, range: 6, sight: 6, speed: 0, radius: 0.6, mass: 100, lifetime: 30, half: 1,
+      projectile: { speed: 500 / 60, visual: 'bomb', splash: 1.5, arc: 2 },
+      deathDamage: { damage: 222, radius: 3, pushback: 0, delay: 3, towerMul: 1, visual: 'bomb' },
+    }),
+  },
   tombstone: {
     id: 'tombstone', name: '骷髏墓碑',
     stats: ground({
@@ -271,6 +315,14 @@ export const CARDS: Record<string, CardDef> = {
   tombstone: { id: 'tombstone', name: '骷髏墓碑', glyph: '墓', color: '#77707a', cost: 3, kind: 'building', rarity: 'rare', role: '持續召喚骷髏，倒下再放四隻', unit: 'tombstone' },
   elixir_collector: { id: 'elixir_collector', name: '能量收集器', glyph: '集', color: '#c85ad0', cost: 6, kind: 'building', rarity: 'rare', role: '每 9 秒產生 1 點能量，倒下時再給 1 點', unit: 'elixir_collector' },
   tunneler: { id: 'tunneler', name: '地道挖掘者', glyph: '掘', color: '#a0743a', cost: 3, kind: 'troop', rarity: 'legendary', role: '從地底鑽到場上任何地方，對塔傷害較低', unit: 'tunneler' },
+  mega_gargoyle: { id: 'mega_gargoyle', name: '重甲石像鬼', glyph: '甲', color: '#4a5a7a', cost: 3, kind: 'troop', rarity: 'rare', role: '耐打的飛行遠程，單發傷害高', unit: 'mega_gargoyle' },
+  gargoyle_horde: { id: 'gargoyle_horde', name: '石像鬼群', glyph: '群', color: '#5a6f8a', cost: 5, kind: 'troop', rarity: 'common', role: '六隻飛行，用數量壓過去', unit: 'gargoyle', count: 6 },
+  siege_ram: { id: 'siege_ram', name: '攻城衝車', glyph: '槌', color: '#8a5a32', cost: 4, kind: 'troop', rarity: 'rare', role: '衝向建築撞一下，撞完放出兩名蠻族戰士', unit: 'siege_ram' },
+  siege_giant: { id: 'siege_giant', name: '攻城巨人', glyph: '砲', color: '#6a7fa0', cost: 6, kind: 'troop', rarity: 'common', role: '扛大砲的巨人，在 5 格外轟擊建築', unit: 'siege_giant' },
+  berserkers: { id: 'berserkers', name: '雙斧狂戰士', glyph: '狂', color: '#c4532a', cost: 6, kind: 'troop', rarity: 'common', role: '兩名跑得快、出手重的近戰', unit: 'berserker', count: 2 },
+  blowgun_goblin: { id: 'blowgun_goblin', name: '吹管哥布林', glyph: '吹', color: '#4f8a3a', cost: 3, kind: 'troop', rarity: 'rare', role: '射程極遠的快速射手，可打空中', unit: 'blowgun_goblin' },
+  spirit_hut: { id: 'spirit_hut', name: '火靈小屋', glyph: '屋', color: '#c8572a', cost: 4, kind: 'building', rarity: 'rare', role: '每 5 秒放出一隻火精靈', unit: 'spirit_hut' },
+  bomb_turret: { id: 'bomb_turret', name: '炸彈砲塔', glyph: '彈', color: '#7a6a5a', cost: 4, kind: 'building', rarity: 'rare', role: '範圍轟炸地面部隊，倒下時留下炸彈', unit: 'bomb_turret' },
   fireball: {
     id: 'fireball', name: '火球', glyph: '球', color: '#e0782f', cost: 4, kind: 'spell', rarity: 'rare', role: '中範圍高傷害並擊退',
     spell: { kind: 'projectile', radius: 2.5, damage: 689, towerPct: 0.3, speed: 10, hitsAir: true, pushback: 1 },
@@ -307,6 +359,11 @@ export const CARDS: Record<string, CardDef> = {
     // 半徑 3 格、持續 6 秒、每 0.3 秒刷新、離開後維持 2 秒、+35% [R]
     spell: { kind: 'area', radius: 3, damage: 0, towerPct: 0, speed: 0, hitsAir: true, duration: 6, tick: 0.3, rage: { mul: 1.35, linger: 2 } },
   },
+  lightning: {
+    id: 'lightning', name: '落雷', glyph: '霹', color: '#6a5ad5', cost: 6, kind: 'spell', rarity: 'epic', role: '依序劈中範圍內血量最高的三個目標，並短暫暈眩',
+    // 每道 1056、半徑 3.5、最多 3 個目標、間隔 0.46 秒、暈眩 0.5 秒、對塔 30% [R]
+    spell: { kind: 'lightning', radius: 3.5, damage: 1056, towerPct: 0.3, speed: 0, hitsAir: true, stun: 0.5, bolts: 3, waveInterval: 0.46 },
+  },
   goblin_barrel: {
     id: 'goblin_barrel', name: '哥布林飛桶', glyph: '桶', color: '#8a6a3a', cost: 3, kind: 'spell', rarity: 'epic', role: '把三隻哥布林丟到任何地方',
     spell: { kind: 'barrel', radius: 1.5, damage: 0, towerPct: 1, speed: 400 / 60, hitsAir: false, spawn: { unit: 'goblin', count: 3, deployTime: 1.1 } },
@@ -324,8 +381,10 @@ export const AI_DECKS: { name: string; cards: string[] }[] = [
   { name: '石像重推', cards: ['golem', 'baby_dragon', 'gargoyles', 'iron_swordsman', 'zap', 'poison', 'knight', 'elixir_collector'] },
   { name: '誘餌消耗', cards: ['goblin_barrel', 'tunneler', 'skeleton_army', 'inferno', 'fireball', 'log', 'knight', 'musketeer'] },
   { name: '空中轟炸', cards: ['bomb_blimp', 'giant', 'bats', 'musketeer', 'axe_dwarf', 'arrows', 'freeze', 'ice_spirit'] },
-  { name: '騎士衝鋒', cards: ['lancer', 'giant_skeleton', 'witch', 'bomber', 'archers', 'zap', 'rage', 'iron_swordsman'] },
+  { name: '騎士衝鋒', cards: ['lancer', 'berserkers', 'witch', 'bomber', 'archers', 'zap', 'rage', 'iron_swordsman'] },
   { name: '地道控場', cards: ['tunneler', 'musketeer', 'skeletons', 'bomber', 'tombstone', 'log', 'fireball', 'knight'] },
+  { name: '衝車連攻', cards: ['siege_ram', 'blowgun_goblin', 'mega_gargoyle', 'bomb_turret', 'zap', 'fireball', 'skeletons', 'knight'] },
+  { name: '攻城砲擊', cards: ['siege_giant', 'spirit_hut', 'gargoyle_horde', 'lightning', 'log', 'bomber', 'ice_spirit', 'archers'] },
 ];
 
 export function isValidDeck(deck: readonly string[]): boolean {

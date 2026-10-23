@@ -56,7 +56,41 @@ function poisonTicks(f: Foe): number {
   return Math.max(2, Math.min(8, Math.round(4 / f.st.speed + f.e.deployTimer)));
 }
 
+/** 落雷：只會劈範圍內血量最高的 bolts 個目標（含塔），每個一道。 */
+function evalLightning(ctx: SpellCtx, cardId: string, s: SpellStats, foes: Foe[], x: number, y: number): SpellPlan {
+  const g = ctx.game;
+  const wait = ctx.delay ?? 0;
+  const plan: SpellPlan = { cardId, x, y, land: 0, value: 0, hits: [], towerDmg: 0, tower: null };
+  type Cand = { hp: number; foe?: Foe; tower?: Entity };
+  const cands: Cand[] = [];
+  for (const f of foes) {
+    if (f.appear > wait + 1.2) continue;
+    const [px, py] = foePos(g, f, wait + 0.5 * ctx.aim);
+    if (edgeAt(x, y, f.kind, f.st, px, py) > s.radius) continue;
+    cands.push({ hp: f.hp, foe: f });
+  }
+  for (const t of ctx.towers) if (distTo(x, y, t) <= s.radius) cands.push({ hp: t.hp, tower: t });
+  cands.sort((a, b) => b.hp - a.hp);
+  for (const c of cands.slice(0, s.bolts ?? 3)) {
+    if (c.foe) {
+      const f = c.foe;
+      let v = hitValue(f, s.damage) * (1 + ctx.foeBonus(f));
+      if (f.e && f.st.ramp && f.e.rampTime >= 1.2) v += 2;
+      else if (f.e?.charging) v += 0.8;
+      plan.hits.push({ foe: f, dmg: s.damage });
+      plan.value += v;
+    } else if (c.tower) {
+      const dmg = spellDamage(s, true);
+      plan.towerDmg = dmg;
+      plan.tower = c.tower;
+      plan.value += ctx.towerValue(c.tower, dmg);
+    }
+  }
+  return plan;
+}
+
 function evalPoint(ctx: SpellCtx, cardId: string, s: SpellStats, foes: Foe[], x: number, y: number): SpellPlan {
+  if (s.bolts) return evalLightning(ctx, cardId, s, foes, x, y);
   const g = ctx.game;
   const land = spellFlight(g, ctx.team, s, x, y);
   const wait = ctx.delay ?? 0;

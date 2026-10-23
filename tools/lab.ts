@@ -34,6 +34,9 @@ const S: Record<string, { at: [number, number]; setup: () => void }> = {
   tunnel: { at: [3.5, 9], setup: () => { put(0, 'tunneler', 1.5, 6.5); put(0, 'elixir_collector', 6, 22); } },
   rage: { at: [9, 15], setup: () => { put(0, 'knight', 8.5, 18.5); put(0, 'archers', 10.5, 19.5); put(1, 'barbarians', 9.5, 11.5); setTimeout(() => put(0, 'rage', 9.5, 16.5), 1200); } },
   freeze: { at: [3.5, 8], setup: () => { put(1, 'barbarians', 3.5, 10.5); setTimeout(() => put(0, 'freeze', 3.5, 8.5), 900); } },
+  ram: { at: [3.5, 10], setup: () => { put(0, 'siege_ram', 3.5, 17.5); put(0, 'blowgun_goblin', 4.5, 20.5); put(0, 'mega_gargoyle', 2.5, 19.5); } },
+  lightning: { at: [9, 11], setup: () => { put(1, 'giant', 9.5, 10.5); put(1, 'knight', 8.5, 11.5); put(1, 'archers', 10.5, 11.5); setTimeout(() => put(0, 'lightning', 9.5, 11), 1300); } },
+  siege: { at: [9, 20], setup: () => { put(0, 'bomb_turret', 9, 22); put(0, 'spirit_hut', 13, 22); put(1, 'siege_giant', 9.5, 13.5); put(1, 'berserkers', 5.5, 13.5); put(1, 'gargoyle_horde', 13.5, 13.5); } },
   collapse: {
     at: [3.5, 8],
     setup: () => {

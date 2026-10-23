@@ -914,7 +914,8 @@ if (!QUICK && run('6')) {
 check('全程沒有 console error／pageerror／載入失敗', results.errors.length === 0, results.errors.slice(0, 5).join('；'));
 results.finishedAt = new Date().toISOString();
 results.summary = { total: results.checks.length, failed: failures };
-const outName = ONLY ? `e2e-results-only-${ONLY.join('-')}.json` : 'e2e-results.json';
+// 快速版與單節重跑另存檔名，不覆蓋完整 e2e 的結果
+const outName = ONLY ? `e2e-results-only-${ONLY.join('-')}.json` : QUICK ? 'e2e-results-quick.json' : 'e2e-results.json';
 writeFileSync(`${outDir}${outName}`, JSON.stringify(results, null, 2));
 console.log(`\n${results.checks.length - failures}/${results.checks.length} 通過，結果寫入 ${outDir}${outName}`);
 await browser.close();

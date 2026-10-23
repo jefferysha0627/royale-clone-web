@@ -548,6 +548,7 @@ function statRows(c: CardDef): [string, string][] {
     }
     rows.push(['範圍', s.kind === 'roll' ? `寬 ${(s.radius * 2).toFixed(1)}・長 ${s.rollRange} 格` : `半徑 ${s.radius} 格`]);
     if (s.stun) rows.push([s.freeze ? '冰凍' : '暈眩', `${s.stun} 秒`]);
+    if (s.bolts) rows.push(['劈擊', `範圍內血量最高的 ${s.bolts} 個目標，每個 1 道`]);
     if (s.rage) rows.push(['加速', `移動與攻擊 +${Math.round((s.rage.mul - 1) * 100)}%，離開後再 ${s.rage.linger} 秒`]);
     if (s.duration) rows.push(['持續', `${s.duration} 秒`]);
     if (s.slow) rows.push(['緩速', `${Math.round(s.slow * 100)}%`]);
@@ -572,6 +573,7 @@ function statRows(c: CardDef): [string, string][] {
   if (u.deathSpawn) rows.push(['死亡時', `${UNITS[u.deathSpawn.unit].name} ×${u.deathSpawn.count}`]);
   if (u.projectile?.freeze) rows.push(['冰凍', `${u.projectile.freeze} 秒`]);
   if (u.jumpsRiver) rows.push(['特性', '可跳過河']);
+  if (u.kamikaze && !u.projectile) rows.push(['特性', '撞到建築就解體']);
   if (u.towerMul !== undefined) rows.push(['對塔傷害', String(Math.round(u.damage * u.towerMul))]);
   if (u.tunnelSpeed) rows.push(['特性', '可部署到場上任何地方（從地底鑽過去）']);
   if (u.elixirGen) rows.push(['產生能量', `每 ${u.elixirGen.interval} 秒 +${u.elixirGen.amount}，倒下時 +${u.elixirGen.onDeath}`]);
