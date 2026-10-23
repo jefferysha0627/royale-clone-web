@@ -218,6 +218,9 @@ for (const vp of run('1') ? VIEWPORTS : []) {
   const hudBottom = await page.locator('.hud-players').boundingBox().then((b) => b.y + b.height);
   check(`[${tag}] 場地完整可見：對方國王塔血條不被資訊列遮、己方最後一排在手牌上方`, lastRowY < panel.y - 2 && kingTopY > 0 && hudBottom <= kingBarY - 6, `對方塔血條 y=${Math.round(kingBarY)}、資訊列底 ${Math.round(hudBottom)}、己方後排 y=${Math.round(lastRowY)}、手牌頂 ${Math.round(panel.y)}`);
   await shot(page, `${tag}-04-battle-start`);
+  // 第一場的新手教學：開戰後示範把卡牌拖到場上
+  const coach0 = await page.evaluate(() => ({ shown: !document.getElementById('coach').hidden, hand: !document.getElementById('coach-hand').hidden, tip: document.getElementById('coach-tip').textContent }));
+  check(`[${tag}] 第一場顯示新手教學（手指示範拖曳出牌）`, coach0.shown && coach0.hand && coach0.tip.includes('拖'), coach0.tip);
 
   // 拖曳中：顯示格線／禁區／半透明預覽
   let idx = await findHand(page, 'troop');
@@ -246,6 +249,12 @@ for (const vp of run('1') ? VIEWPORTS : []) {
   check(`[${tag}] 拖曳時顯示部署區格線與落點預覽`, pv.showZone && pv.preview && pv.preview.legal, JSON.stringify(pv));
   check(`[${tag}] 拖曳出牌成功且只扣一次能量`, s1.played === s0.played + 1 && s1.spent === s0.spent + cost, `出牌 ${s0.played}→${s1.played}，花費 ${s0.spent}→${s1.spent}（卡費 ${cost}）`);
   check(`[${tag}] 出牌後該格由下一張補上`, s1.hand[idx] === s0.next, `${s0.hand[idx]} → ${s1.hand[idx]}（下一張 ${s0.next}）`);
+  const coach1 = await page.evaluate(() => {
+    const tip = document.getElementById('coach-tip');
+    const r = tip.getBoundingClientRect();
+    return { text: tip.textContent, hand: !document.getElementById('coach-hand').hidden, bottom: r.bottom, panelTop: document.getElementById('hand-panel').getBoundingClientRect().top };
+  });
+  check(`[${tag}] 出第一張牌後教學換成能量說明，提示不擋住手牌`, coach1.text.includes('能量') && !coach1.hand && coach1.bottom <= coach1.panelTop + 1, coach1.text);
 
   // 點選卡牌 → 點地面
   await sleep(2200); // 等卡牌循環冷卻
@@ -355,6 +364,10 @@ if (run('2')) {
   const matchLog = [];
   const trophyLog = [];
   for (let m = 0; m < 4; m++) {
+    if (m === 1) {
+      const coachAgain = await page.evaluate(() => ({ hidden: document.getElementById('coach').hidden, done: window.__btd.settings.coachDone }));
+      check('[desktop] 打完第一場後新手教學不再出現（含「再戰一場」）', coachAgain.hidden && coachAgain.done, JSON.stringify(coachAgain));
+    }
     await page.evaluate(() => window.__btd.autoplay(600));
     await page.waitForSelector('#ov-result:not([hidden])', { timeout: 10000 });
     await sleep(1800); // 皇冠逐一亮起

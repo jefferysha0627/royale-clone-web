@@ -27,6 +27,8 @@ export interface Settings {
   muted: boolean;
   level: AiLevel;
   howtoSeen: boolean;
+  /** 第一場的新手教學提示已經看過。 */
+  coachDone: boolean;
   record: { win: number; lose: number; draw: number };
   trophies: number;
   bestTrophies: number;
@@ -70,6 +72,7 @@ export function loadSettings(): Settings {
     muted: raw.muted === true,
     level,
     howtoSeen: raw.howtoSeen === true,
+    coachDone: raw.coachDone === true,
     record: {
       win: Number(r?.win) || 0,
       lose: Number(r?.lose) || 0,

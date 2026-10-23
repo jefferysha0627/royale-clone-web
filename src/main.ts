@@ -39,6 +39,9 @@ let pendingUnlock: number | null = null;
 
 const battle = new Battle(sound, {
   onResult(r) {
+    // 打完第一場就不再顯示新手教學（包含直接按「再戰一場」）
+    settings.coachDone = true;
+    battle.coach = false;
     if (r.winner === 0) settings.record.win++;
     else if (r.winner === 1) settings.record.lose++;
     else settings.record.draw++;
@@ -324,6 +327,7 @@ function startBattle(): void {
   home.hidden = true;
   deckScreen.hidden = true;
   syncArena();
+  battle.coach = !settings.coachDone;
   battle.start(settings.deck, settings.level, fixedSeed);
   pushBattleEntry();
 }

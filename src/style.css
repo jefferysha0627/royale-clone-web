@@ -869,3 +869,42 @@ button.player-chip:focus-visible { outline: 3px solid var(--gold); outline-offse
 .log-delta { font-weight: 900; color: #ffd54a; font-variant-numeric: tabular-nums; }
 .log-delta.down { color: #ff9a8f; }
 .log-meta { font-size: 11.5px; color: var(--muted); }
+
+/* 第一場的新手教學提示 */
+.coach { position: fixed; inset: 0; z-index: 7; pointer-events: none; }
+.coach-hand { position: fixed; left: 0; top: 0; width: 46px; height: 46px; margin: -3px 0 0 -18px; animation: coach-drag 2.4s ease-in-out infinite; filter: drop-shadow(0 4px 4px rgba(0, 0, 0, .45)); }
+.coach-hand svg { width: 100%; height: 100%; fill: #fff; stroke: #1d2a3a; stroke-width: 2.4; stroke-linejoin: round; }
+@keyframes coach-drag {
+  0% { transform: translate(var(--x0), var(--y0)) scale(1.1); opacity: 0; }
+  10% { transform: translate(var(--x0), var(--y0)) scale(1.1); opacity: 1; }
+  22% { transform: translate(var(--x0), var(--y0)) scale(.9); opacity: 1; }
+  68% { transform: translate(var(--x1), var(--y1)) scale(.9); opacity: 1; }
+  80% { transform: translate(var(--x1), var(--y1)) scale(1.1); opacity: 1; }
+  100% { transform: translate(var(--x1), var(--y1)) scale(1.1); opacity: 0; }
+}
+.coach-ring { position: fixed; width: 70px; height: 44px; margin: -22px 0 0 -35px; border: 3px solid #fff; border-radius: 50%; box-shadow: 0 0 10px rgba(255, 255, 255, .7); animation: coach-ring 1.2s ease-out infinite; }
+@keyframes coach-ring { 0% { transform: scale(.6); opacity: .95; } 100% { transform: scale(1.35); opacity: 0; } }
+.coach-tip {
+  position: fixed;
+  left: 50%;
+  margin: 0;
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: min(300px, calc(100vw - 32px));
+  padding: 9px 14px 10px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, .96);
+  color: #1d2a3a;
+  font-size: 15px;
+  font-weight: 800;
+  line-height: 1.35;
+  text-align: center;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, .35);
+  animation: coach-tip .3s ease-out;
+}
+@keyframes coach-tip { from { opacity: 0; transform: translate(-50%, 8px); } to { opacity: 1; transform: translateX(-50%); } }
+@media (prefers-reduced-motion: reduce) {
+  .coach-hand, .coach-ring { animation-duration: 3.6s; }
+}

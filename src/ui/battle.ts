@@ -88,6 +88,15 @@ export class Battle {
   stepsRun = 0;
   /** 測試用：略過開場動畫。 */
   skipIntro = false;
+  /** 這場顯示新手教學提示（第一場）。 */
+  coach = false;
+  /** 教學進度：1 示範拖曳出牌、2 說明能量、3 等電腦的部隊過河、4 提醒防守、5 結束。 */
+  private coachStep = 0;
+  private coachT = 0;
+  private readonly coachEl = $<HTMLElement>('coach');
+  private readonly coachHand = $<HTMLElement>('coach-hand');
+  private readonly coachRing = $<HTMLElement>('coach-ring');
+  private readonly coachTip = $<HTMLElement>('coach-tip');
 
   private readonly root = $<HTMLElement>('screen-battle');
   private readonly wrap = $<HTMLElement>('arena-wrap');
@@ -204,6 +213,9 @@ export class Battle {
     if (!this.skipIntro && Math.random() < 0.5) this.enemyEmote('luck', 2.2);
     this.root.hidden = false;
     this.active = true;
+    this.coachStep = this.coach ? 1 : 0;
+    this.coachT = 0;
+    this.coachEl.hidden = true;
     this.intro = this.skipIntro ? 0 : INTRO_VS + INTRO_COUNT * 4;
     this.sound.stopMusic();
     if (this.skipIntro) this.sound.startMusic();
@@ -323,6 +335,7 @@ export class Battle {
     }
     this.renderer.render(g, this.paused ? 1 : Math.min(1, this.acc / DT), this.paused ? 0 : dt);
     this.updateHud();
+    this.updateCoach(dt);
     if (this.endAt && now >= this.endAt && !this.resultShown) this.showResult();
   };
 
@@ -349,6 +362,76 @@ export class Battle {
       this.countdownEl.hidden = true;
       this.last = performance.now();
       this.sound.startMusic();
+    }
+  }
+
+  // ───────── 第一場的新手教學提示（仿新手訓練營：手指示範拖曳出牌，之後提示能量與防守） ─────────
+
+  private setCoachStep(step: number): void {
+    this.coachStep = step;
+    this.coachT = 0;
+  }
+
+  private coachTipAt(text: string, y: number): void {
+    if (this.coachTip.textContent !== text) {
+      this.coachTip.textContent = text;
+      this.coachTip.style.animation = 'none';
+      void this.coachTip.offsetWidth;
+      this.coachTip.style.animation = '';
+    }
+    const h = this.coachTip.offsetHeight || 48;
+    this.coachTip.style.top = `${Math.max(8, Math.min(window.innerHeight - h - 8, y - h))}px`;
+  }
+
+  private placeRing(x: number, y: number): void {
+    this.coachRing.hidden = false;
+    this.coachRing.style.left = `${x}px`;
+    this.coachRing.style.top = `${y}px`;
+  }
+
+  private updateCoach(dt: number): void {
+    const g = this.game;
+    const live = this.coachStep > 0 && this.coachStep < 5 && this.intro <= 0 && !this.paused && g.playing && !this.resultShown;
+    this.coachT += live ? dt : 0;
+    // 第 3 步是「等電腦的部隊過河」，期間不顯示
+    if (live && this.coachStep === 3) {
+      const foe = g.entities.find((e) => e.alive && e.team === 1 && e.kind === 'troop' && e.y > ARENA.riverBottom);
+      if (foe) this.setCoachStep(4);
+    }
+    const show = live && this.coachStep !== 3;
+    this.coachEl.hidden = !show;
+    if (!show) return;
+    this.coachHand.hidden = this.coachStep !== 1;
+    this.coachRing.hidden = true;
+    if (this.coachStep === 1) {
+      // 手指從手上第一張出得起的牌，拖到己方國王塔前方
+      const p = g.players[0];
+      let i = this.handSlots.findIndex((id) => !!id && CARDS[id].cost <= p.elixir);
+      if (i < 0) i = 0;
+      const cr = this.cards[i].getBoundingClientRect();
+      const [tx, ty] = this.screenOf(9, 23);
+      const st = this.coachHand.style;
+      st.setProperty('--x0', `${Math.round(cr.left + cr.width / 2)}px`);
+      st.setProperty('--y0', `${Math.round(cr.top + cr.height * 0.42)}px`);
+      st.setProperty('--x1', `${Math.round(tx)}px`);
+      st.setProperty('--y1', `${Math.round(ty)}px`);
+      this.placeRing(tx, ty);
+      this.coachTipAt('按住一張卡，拖到自己這半邊放開，就能派兵', ty - 46);
+      if (this.coachT > 30) this.setCoachStep(2);
+    } else if (this.coachStep === 2) {
+      // 提示放在手牌上方，不擋住卡牌
+      this.coachTipAt('出牌會花下方紫色能量條的能量，能量會自己慢慢回滿', this.panel.getBoundingClientRect().top - 12);
+      if (this.coachT > 4.5) this.setCoachStep(3);
+    } else if (this.coachStep === 4) {
+      const foe = g.entities.find((e) => e.alive && e.team === 1 && e.kind === 'troop' && e.y > ARENA.riverBottom - 2);
+      if (foe) {
+        const [fx, fy] = this.screenOf(foe.x, foe.y);
+        this.placeRing(fx, fy);
+        this.coachTipAt('電腦的部隊過河了！在它前面出兵把它擋下來', fy - 40);
+      } else {
+        this.coachTipAt('電腦的部隊過河了！在它前面出兵把它擋下來', window.innerHeight * 0.4);
+      }
+      if (this.coachT > 4.5) this.setCoachStep(5);
     }
   }
 
@@ -390,6 +473,7 @@ export class Battle {
         case 'deploy':
           this.sound.play(ev.team === 0 ? 'deploy' : 'enemyDeploy');
           if (ev.team === 0) this.plays[ev.cardId] = (this.plays[ev.cardId] ?? 0) + 1;
+          if (ev.team === 0 && this.coachStep === 1) this.setCoachStep(2);
           break;
         case 'spawn':
           if (ev.source === 'card' && CARDS[this.game.get(ev.id)?.cardId ?? '']?.kind === 'troop') {
