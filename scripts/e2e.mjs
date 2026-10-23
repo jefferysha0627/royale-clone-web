@@ -193,12 +193,18 @@ for (const vp of run('1') ? VIEWPORTS : []) {
   const introVisible = await page.isVisible('#ov-vs');
   const sIntro = await state(page);
   await shot(page, `${tag}-03-vs`);
-  // 開場倒數期間不能出牌、時間不前進
+  // 開場倒數期間不能出牌、時間不前進。
+  // 以測試掛鉤把倒數暫時拉長：無 GPU 的軟體算圖下單一觸控事件可能延遲數秒，拖曳會拖到倒數結束後才放開，
+  // 變成真的出牌並連帶影響後面的檢查。拉長後整段拖曳一定落在倒數內；檢查完再還原成原本剩餘的秒數。
   const bIdx = await findHand(page, 'troop');
-  await page.evaluate(() => (window.__btd.game().players[0].elixir = 10));
+  await page.evaluate(() => {
+    window.__btd.game().players[0].elixir = 10;
+    window.__btd.battle.intro = 60;
+  });
   await drag(page, cdp, await cardBox(page, bIdx), await screenOf(page, 9.5, 24.5));
   const sIntro2 = await state(page);
-  check(`[${tag}] 開場 VS 與倒數期間模擬暫停、不能出牌`, introVisible && sIntro.intro > 0 && sIntro2.played === 0 && sIntro2.time === 0, `intro ${sIntro.intro.toFixed(2)} 秒`);
+  await page.evaluate((left) => (window.__btd.battle.intro = left), sIntro.intro);
+  check(`[${tag}] 開場 VS 與倒數期間模擬暫停、不能出牌`, introVisible && sIntro.intro > 0 && sIntro2.intro > 0 && sIntro2.played === 0 && sIntro2.time === 0, `intro ${sIntro.intro.toFixed(2)} 秒，拖曳放開時仍剩 ${sIntro2.intro.toFixed(2)} 秒`);
   await page.waitForFunction(() => window.__btd.battle.intro <= 0, null, { timeout: 15000 });
   await sleep(300);
   vr.audioState = await page.evaluate(() => window.__btd.sound.state);
