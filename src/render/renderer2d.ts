@@ -119,6 +119,11 @@ export class Renderer2D implements BattleRenderer {
           this.effects.push({ kind: 'boom', x: ev.x, y: ev.y, r: ev.isKing ? 4 : 3, t: 0, life: 0.9, color: '#ffb347' });
           this.shake = 0.5;
           break;
+        case 'strike':
+          // 落雷：從上方劈到目標的一道閃電＋閃光
+          this.effects.push({ kind: 'bolt', x: ev.x, y: ev.y - 6, x2: ev.x, y2: ev.y, r: 0, t: 0, life: 0.2, color: '#e2d6ff' });
+          this.effects.push({ kind: 'boom', x: ev.x, y: ev.y, r: 1.2, t: 0, life: 0.3, color: '#c9b8ff' });
+          break;
         case 'spell': {
           const color = ev.cardId === 'fireball' ? '#ff7a2f' : ev.cardId === 'zap' ? '#7fd3ff' : '#f0d070';
           this.effects.push({ kind: 'ring', x: ev.x, y: ev.y, r: ev.radius, t: 0, life: 0.45, color });

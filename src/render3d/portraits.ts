@@ -388,10 +388,10 @@ type HeroSlot = [unit: string, team: 0 | 1, scale: number];
 /** 每座競技場插圖上的角色（左邊藍隊三名、右邊紅隊兩名、中間一隻飛行單位）。 */
 const ARENA_CAST: [HeroSlot, HeroSlot, HeroSlot, HeroSlot, HeroSlot, HeroSlot][] = [
   [['knight', 0, 1.3], ['giant', 0, 1.1], ['musketeer', 0, 1.15], ['barbarian', 1, 1.25], ['goblin', 1, 1.3], ['baby_dragon', 0, 1.0]],
-  [['iron_swordsman', 0, 1.3], ['giant', 0, 1.1], ['archer', 0, 1.25], ['knight', 1, 1.25], ['spear_goblin', 1, 1.3], ['gargoyle', 1, 1.1]],
-  [['barbarian', 0, 1.3], ['golem', 0, 1.05], ['wizard', 0, 1.15], ['axe_dwarf', 1, 1.3], ['bomber', 1, 1.35], ['baby_dragon', 0, 1.0]],
+  [['iron_swordsman', 0, 1.3], ['siege_giant', 0, 1.1], ['archer', 0, 1.25], ['knight', 1, 1.25], ['blowgun_goblin', 1, 1.3], ['gargoyle', 1, 1.1]],
+  [['berserker', 0, 1.3], ['golem', 0, 1.05], ['wizard', 0, 1.15], ['axe_dwarf', 1, 1.3], ['bomber', 1, 1.35], ['baby_dragon', 0, 1.0]],
   [['knight', 0, 1.3], ['giant_skeleton', 0, 1.05], ['witch', 0, 1.1], ['barbarian', 1, 1.25], ['skeleton', 1, 1.35], ['bat', 1, 1.3]],
-  [['tunneler', 0, 1.35], ['golem', 0, 1.05], ['musketeer', 0, 1.15], ['iron_swordsman', 1, 1.25], ['goblin', 1, 1.3], ['bomb_blimp', 1, 0.9]],
+  [['tunneler', 0, 1.35], ['golem', 0, 1.05], ['musketeer', 0, 1.15], ['iron_swordsman', 1, 1.25], ['goblin', 1, 1.3], ['mega_gargoyle', 1, 1.0]],
   [['lancer', 0, 1.05], ['giant', 0, 1.1], ['wizard', 0, 1.15], ['knight', 1, 1.25], ['archer', 1, 1.3], ['baby_dragon', 0, 1.0]],
 ];
 
