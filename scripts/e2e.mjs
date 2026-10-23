@@ -496,6 +496,74 @@ if (run('3')) {
   await ctx.close();
 }
 
+// ───────── 3d. 獎盃之路與新競技場解鎖（獎盃 295 → 贏一場跨過 300 門檻） ─────────
+if (run('3')) {
+  const vp = VIEWPORTS[2];
+  const { ctx, page } = await newPage(vp);
+  await page.addInitScript(() => {
+    if (!sessionStorage.getItem('seeded')) {
+      localStorage.setItem('bridge-tower-duel.v1', JSON.stringify({ trophies: 295, howtoSeen: true }));
+      sessionStorage.setItem('seeded', '1');
+    }
+  });
+  await page.goto(`${BASE}?test=1&seed=5`);
+  await page.waitForSelector('#screen-home:not([hidden])');
+  const heroSrc = async () => page.evaluate(() => (document.getElementById('hero-img').hidden ? '' : document.getElementById('hero-img').src));
+  await page.waitForFunction(() => !document.getElementById('hero-img').hidden && document.getElementById('hero-img').src.startsWith('data:image/png'), null, { timeout: 15000 }).catch(() => undefined);
+  const hero0 = await heroSrc();
+  check('[390x844] 主畫面插圖是目前競技場的 3D 小場景', hero0.startsWith('data:image/png') && (await page.locator('#home-arena').textContent()) === '綠野競技場', `${Math.round(hero0.length / 1024)} KB`);
+  await page.click('#btn-road');
+  await page.waitForSelector('#ov-road:not([hidden])');
+  await page.waitForFunction(() => [...document.querySelectorAll('#road-list img')].every((i) => !i.hidden), null, { timeout: 15000 }).catch(() => undefined);
+  const road = await page.evaluate(() => ({
+    items: [...document.querySelectorAll('#road-list .road-item')].map((li) => ({ name: li.querySelector('b').textContent, cls: li.className })),
+    arts: [...document.querySelectorAll('#road-list img')].filter((i) => !i.hidden && i.naturalWidth > 0).length,
+    count: document.getElementById('road-count').textContent,
+  }));
+  const cur = road.items.find((i) => i.cls.includes('current'));
+  check(
+    '[390x844] 獎盃之路列出 6 座競技場（由高到低）、目前所在與未解鎖狀態、每座都有場景圖',
+    road.items.length === 6 && road.items[5].name === '綠野競技場' && cur?.name === '綠野競技場' && road.items.filter((i) => i.cls.includes('locked')).length === 5 && road.arts === 6 && road.count === '295',
+    road.items.map((i) => `${i.name}${i.cls.includes('current') ? '（目前）' : i.cls.includes('locked') ? '（未解鎖）' : ''}`).join('、'),
+  );
+  const roadAudit = await layoutAudit(page);
+  check('[390x844] 獎盃之路畫面無溢出', !roadAudit.docOverflowX && roadAudit.issues.length === 0, roadAudit.issues.slice(0, 3).join('；'));
+  await shot(page, `${vp.name}-17-trophy-road`);
+  await page.click('#btn-road-close');
+  check('[390x844] 獎盃之路可關閉', await page.isHidden('#ov-road'));
+  // 開一場，用測試掛鉤把電腦的塔血量設成 1 讓這場必勝（只為了測「跨過門檻 → 解鎖畫面」的流程）
+  await page.evaluate(() => window.__btd.skipIntro(true));
+  await page.click('#btn-play');
+  await page.waitForSelector('#screen-battle:not([hidden])');
+  await page.evaluate(() => {
+    for (const t of window.__btd.game().towers(1)) t.hp = 1;
+    window.__btd.autoplay(600);
+  });
+  await page.waitForSelector('#ov-result:not([hidden])', { timeout: 10000 });
+  const resTrophy = (await page.locator('#result-trophies').textContent()) ?? '';
+  check('[390x844] 跨過 300 獎盃時結算寫出解鎖新競技場', resTrophy.includes('解鎖新競技場「石橋要塞」'), resTrophy.replace(/\s+/g, ' '));
+  await page.click('#btn-result-home');
+  await page.waitForSelector('#ov-unlock:not([hidden])', { timeout: 5000 }).catch(() => undefined);
+  await page.waitForFunction(() => !document.getElementById('unlock-img').hidden && document.getElementById('unlock-img').naturalWidth > 0, null, { timeout: 15000 }).catch(() => undefined);
+  await sleep(1100); // 進場動畫
+  const unlock = await page.evaluate(() => ({ shown: !document.getElementById('ov-unlock').hidden, name: document.getElementById('unlock-name').textContent, img: !document.getElementById('unlock-img').hidden }));
+  check('[390x844] 回主畫面時播放新競技場解鎖畫面（名稱與場景圖）', unlock.shown && unlock.name === '石橋要塞' && unlock.img, JSON.stringify(unlock));
+  await shot(page, `${vp.name}-18-arena-unlock`);
+  await page.click('#btn-unlock-ok');
+  await page.waitForFunction((h0) => !document.getElementById('hero-img').hidden && document.getElementById('hero-img').src !== h0, hero0, { timeout: 15000 }).catch(() => undefined);
+  const hero1 = await heroSrc();
+  check(
+    '[390x844] 關閉後主畫面換成新競技場（名稱與插圖都換）',
+    (await page.isHidden('#ov-unlock')) && (await page.locator('#home-arena').textContent()) === '石橋要塞' && hero1.startsWith('data:image/png') && hero1 !== hero0,
+  );
+  await page.click('#btn-play');
+  await page.waitForSelector('#screen-battle:not([hidden])');
+  const vsArena = await page.locator('#vs-arena').textContent();
+  const theme = await page.evaluate(() => window.__btd.battle.arenaTheme);
+  check('[390x844] 下一場在新競技場開打', vsArena === '石橋要塞' && theme === 1, `${vsArena}，場地配色 ${theme}`);
+  await ctx.close();
+}
+
 // ───────── 3a. 手機橫拿：提示轉直向並暫停，轉回後可繼續 ─────────
 if (run('3')) {
   const vp = { name: 'mobile-844x390-landscape', viewport: { width: 844, height: 390 }, touch: true, dsf: 2 };

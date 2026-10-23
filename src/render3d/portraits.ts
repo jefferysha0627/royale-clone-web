@@ -9,7 +9,9 @@ import { instantiate, Kit } from './kit';
 import { toonMaterial } from './materials';
 import { getAsset, profileOf } from './models';
 import { commanderSpec } from './models/buildings';
-import { buildHumanoid, type Face } from './models/humanoid';
+import { buildHumanoid, shade, type Face } from './models/humanoid';
+import { ARENA_THEMES, themeIndex } from './arena';
+import { banner, boulder, brazier, crag, crystal, flowerBush, goldPillar, hayBale, lantern, maple, pine, pumpkin, reeds, roundTree, topiary, willow } from './props';
 
 // 卡面圖：用遊戲內同一套原創 3D 模型即時渲染成小插畫（主題色背景＋光暈＋地面影子），不需要下載任何圖檔。
 // 在閒置時間分批產生，完成前卡面先顯示文字圖示。
@@ -121,23 +123,42 @@ export const EMOTE_POSES: Record<string, { face: Face; arm: number }> = {
   luck: { face: 'wink', arm: -2.0 },
 };
 
+interface RenderCtx {
+  r: WebGLRenderer;
+  scene: Scene;
+  cam: OrthographicCamera;
+  bgScene: Scene;
+  bgMat: ShaderMaterial;
+  bgCam: OrthographicCamera;
+}
+
 class PortraitStore {
   private urls = new Map<string, string>();
   private emotes = new Map<string, string>();
-  private heroUrl: string | undefined;
+  private arts = new Map<number, string>();
+  private listeners: Listener[] = [];
+  private started = false;
+  private failed = false;
+  private ctx: RenderCtx | null = null;
+  private cardQueue: string[] = [];
+  private emoteJobs: [string, 0 | 1][] = [];
+  private artQueue: number[] = [];
+  private pumping = false;
 
   /** 表情貼圖（id、隊伍）；還沒產生好時回傳 undefined。 */
   emote(id: string, team: 0 | 1): string | undefined {
     return this.emotes.get(`${id}|${team}`);
   }
 
-  /** 主畫面插圖（原創角色與塔的小場景）。 */
-  hero(): string | undefined {
-    return this.heroUrl;
+  /** 競技場小場景圖（主畫面插圖、獎盃之路）；還沒產生好時回傳 undefined，記得先 requestArt。 */
+  arenaArt(theme: number): string | undefined {
+    return this.arts.get(theme);
   }
-  private listeners: Listener[] = [];
-  private started = false;
-  private failed = false;
+
+  /** WebGL 不可用時卡面、表情與場景圖都不會產生（畫面改用文字圖示與 CSS 圖樣）。 */
+  get unavailable(): boolean {
+    return this.failed;
+  }
 
   get(cardId: string): string | undefined {
     return this.urls.get(cardId);
@@ -147,10 +168,69 @@ class PortraitStore {
     this.listeners.push(fn);
   }
 
-  /** 開始在背景產生所有卡面（只會執行一次）。 */
+  /** 開始在背景產生所有卡面（只會執行一次）：先做 order 裡的卡，再做場景圖、其他卡與表情。 */
   start(order: string[] = Object.keys(CARDS)): void {
     if (this.started || this.failed) return;
     this.started = true;
+    this.cardQueue = [...new Set([...order, ...Object.keys(CARDS)])];
+    for (const team of [0, 1] as const) for (const id of Object.keys(EMOTE_POSES)) this.emoteJobs.push([id, team]);
+    this.pump();
+  }
+
+  /** 要求產生競技場小場景圖，完成後會通知 onUpdate。 */
+  requestArt(themes: number[]): void {
+    if (this.failed) return;
+    for (const t of themes) if (!this.arts.has(t) && !this.artQueue.includes(t)) this.artQueue.push(t);
+    if (this.artQueue.length) this.pump();
+  }
+
+  private pump(): void {
+    if (this.pumping) return;
+    this.pumping = true;
+    setTimeout(this.step, 30);
+  }
+
+  private step = (): void => {
+    const c = this.ensureCtx();
+    if (!c) {
+      this.pumping = false;
+      for (const fn of this.listeners) fn();
+      return;
+    }
+    const t0 = performance.now();
+    const total = Object.keys(CARDS).length;
+    const budget = () => performance.now() - t0 < 24;
+    // 牌組的 8 張先做（主畫面最先看到），接著是場景圖，再來是其他卡與表情
+    while (this.cardQueue.length > total - 8 && budget()) this.safeCard(c, this.cardQueue.shift()!);
+    while (this.artQueue.length && (this.cardQueue.length <= total - 8 || !this.started) && budget()) {
+      const theme = this.artQueue.shift()!;
+      try {
+        this.arts.set(theme, renderArenaArt(c, theme));
+      } catch {
+        this.arts.set(theme, '');
+      }
+    }
+    while (this.cardQueue.length && !this.artQueue.length && budget()) this.safeCard(c, this.cardQueue.shift()!);
+    while (!this.cardQueue.length && this.emoteJobs.length && budget()) {
+      const [id, team] = this.emoteJobs.shift()!;
+      try {
+        this.renderEmote(c, id, team);
+      } catch {
+        // 表情貼圖失敗就用系統表情符號
+      }
+    }
+    for (const fn of this.listeners) fn();
+    if (this.cardQueue.length || this.emoteJobs.length || this.artQueue.length) setTimeout(this.step, 16);
+    else {
+      this.releaseCtx();
+      this.pumping = false;
+    }
+  };
+
+  /** 建立離屏渲染器與燈光（做完所有工作就釋放，之後有新的場景圖要求再建立）。 */
+  private ensureCtx(): RenderCtx | null {
+    if (this.ctx) return this.ctx;
+    if (this.failed) return null;
     let r: WebGLRenderer;
     try {
       const canvas = document.createElement('canvas');
@@ -163,7 +243,7 @@ class PortraitStore {
       r.setClearColor(0x000000, 0);
     } catch {
       this.failed = true;
-      return;
+      return null;
     }
     const scene = new Scene();
     scene.add(new AmbientLight('#ffffff', 0.55));
@@ -187,104 +267,92 @@ class PortraitStore {
     bgQuad.frustumCulled = false;
     bgScene.add(bgQuad);
     const bgCam = new OrthographicCamera(-1, 1, 1, -1, 0, 1);
-    const queue = [...new Set([...order, ...Object.keys(CARDS)])];
-    const renderCard = (id: string) => {
-      const theme = themeOf(id);
-      bgMat.uniforms.uTop.value.set(theme.top);
-      bgMat.uniforms.uMid.value.set(theme.mid);
-      bgMat.uniforms.uGlow.value.set(theme.glow);
-      const subject = buildSubject(id);
-      scene.add(subject);
-      const ground = theme.ground ? addGround(subject, theme.ground) : null;
-      frame(cam, subject, id);
-      r.autoClear = false;
-      r.clear();
-      r.render(bgScene, bgCam);
-      r.clearDepth();
-      r.render(scene, cam);
-      r.autoClear = true;
-      this.urls.set(id, r.domElement.toDataURL('image/jpeg', 0.9));
-      scene.remove(subject);
-      if (ground) {
-        ground.removeFromParent();
-        ground.geometry.dispose();
-        (ground.material as MeshBasicMaterial).dispose();
-      }
-      disposeTree(subject);
-    };
-    const emoteJobs: [string, 0 | 1][] = [];
-    for (const team of [0, 1] as const) for (const id of Object.keys(EMOTE_POSES)) emoteJobs.push([id, team]);
-    const renderEmote = (id: string, team: 0 | 1) => {
-      const pose = EMOTE_POSES[id];
-      const pal = TEAM_RGB[team];
-      const asset = buildHumanoid(commanderSpec(pal, pose.face, 0.55), pal);
-      const inst = instantiate(asset, toonMaterial({ rim: 0.5 }));
-      const st = newAnimState();
-      st.t = 0.2;
-      animate(inst, profileOf('knight'), st, 0.016);
-      inst.byName.armR?.rotation.set(pose.arm, 0, 0.25);
-      inst.byName.head?.rotation.set(-0.12, team === 0 ? -0.15 : 0.15, id === 'wow' ? 0.12 : 0);
-      inst.mesh.rotation.y = team === 0 ? 0.25 : -0.25;
-      const g = new Group();
-      g.add(inst.mesh);
-      scene.add(g);
-      const EW = 128;
-      r.setSize(EW, EW, false);
-      g.updateMatrixWorld(true);
-      const box = new Box3().setFromObject(g);
-      const size = box.getSize(new Vector3());
-      const center = new Vector3((box.min.x + box.max.x) / 2, box.min.y + size.y * 0.72, (box.min.z + box.max.z) / 2);
-      const view = size.y * 0.62;
-      cam.left = -view / 2;
-      cam.right = view / 2;
-      cam.top = view / 2;
-      cam.bottom = -view / 2;
-      cam.position.copy(center).addScaledVector(new Vector3(0, 0.25, 1).normalize(), 20);
-      cam.lookAt(center);
-      cam.updateProjectionMatrix();
-      r.setClearColor(0x000000, 0);
-      r.clear();
-      r.render(scene, cam);
-      this.emotes.set(`${id}|${team}`, r.domElement.toDataURL('image/png'));
-      scene.remove(g);
-      disposeTree(g);
-      asset.geometry.dispose();
-      inst.mesh.skeleton.dispose();
-      r.setSize(W, H, false);
-    };
-    const step = () => {
-      const t0 = performance.now();
-      while (queue.length && performance.now() - t0 < 24) {
-        const id = queue.shift()!;
-        try {
-          renderCard(id);
-        } catch {
-          // 單張失敗就保留文字圖示
-        }
-      }
-      while (!queue.length && emoteJobs.length && performance.now() - t0 < 24) {
-        const [id, team] = emoteJobs.shift()!;
-        try {
-          renderEmote(id, team);
-        } catch {
-          // 表情貼圖失敗就用系統表情符號
-        }
-      }
-      if (!this.heroUrl && queue.length < Object.keys(CARDS).length - 8) {
-        try {
-          this.heroUrl = renderHero(r, scene);
-        } catch {
-          this.heroUrl = '';
-        }
-      }
-      for (const fn of this.listeners) fn();
-      if (queue.length || emoteJobs.length) setTimeout(step, 16);
-      else {
-        r.dispose();
-        r.forceContextLoss();
-      }
-    };
-    setTimeout(step, 30);
+    this.ctx = { r, scene, cam, bgScene, bgMat, bgCam };
+    return this.ctx;
+  }
+
+  private releaseCtx(): void {
+    const c = this.ctx;
+    if (!c) return;
+    this.ctx = null;
+    c.bgScene.traverse((o) => (o as Mesh).geometry?.dispose());
+    c.bgMat.dispose();
+    c.r.dispose();
+    c.r.forceContextLoss();
+  }
+
+  private safeCard(c: RenderCtx, id: string): void {
+    try {
+      this.renderCard(c, id);
+    } catch {
+      // 單張失敗就保留文字圖示
+    }
+  }
+
+  private renderCard(c: RenderCtx, id: string): void {
+    const { r, scene, cam, bgScene, bgMat, bgCam } = c;
+    const theme = themeOf(id);
+    bgMat.uniforms.uTop.value.set(theme.top);
+    bgMat.uniforms.uMid.value.set(theme.mid);
+    bgMat.uniforms.uGlow.value.set(theme.glow);
+    const subject = buildSubject(id);
+    scene.add(subject);
+    const ground = theme.ground ? addGround(subject, theme.ground) : null;
+    frame(cam, subject, id);
+    r.autoClear = false;
+    r.clear();
+    r.render(bgScene, bgCam);
+    r.clearDepth();
+    r.render(scene, cam);
+    r.autoClear = true;
+    this.urls.set(id, r.domElement.toDataURL('image/jpeg', 0.9));
+    scene.remove(subject);
+    if (ground) {
+      ground.removeFromParent();
+      ground.geometry.dispose();
+      (ground.material as MeshBasicMaterial).dispose();
+    }
+    disposeTree(subject);
+  }
+
+  private renderEmote(c: RenderCtx, id: string, team: 0 | 1): void {
+    const { r, scene, cam } = c;
+    const pose = EMOTE_POSES[id];
+    const pal = TEAM_RGB[team];
+    const asset = buildHumanoid(commanderSpec(pal, pose.face, 0.55), pal);
+    const inst = instantiate(asset, toonMaterial({ rim: 0.5 }));
+    const st = newAnimState();
+    st.t = 0.2;
+    animate(inst, profileOf('knight'), st, 0.016);
+    inst.byName.armR?.rotation.set(pose.arm, 0, 0.25);
+    inst.byName.head?.rotation.set(-0.12, team === 0 ? -0.15 : 0.15, id === 'wow' ? 0.12 : 0);
+    inst.mesh.rotation.y = team === 0 ? 0.25 : -0.25;
+    const g = new Group();
+    g.add(inst.mesh);
+    scene.add(g);
+    const EW = 128;
+    r.setSize(EW, EW, false);
+    g.updateMatrixWorld(true);
+    const box = new Box3().setFromObject(g);
+    const size = box.getSize(new Vector3());
+    const center = new Vector3((box.min.x + box.max.x) / 2, box.min.y + size.y * 0.72, (box.min.z + box.max.z) / 2);
+    const view = size.y * 0.62;
+    cam.left = -view / 2;
+    cam.right = view / 2;
+    cam.top = view / 2;
+    cam.bottom = -view / 2;
+    cam.position.copy(center).addScaledVector(new Vector3(0, 0.25, 1).normalize(), 20);
+    cam.lookAt(center);
+    cam.updateProjectionMatrix();
+    r.setClearColor(0x000000, 0);
+    r.clear();
+    r.render(scene, cam);
+    this.emotes.set(`${id}|${team}`, r.domElement.toDataURL('image/png'));
+    scene.remove(g);
+    disposeTree(g);
+    asset.geometry.dispose();
+    inst.mesh.skeleton.dispose();
+    r.setSize(W, H, false);
   }
 }
 
@@ -313,21 +381,93 @@ function disposeTree(o: Object3D): void {
   });
 }
 
-/** 主畫面插圖：草地平台上的側塔與幾名原創角色。 */
-function renderHero(r: WebGLRenderer, scene: Scene): string {
+type HeroSlot = [unit: string, team: 0 | 1, scale: number];
+
+/** 每座競技場插圖上的角色（左邊藍隊三名、右邊紅隊兩名、中間一隻飛行單位）。 */
+const ARENA_CAST: [HeroSlot, HeroSlot, HeroSlot, HeroSlot, HeroSlot, HeroSlot][] = [
+  [['knight', 0, 1.3], ['giant', 0, 1.1], ['musketeer', 0, 1.15], ['barbarian', 1, 1.25], ['goblin', 1, 1.3], ['baby_dragon', 0, 1.0]],
+  [['iron_swordsman', 0, 1.3], ['giant', 0, 1.1], ['archer', 0, 1.25], ['knight', 1, 1.25], ['spear_goblin', 1, 1.3], ['gargoyle', 1, 1.1]],
+  [['barbarian', 0, 1.3], ['golem', 0, 1.05], ['wizard', 0, 1.15], ['axe_dwarf', 1, 1.3], ['bomber', 1, 1.35], ['baby_dragon', 0, 1.0]],
+  [['knight', 0, 1.3], ['giant_skeleton', 0, 1.05], ['witch', 0, 1.1], ['barbarian', 1, 1.25], ['skeleton', 1, 1.35], ['bat', 1, 1.3]],
+  [['tunneler', 0, 1.35], ['golem', 0, 1.05], ['musketeer', 0, 1.15], ['iron_swordsman', 1, 1.25], ['goblin', 1, 1.3], ['bomb_blimp', 1, 0.9]],
+  [['lancer', 0, 1.05], ['giant', 0, 1.1], ['wizard', 0, 1.15], ['knight', 1, 1.25], ['archer', 1, 1.3], ['baby_dragon', 0, 1.0]],
+];
+
+/** 競技場小場景：浮在空中的圓形草地（依競技場換地面、河水、橋與道具），兩座側塔與幾名原創角色。 */
+function renderArenaArt(c: RenderCtx, theme: number): string {
+  const { r, scene } = c;
+  const idx = themeIndex(theme);
+  const pal = ARENA_THEMES[idx];
   const HW = 480;
   const HH = 270;
   r.setSize(HW, HH, false);
   const g = new Group();
   const k = new Kit();
   k.addBone('root', -1, [0, 0, 0]);
-  k.cyl(4.6, 4.9, 0.6, { at: [0, -0.3, 0], color: '#6b4a2a' }, 40);
-  k.cyl(4.62, 4.62, 0.12, { at: [0, 0.02, 0], color: '#8fcf5e' }, 40);
-  k.box(1.4, 0.04, 8.6, { at: [-0.4, 0.09, 0], rot: [0, 0.5, 0], color: '#e5c98a' });
-  k.box(5.2, 0.5, 1.8, { at: [0.6, -0.15, 0.4], rot: [0, 0.5, 0], color: '#58b2ea' });
-  k.box(1.9, 0.18, 2.4, { at: [0.6, 0.12, 0.4], rot: [0, 0.5, 0], color: '#9a6834' });
-  const base = new Mesh(k.build(1).geometry, new MeshLambertMaterial({ vertexColors: true }));
-  g.add(base);
+  const glow = new Kit();
+  glow.gradient = false;
+  glow.addBone('root', -1, [0, 0, 0]);
+  const soil = pal.style === 'highland' ? '#6f665a' : pal.style === 'royal' ? '#dccfb1' : pal.style === 'lake' ? '#56584c' : '#6b4a2a';
+  k.cyl(4.6, 4.9, 0.6, { at: [0, -0.3, 0], color: soil }, 40);
+  if (pal.style === 'royal') k.torus(4.72, 0.07, { at: [0, -0.08, 0], rot: [Math.PI / 2, 0, 0], color: '#e6b53c' }, 48);
+  k.cyl(4.62, 4.62, 0.12, { at: [0, 0.02, 0], color: pal.grassA }, 40);
+  k.box(1.4, 0.04, 8.6, { at: [-0.4, 0.09, 0], rot: [0, 0.5, 0], color: pal.path });
+  k.box(5.2, 0.5, 1.8, { at: [0.6, -0.15, 0.4], rot: [0, 0.5, 0], color: pal.water[0] });
+  if (pal.bridge === 'stone') {
+    const stone = pal.style === 'royal' ? '#ece4d0' : '#b2aea4';
+    k.box(1.9, 0.18, 2.4, { at: [0.6, 0.12, 0.4], rot: [0, 0.5, 0], color: stone });
+    for (const sx of [-1, 1]) {
+      const ox = Math.cos(0.5) * sx * 0.95;
+      const oz = -Math.sin(0.5) * sx * 0.95;
+      k.box(0.18, 0.3, 2.4, { at: [0.6 + ox, 0.3, 0.4 + oz], rot: [0, 0.5, 0], color: shade(stone, -0.08) });
+    }
+  } else {
+    k.box(1.9, 0.18, 2.4, { at: [0.6, 0.12, 0.4], rot: [0, 0.5, 0], color: pal.wood[1] });
+  }
+  // 後緣的道具（依競技場風格）
+  const rnd = (() => {
+    let x = 7 + idx * 13;
+    return () => ((x = (x * 16807) % 2147483647) / 2147483647);
+  })();
+  switch (pal.style) {
+    case 'fort':
+      pine(k, -1.1, -3.7, 1.0, pal);
+      pine(k, 1.3, -3.8, 0.9, pal);
+      brazier(k, glow, -3.9, -2.6, 0.8);
+      boulder(k, 4.0, -2.4, 0.5, pal, rnd);
+      break;
+    case 'autumn':
+      maple(k, -1.1, -3.7, 1.0, pal, rnd);
+      maple(k, 1.3, -3.8, 0.85, pal, rnd);
+      hayBale(k, -3.4, -2.7, 0.85, 0.4);
+      pumpkin(k, 4.0, -2.3, 1.1);
+      break;
+    case 'lake':
+      willow(k, -1.1, -3.7, 0.95, pal, rnd);
+      willow(k, 1.4, -3.8, 0.8, pal, rnd);
+      lantern(k, glow, -3.95, -2.5, 0.9);
+      reeds(k, 4.0, -2.4, 1, rnd);
+      break;
+    case 'highland':
+      crystal(k, glow, -1.1, -3.7, 1.1, '#8fe8ff', rnd);
+      pine(k, 1.3, -3.8, 0.95, pal);
+      crag(k, -3.9, -2.6, 0.8, pal, rnd);
+      crystal(k, glow, 4.0, -2.4, 0.8, '#c99bff', rnd);
+      break;
+    case 'royal':
+      topiary(k, -1.1, -3.7, 1.2);
+      goldPillar(k, 1.3, -3.8, 1.0);
+      topiary(k, -3.9, -2.6, 0.9);
+      banner(k, 4.0, -2.4, 0.9, '#c8323c', '#e6b53c');
+      break;
+    default:
+      roundTree(k, -1.1, -3.7, 1.0, pal, rnd);
+      roundTree(k, 1.3, -3.8, 0.85, pal, rnd);
+      flowerBush(k, -3.9, -2.7, 0.4, pal, rnd);
+      flowerBush(k, 4.0, -2.4, 0.35, pal, rnd);
+  }
+  g.add(new Mesh(k.build(1).geometry, new MeshLambertMaterial({ vertexColors: true })));
+  if (glow.parts > 0) g.add(new Mesh(glow.build(1).geometry, new MeshBasicMaterial({ vertexColors: true })));
   const put = (unit: string, team: 0 | 1, x: number, z: number, rotY: number, sc = 1, y = 0, pose = 0.3) => {
     const inst = instantiate(getAsset(unit, team), toonMaterial({ rim: 0.45 }));
     const st = newAnimState();
@@ -341,18 +481,21 @@ function renderHero(r: WebGLRenderer, scene: Scene): string {
   };
   put('princess', 0, -2.9, -1.4, 0.2, 0.62);
   put('princess', 1, 3.0, -1.6, -0.3, 0.55);
-  put('knight', 0, -1.2, 1.4, 0.9, 1.3, 0, 2);
-  put('giant', 0, -2.4, 0.4, 0.7, 1.1);
-  put('barbarian', 1, 1.2, 1.5, -1.0, 1.25, 0, 2);
-  put('goblin', 1, 2.4, 0.9, -0.8, 1.3);
-  put('baby_dragon', 0, -0.2, -0.6, 0.6, 1.0, 2.3);
-  put('musketeer', 0, -3.2, 2.2, 0.5, 1.15);
+  const [front, big, back, foeFront, foeSmall, fly] = ARENA_CAST[idx];
+  put(front[0], front[1], -1.2, 1.4, 0.9, front[2], 0, 2);
+  put(big[0], big[1], -2.4, 0.4, 0.7, big[2]);
+  put(foeFront[0], foeFront[1], 1.2, 1.5, -1.0, foeFront[2], 0, 2);
+  put(foeSmall[0], foeSmall[1], 2.4, 0.9, -0.8, foeSmall[2]);
+  put(fly[0], fly[1], -0.2, -0.6, 0.6, fly[2], 2.3);
+  put(back[0], back[1], -3.2, 2.2, 0.5, back[2]);
   scene.add(g);
   const cam = new OrthographicCamera(-5.4, 5.4, 3.04, -3.04, 0.1, 100);
   const dir = new Vector3(0, 0.62, 1).normalize();
   cam.position.copy(new Vector3(0, 0.9, 0)).addScaledVector(dir, 30);
   cam.lookAt(0, 0.9, 0);
   cam.updateProjectionMatrix();
+  r.setClearColor(0x000000, 0);
+  r.clear();
   r.render(scene, cam);
   const url = r.domElement.toDataURL('image/png');
   scene.remove(g);

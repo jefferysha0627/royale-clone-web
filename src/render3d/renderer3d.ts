@@ -1,10 +1,10 @@
 import {
-  AdditiveBlending, CircleGeometry, CylinderGeometry, DoubleSide, Group, Mesh, MeshBasicMaterial, MeshLambertMaterial, OrthographicCamera, RingGeometry,
+  AdditiveBlending, CircleGeometry, Color, CylinderGeometry, DoubleSide, Group, Mesh, MeshBasicMaterial, MeshLambertMaterial, OrthographicCamera, RingGeometry,
   SphereGeometry, Vector3, type BufferGeometry, type Object3D, type SkinnedMesh, type WebGLRenderer,
 } from 'three';
 import { ARENA, CARDS, Game, UNITS, type Entity, type GameEvent } from '../sim';
 import type { BattleRenderer, DeployPreview } from '../render/types';
-import { ArenaView } from './arena';
+import { ARENA_THEMES, ArenaView, themeIndex } from './arena';
 import { COS_E, CX, CZ, SIN_E, TEAM_RGB, toX, toZ } from './coords';
 import { Effects } from './effects';
 import { Overlay } from './overlay';
@@ -253,6 +253,15 @@ export class Renderer3D implements BattleRenderer {
 
   setArenaTheme(theme: number): void {
     this.arena.setTheme(theme);
+    // 每座競技場的光線色調（黃昏的湖畔偏冷偏暗、楓紅山谷偏暖）
+    const l = ARENA_THEMES[themeIndex(theme)].light;
+    const { hemi, sun, scene } = this.stage;
+    hemi.color.set(l.sky);
+    hemi.groundColor.set(l.ground);
+    hemi.intensity = l.hemi;
+    sun.color.set(l.sun);
+    sun.intensity = l.sunI;
+    (scene.background as Color).set(l.bg);
   }
 
   reset(): void {

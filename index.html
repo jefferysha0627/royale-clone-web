@@ -56,11 +56,11 @@
           <div class="home-hero">
             <h1 class="title">皇室戰爭<span class="title-sub">克隆</span></h1>
             <p class="tagline">出牌派兵、過橋推塔・三分鐘一局</p>
-            <div class="arena-banner" aria-live="polite">
-              <span class="arena-name" id="home-arena">綠野競技場</span>
-              <div class="arena-bar" aria-hidden="true"><i id="home-arena-fill"></i></div>
+            <button id="btn-road" class="arena-banner" type="button" aria-label="獎盃之路：查看所有競技場">
+              <span class="arena-name"><span id="home-arena" aria-live="polite">綠野競技場</span><i class="road-chev" aria-hidden="true">›</i></span>
+              <span class="arena-bar" aria-hidden="true"><i id="home-arena-fill"></i></span>
               <small id="home-arena-next"></small>
-            </div>
+            </button>
             <div class="hero-art"><img id="hero-img" alt="" hidden /><div class="hero-fallback" id="hero-fallback"></div></div>
           </div>
           <div class="home-actions">
@@ -126,6 +126,30 @@
             <button id="btn-info-use" class="btn primary" type="button">使用</button>
             <button id="btn-info-close" class="btn" type="button">關閉</button>
           </div>
+        </div>
+      </div>
+
+      <!-- 獎盃之路 -->
+      <div id="ov-road" class="overlay top sheet" hidden>
+        <div class="panel sheet-panel road-panel" role="dialog" aria-labelledby="road-title">
+          <div class="road-head">
+            <h3 id="road-title">獎盃之路</h3>
+            <span class="road-count"><svg class="trophy-ico" viewBox="0 0 20 20" aria-hidden="true"><path d="M5 2h10v3h3v2a4 4 0 0 1-4 4h-.4A4.5 4.5 0 0 1 11 13.4V15h3v3H6v-3h3v-1.6A4.5 4.5 0 0 1 6.4 11H6a4 4 0 0 1-4-4V5h3zM4 7a2 2 0 0 0 1.2 1.8A9 9 0 0 1 5 7zm11 0c0 .6-.1 1.2-.2 1.8A2 2 0 0 0 16 7z" /></svg><b id="road-count">0</b></span>
+          </div>
+          <p class="road-note">贏電腦拿獎盃（難度越高拿越多），累積到門檻就換到下一座競技場。</p>
+          <ol id="road-list" class="road-list"></ol>
+          <button id="btn-road-close" class="btn" type="button">關閉</button>
+        </div>
+      </div>
+
+      <!-- 新競技場解鎖 -->
+      <div id="ov-unlock" class="overlay top" hidden>
+        <div class="panel unlock-panel" role="dialog" aria-labelledby="unlock-name">
+          <p class="unlock-kicker">解鎖新競技場！</p>
+          <h2 id="unlock-name" class="unlock-name"></h2>
+          <div class="unlock-art"><i class="unlock-rays" aria-hidden="true"></i><img id="unlock-img" alt="" /></div>
+          <p id="unlock-note" class="unlock-note"></p>
+          <button id="btn-unlock-ok" class="btn primary" type="button">太好了！</button>
         </div>
       </div>
 

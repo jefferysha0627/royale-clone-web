@@ -746,9 +746,28 @@ p.small { font-size: 12px; line-height: 1.45; margin: -2px 0 2px; }
 /* 獎盃與競技場 */
 .trophy-count { display: inline-flex; align-items: center; gap: 2px; margin-left: 4px; color: #ffd54a; font-variant-numeric: tabular-nums; }
 .trophy-ico { width: 14px; height: 14px; fill: #ffc531; filter: drop-shadow(0 1px 0 rgba(0, 0, 0, .5)); }
-.arena-banner { display: flex; flex-direction: column; align-items: center; gap: 4px; margin: 8px auto 0; width: min(280px, 86%); }
-.arena-name { font-size: 16px; font-weight: 900; color: #ffe7a8; text-shadow: 0 2px 0 rgba(0, 0, 0, .55); letter-spacing: 1px; }
-.arena-bar { width: 100%; height: 8px; border-radius: 4px; background: rgba(0, 0, 0, .35); border: 1px solid rgba(255, 255, 255, .15); overflow: hidden; }
+.arena-banner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  margin: 8px auto 0;
+  width: min(296px, 90%);
+  padding: 6px 10px 7px;
+  border: 1px solid rgba(255, 255, 255, .1);
+  border-radius: 12px;
+  background: rgba(0, 0, 0, .18);
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  transition: transform .12s, background .12s;
+}
+.arena-banner:hover { background: rgba(0, 0, 0, .28); }
+.arena-banner:active { transform: scale(.97); }
+.arena-banner:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
+.arena-name { display: inline-flex; align-items: center; gap: 6px; font-size: 16px; font-weight: 900; color: #ffe7a8; text-shadow: 0 2px 0 rgba(0, 0, 0, .55); letter-spacing: 1px; }
+.road-chev { font-style: normal; font-size: 20px; line-height: 1; color: var(--gold); margin-top: -2px; }
+.arena-bar { display: block; width: 100%; height: 8px; border-radius: 4px; background: rgba(0, 0, 0, .35); border: 1px solid rgba(255, 255, 255, .15); overflow: hidden; }
 .arena-bar i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, #ffb52e, #ffe27a); transition: width .6s ease-out; }
 .arena-banner small { font-size: 12px; color: var(--muted); }
 .panel .result-trophies { margin: -4px 0 18px; font-size: 20px; font-weight: 900; line-height: 1.2; color: #ffd54a; text-shadow: 0 2px 0 rgba(0, 0, 0, .5); animation: trophy-pop .5s ease-out; }
@@ -766,3 +785,44 @@ p.small { font-size: 12px; line-height: 1.45; margin: -2px 0 2px; }
 /* 表情貼圖（3D 指揮官表情） */
 .emote-picker button .em-img { width: 34px; height: 34px; display: block; pointer-events: none; }
 .emote-bubble .em-img { width: 40px; height: 40px; display: inline-block; vertical-align: middle; margin: -8px 4px -8px -4px; pointer-events: none; }
+
+/* 獎盃之路 */
+.road-panel { max-height: calc(var(--app-h) - 24px - var(--safe-t) - var(--safe-b)); overflow: hidden; }
+.road-head { display: flex; align-items: center; justify-content: space-between; }
+.road-head h3 { margin: 0; font-size: 22px; }
+.road-count { display: inline-flex; align-items: center; gap: 4px; font-size: 19px; font-weight: 900; color: #ffd54a; font-variant-numeric: tabular-nums; }
+.road-count .trophy-ico { width: 19px; height: 19px; }
+.road-note { font-size: 12px; color: var(--muted); line-height: 1.4; }
+.road-list { position: relative; list-style: none; margin: 0; padding: 2px 2px 2px 22px; display: flex; flex-direction: column; gap: 10px; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; min-height: 0; }
+.road-list::before { content: ""; position: absolute; left: 9px; top: 16px; bottom: 16px; width: 4px; border-radius: 2px; background: rgba(255, 255, 255, .12); }
+.road-item { position: relative; display: flex; gap: 10px; align-items: center; padding: 7px; border-radius: 14px; background: rgba(0, 0, 0, .22); border: 2px solid rgba(255, 255, 255, .07); }
+.road-item::before { content: ""; position: absolute; left: -20px; top: 50%; width: 12px; height: 12px; margin-top: -8px; border-radius: 50%; background: #3a4a5a; border: 2px solid rgba(255, 255, 255, .25); }
+.road-item.done::before, .road-item.current::before { background: var(--gold); border-color: #fff3c4; }
+.road-item.current { border-color: var(--gold); background: linear-gradient(90deg, rgba(242, 178, 51, .22), rgba(0, 0, 0, .18)); }
+.road-item.current::before { box-shadow: 0 0 0 4px rgba(242, 178, 51, .3); }
+.road-art { position: relative; flex: 0 0 auto; width: 46%; max-width: 150px; aspect-ratio: 16 / 9; border-radius: 10px; overflow: hidden; }
+.road-art img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+.road-item.locked .road-art img { filter: grayscale(.8) brightness(.55); }
+.road-lock { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; }
+.road-lock svg { width: 26px; height: 26px; fill: #e9eef5; filter: drop-shadow(0 2px 2px rgba(0, 0, 0, .6)); }
+.road-info { display: flex; flex-direction: column; gap: 3px; min-width: 0; text-align: left; }
+.road-info b { font-size: 16px; line-height: 1.2; }
+.road-min { display: inline-flex; align-items: center; gap: 3px; font-size: 14px; font-weight: 900; color: #ffd54a; font-variant-numeric: tabular-nums; }
+.road-info small { font-size: 12px; color: var(--muted); line-height: 1.35; word-break: keep-all; overflow-wrap: anywhere; }
+.road-item.current small { color: #ffe7a8; font-weight: 800; }
+
+/* 新競技場解鎖 */
+.unlock-panel { max-width: 380px; overflow: hidden; gap: 6px; background: radial-gradient(circle at 50% 42%, #35548a, var(--panel) 72%); border-color: var(--gold); animation: unlock-in .45s cubic-bezier(.2, 1.4, .4, 1) both; }
+.unlock-kicker { font-size: 15px; font-weight: 900; color: #ffe7a8; letter-spacing: 3px; }
+.panel .unlock-name { font-size: 30px; color: var(--gold); text-shadow: 0 3px 0 #000; letter-spacing: 2px; }
+.unlock-art { position: relative; width: 100%; aspect-ratio: 16 / 9; margin: 2px 0 4px; }
+.unlock-art img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; filter: drop-shadow(0 12px 14px rgba(0, 0, 0, .5)); animation: unlock-drop .8s .2s cubic-bezier(.2, 1.3, .4, 1) both; }
+.unlock-rays { position: absolute; left: 50%; top: 50%; width: 160%; aspect-ratio: 1; transform: translate(-50%, -50%); background: repeating-conic-gradient(rgba(255, 231, 168, .2) 0 9deg, transparent 9deg 18deg); -webkit-mask-image: radial-gradient(circle, #000 18%, transparent 62%); mask-image: radial-gradient(circle, #000 18%, transparent 62%); animation: rays-spin 14s linear infinite; pointer-events: none; }
+.unlock-note { font-size: 13px; color: var(--muted); }
+@keyframes rays-spin { to { transform: translate(-50%, -50%) rotate(360deg); } }
+@keyframes unlock-in { from { transform: scale(.6); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes unlock-drop { from { transform: translateY(-36px) scale(.7); opacity: 0; } to { transform: none; opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  .unlock-panel, .unlock-art img { animation-duration: .01s; }
+  .unlock-rays { animation: none; }
+}

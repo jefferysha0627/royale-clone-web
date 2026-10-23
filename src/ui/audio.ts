@@ -309,6 +309,13 @@ const VOICES: Record<string, Voice> = {
   lose: (c, o, t) => {
     [392, 370, 349, 262].forEach((f, i) => tone(c, o, t + i * 0.22, 'triangle', f, f * 0.98, i === 3 ? 0.7 : 0.22, 0.16));
   },
+  // 新競技場解鎖：往上爬的琶音＋閃亮的高音
+  unlockArena: (c, o, t) => {
+    noise(c, o, t, 0.6, 0.12, 'bandpass', 1500, 6000, 1, 0.05);
+    [392, 523, 659, 784, 1047].forEach((f, i) => tone(c, o, t + 0.1 + i * 0.09, 'triangle', f, f, i === 4 ? 0.6 : 0.18, 0.13));
+    [1568, 2093].forEach((f, i) => tone(c, o, t + 0.6 + i * 0.08, 'sine', f, f, 0.5, 0.06));
+    [262, 330, 392].forEach((f) => tone(c, o, t + 0.55, 'square', f, f, 0.6, 0.05));
+  },
   draw: (c, o, t) => {
     [523, 494, 523].forEach((f, i) => tone(c, o, t + i * 0.18, 'triangle', f, f, 0.2, 0.14));
   },

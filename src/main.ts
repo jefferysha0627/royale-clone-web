@@ -3,9 +3,10 @@ import { AiController, AI_LEVELS, CARD_IDS, CARDS, DEFAULT_PLAYER_DECK, UNITS, c
 import { Sound } from './ui/audio';
 import { Battle } from './ui/battle';
 import { avgCost, cardTags, fillCard, rarityName, refreshPortraits } from './ui/cardview';
-import { arenaIndex, arenaOf, arenaProgress, trophyDelta } from './ui/progress';
+import { ARENAS, arenaIndex, arenaOf, arenaProgress, trophyDelta } from './ui/progress';
 import { loadSettings, saveSettings } from './ui/settings';
 import { shareGame, shareUrl } from './ui/share';
+import { ARENA_THEMES, themeIndex } from './render3d/arena';
 import { portraits } from './render3d/portraits';
 
 const $ = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T;
@@ -29,6 +30,8 @@ let afterHowto: (() => void) | null = null;
 /** 牌組已滿時選了「使用」：等玩家點一張牌組內的卡來替換。 */
 let swapIn: string | null = null;
 let infoCard: string | null = null;
+/** 這場打完升到的新競技場（回主畫面時播解鎖畫面）。 */
+let pendingUnlock: number | null = null;
 
 const battle = new Battle(sound, {
   onResult(r) {
@@ -40,6 +43,11 @@ const battle = new Battle(sound, {
     settings.trophies = Math.max(0, before + delta);
     saveSettings(settings);
     showTrophyResult(delta, before, settings.trophies);
+    // 升到新競技場：回主畫面時播放解鎖畫面（先準備好場景圖）
+    if (arenaIndex(settings.trophies) > arenaIndex(before)) {
+      pendingUnlock = arenaIndex(settings.trophies);
+      portraits.requestArt([ARENAS[pendingUnlock].theme]);
+    }
     syncArena();
   },
   onQuit() {
@@ -122,6 +130,11 @@ function showHome(): void {
   deckScreen.hidden = true;
   home.hidden = false;
   renderHome();
+  if (pendingUnlock !== null) {
+    const i = pendingUnlock;
+    pendingUnlock = null;
+    showUnlock(i);
+  }
 }
 
 function renderHome(): void {
@@ -144,14 +157,111 @@ function renderHome(): void {
   $('home-arena-next').textContent = prog.next ? `再 ${prog.need} 座獎盃解鎖「${prog.next.name}」` : '已到達最高競技場';
   document.querySelectorAll<HTMLButtonElement>('.seg-btn').forEach((b) => b.setAttribute('aria-checked', String(b.dataset.diff === settings.level)));
   renderMute();
-  const hero = portraits.hero();
-  if (hero) {
-    const img = $<HTMLImageElement>('hero-img');
-    if (img.src !== hero) img.src = hero;
+  // 主畫面插圖是目前競技場的小場景（換競技場時跟著換）
+  const art = portraits.arenaArt(arena.theme);
+  if (art === undefined) portraits.requestArt([arena.theme]);
+  const img = $<HTMLImageElement>('hero-img');
+  if (art) {
+    if (img.src !== art) img.src = art;
     img.hidden = false;
     $('hero-fallback').hidden = true;
   }
 }
+
+// ───────── 獎盃之路與新競技場 ─────────
+
+const LOCK_SVG = '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M6 8V6a4 4 0 1 1 8 0v2h1a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1zm2 0h4V6a2 2 0 1 0-4 0z" /></svg>';
+const roadOv = $('ov-road');
+const unlockOv = $('ov-unlock');
+
+/** 競技場圖還沒產生好時，先用該場地的草地配色當底。 */
+function arenaBg(theme: number): string {
+  const pal = ARENA_THEMES[themeIndex(theme)];
+  return `radial-gradient(ellipse 46% 40% at 50% 54%, ${pal.grassA} 0 70%, ${pal.outside} 72%, transparent 100%)`;
+}
+
+function openRoad(): void {
+  const list = $('road-list');
+  list.innerHTML = '';
+  const t = settings.trophies;
+  const cur = arenaIndex(t);
+  const prog = arenaProgress(t);
+  portraits.requestArt(ARENAS.map((a) => a.theme));
+  // 由高到低排（往上爬），目前所在的競技場捲到畫面中間
+  for (let i = ARENAS.length - 1; i >= 0; i--) {
+    const a = ARENAS[i];
+    const li = document.createElement('li');
+    li.className = `road-item ${i === cur ? 'current' : i < cur ? 'done' : 'locked'}`;
+    li.dataset.arena = String(i);
+    const art = document.createElement('div');
+    art.className = 'road-art';
+    art.style.background = arenaBg(a.theme);
+    const img = document.createElement('img');
+    img.alt = '';
+    img.dataset.theme = String(a.theme);
+    img.hidden = true;
+    art.appendChild(img);
+    if (i > cur) art.insertAdjacentHTML('beforeend', `<span class="road-lock">${LOCK_SVG}</span>`);
+    const info = document.createElement('div');
+    info.className = 'road-info';
+    // 「目前所在」與距離下一座分兩行，避免窄螢幕把最後一個字擠到下一行
+    const status =
+      i === cur ? (prog.next ? `目前所在<br>再 ${prog.need} 座獎盃升級` : '目前所在<br>已是最高競技場') : i < cur ? '已解鎖' : `還差 ${a.min - t} 座獎盃`;
+    info.innerHTML = `<b>${a.name}</b><span class="road-min">${TROPHY_SVG}${a.min}</span><small>${status}</small>`;
+    li.append(art, info);
+    list.appendChild(li);
+  }
+  fillRoadArt();
+  $('road-count').textContent = String(t);
+  roadOv.hidden = false;
+  list.querySelector<HTMLElement>('.road-item.current')?.scrollIntoView({ block: 'center' });
+  sound.play('tap');
+}
+
+function fillRoadArt(): void {
+  roadOv.querySelectorAll<HTMLImageElement>('img[data-theme]').forEach((img) => {
+    const url = portraits.arenaArt(Number(img.dataset.theme));
+    if (!url) return;
+    if (img.src !== url) img.src = url;
+    img.hidden = false;
+  });
+}
+
+function showUnlock(i: number): void {
+  const a = ARENAS[i];
+  $('unlock-name').textContent = a.name;
+  $('unlock-note').textContent = `獎盃達到 ${a.min}，接下來的對戰都在這裡進行。`;
+  const img = $<HTMLImageElement>('unlock-img');
+  img.dataset.theme = String(a.theme);
+  img.removeAttribute('src');
+  img.hidden = true;
+  $('ov-unlock').querySelector<HTMLElement>('.unlock-art')!.style.background = arenaBg(a.theme);
+  portraits.requestArt([a.theme]);
+  fillUnlockArt();
+  unlockOv.hidden = false;
+  sound.play('unlockArena');
+}
+
+function fillUnlockArt(): void {
+  const img = $<HTMLImageElement>('unlock-img');
+  const url = portraits.arenaArt(Number(img.dataset.theme));
+  if (!url) return;
+  if (img.src !== url) img.src = url;
+  img.hidden = false;
+  img.parentElement!.style.background = '';
+}
+
+$('btn-road').addEventListener('click', openRoad);
+$('btn-road-close').addEventListener('click', () => {
+  roadOv.hidden = true;
+});
+roadOv.addEventListener('click', (e) => {
+  if (e.target === roadOv) roadOv.hidden = true;
+});
+$('btn-unlock-ok').addEventListener('click', () => {
+  unlockOv.hidden = true;
+  sound.play('tap');
+});
 
 function renderMute(): void {
   const label = settings.muted ? '音效：關' : '音效：開';
@@ -449,6 +559,10 @@ if (testMode) {
         battle.simStep();
       }
     },
+    /** 直接顯示新競技場解鎖畫面（截圖用）。 */
+    showUnlock(i: number): void {
+      showUnlock(i);
+    },
     /** 略過開場動畫（自動測試用）。 */
     skipIntro(on = true): void {
       battle.skipIntro = on;
@@ -471,5 +585,7 @@ showHome();
 portraits.onUpdate(() => {
   refreshPortraits();
   if (!home.hidden) renderHome();
+  if (!roadOv.hidden) fillRoadArt();
+  if (!unlockOv.hidden) fillUnlockArt();
 });
 portraits.start(settings.deck);

@@ -41,6 +41,11 @@ export class Kit {
   /** 是否烘焙上下漸層（場地裝飾等大型物件可關閉）。 */
   gradient = true;
 
+  /** 目前加入的零件數（空的 Kit 不能 build）。 */
+  get parts(): number {
+    return this.geos.length;
+  }
+
   addBone(name: string, parent: number, at: V3): number {
     this.bones.push({ name, parent, at });
     return this.bones.length - 1;
