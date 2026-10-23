@@ -3,8 +3,9 @@ import {
   SRGBColorSpace, type WebGLRenderer,
 } from 'three';
 import { ARENA, TOWER_LAYOUT } from '../sim';
+import { Ambience } from './ambience';
 import { CX, CZ } from './coords';
-import { Kit } from './kit';
+import { Kit, type V3 } from './kit';
 import { shade } from './models/humanoid';
 import { backTree, banner, brazier, crystal, lantern, lily, pumpkin, reeds, scatterProp, topiary, type ArenaStyle, type PropColors } from './props';
 
@@ -262,6 +263,7 @@ void main() {
 
 export class ArenaView {
   readonly group = new Group();
+  readonly ambience = new Ambience();
   private water: ShaderMaterial;
   private canvas: HTMLCanvasElement;
   private tex: CanvasTexture;
@@ -309,6 +311,8 @@ export class ArenaView {
     this.decor = buildDecor(pal);
     this.decors.set(0, this.decor);
     this.group.add(this.decor);
+    this.group.add(this.ambience.points);
+    this.ambience.setStyle(pal.style, this.decor.userData.emitters as V3[]);
 
     // 遠方草地底色，避免寬螢幕露出背景
     this.farMat = new MeshLambertMaterial({ color: new Color(shade(pal.outside, -0.04)), side: DoubleSide });
@@ -336,6 +340,7 @@ export class ArenaView {
     }
     d.visible = true;
     this.decor = d;
+    this.ambience.setStyle(pal.style, d.userData.emitters as V3[]);
     this.farMat.color.set(shade(pal.outside, -0.04));
     this.water.uniforms.uDeep.value.set(pal.water[0]);
     this.water.uniforms.uLite.value.set(pal.water[1]);
@@ -343,6 +348,12 @@ export class ArenaView {
 
   update(t: number): void {
     this.water.uniforms.uTime.value = t;
+    this.ambience.update(t);
+  }
+
+  /** 畫面縮放（每格多少像素），環境粒子的大小跟著換算。 */
+  setScale(pxPerUnit: number): void {
+    this.ambience.setScale(pxPerUnit);
   }
 }
 
@@ -406,6 +417,7 @@ function buildDecor(pal: ArenaPalette): Group {
   k.addBone('root', -1, [0, 0, 0]);
   const glow = new Kit();
   glow.gradient = false;
+  glow.trackParts = true;
   glow.addBone('root', -1, [0, 0, 0]);
   const [wallMain, wallCap, wallDark] = pal.wall;
   const bankZ = [ARENA.riverTop - CZ, ARENA.riverBottom - CZ];
@@ -511,6 +523,8 @@ function buildDecor(pal: ArenaPalette): Group {
     }
   }
   const group = new Group();
+  // 發光零件（火盆火焰、水晶、燈籠）的位置當環境粒子的發射點；只取畫面看得到的（場地兩側與後方牆前）
+  group.userData.emitters = glow.partAt.filter((p) => Math.abs(p[0]) < W / 2 + 2 && Math.abs(p[2]) < ARENA.height / 2 + 2).map((p) => [p[0], p[1] + 0.2, p[2]] as V3);
   const lit = new Mesh(k.build(1).geometry, new MeshLambertMaterial({ vertexColors: true }));
   lit.castShadow = true;
   lit.receiveShadow = true;

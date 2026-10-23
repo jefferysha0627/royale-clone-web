@@ -42,6 +42,9 @@ export class Kit {
   bone = 0;
   /** 之後加入的零件預設光澤度。 */
   shine = 0;
+  /** 開啟時記下每個零件的位置（場景的發光零件 → 環境粒子的發射點）。 */
+  trackParts = false;
+  readonly partAt: V3[] = [];
   /** 是否烘焙上下漸層（場地裝飾等大型物件可關閉）。 */
   gradient = true;
 
@@ -62,6 +65,7 @@ export class Kit {
   }
 
   add(src: BufferGeometry, o: PartOpts): this {
+    if (this.trackParts) this.partAt.push(o.at ?? [0, 0, 0]);
     const g = src.index ? src : src.toNonIndexed();
     if (!g.index) {
       // 非索引幾何（極少用到）轉成有索引，與其他零件一致才能合併

@@ -207,6 +207,7 @@ export class Renderer3D implements BattleRenderer {
     this.cam.bottom = top - cssH / k;
     this.cam.updateProjectionMatrix();
     this.fx.setScale(k * this.dpr);
+    this.arena.setScale(k * this.dpr);
     this.overlay.resize(cssW, cssH, this.dpr);
   }
 
@@ -232,6 +233,7 @@ export class Renderer3D implements BattleRenderer {
     this.cam.bottom = up - halfH;
     this.cam.updateProjectionMatrix();
     this.fx.setScale(this.k * this.dpr);
+    this.arena.setScale(this.k * this.dpr);
   }
 
   toWorld(px: number, py: number): [number, number] {
@@ -997,6 +999,7 @@ export class Renderer3D implements BattleRenderer {
       if (this.quality === 'low') {
         this.gl.shadowMap.enabled = false;
         this.stage.sun.castShadow = false;
+        this.arena.ambience.enabled = false;
       } else {
         this.stage.sun.shadow.mapSize.set(1024, 1024);
         this.stage.sun.shadow.map?.dispose();
