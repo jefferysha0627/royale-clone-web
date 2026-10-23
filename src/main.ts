@@ -3,6 +3,7 @@ import { AiController, AI_LEVELS, CARD_IDS, CARDS, UNITS, canHitAir, isValidDeck
 import { Sound } from './ui/audio';
 import { Battle } from './ui/battle';
 import { avgCost, cardTags, fillCard, rarityName, refreshPortraits } from './ui/cardview';
+import { profileRows, recordBattle, renderBattleLog } from './ui/profile';
 import { ARENAS, arenaIndex, arenaOf, arenaProgress, trophyDelta } from './ui/progress';
 import { DECK_PRESETS, DECK_SLOTS, loadSettings, saveSettings, useSlot } from './ui/settings';
 import { shareGame, shareUrl } from './ui/share';
@@ -44,6 +45,7 @@ const battle = new Battle(sound, {
     const before = settings.trophies;
     const delta = trophyDelta(settings.level, r.winner, r.crowns[0], before);
     settings.trophies = Math.max(0, before + delta);
+    recordBattle(settings, r, battle.matchInfo(), settings.trophies - before);
     saveSettings(settings);
     showTrophyResult(delta, before, settings.trophies);
     // 升到新競技場：回主畫面時播放解鎖畫面（先準備好場景圖）
@@ -259,6 +261,30 @@ function fillUnlockArt(): void {
   img.hidden = false;
   img.parentElement!.style.background = '';
 }
+
+// ───────── 個人資料與對戰紀錄 ─────────
+
+const profileOv = $('ov-profile');
+
+function openProfile(): void {
+  $('profile-trophies').textContent = String(settings.trophies);
+  $('profile-arena').textContent = arenaOf(settings.trophies).name;
+  $('profile-stats').innerHTML = profileRows(settings)
+    .map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`)
+    .join('');
+  renderBattleLog($('profile-log'), settings.log);
+  profileOv.hidden = false;
+  profileOv.querySelector('.profile-scroll')!.scrollTop = 0;
+  sound.play('tap');
+}
+
+$('btn-profile').addEventListener('click', openProfile);
+$('btn-profile-close').addEventListener('click', () => {
+  profileOv.hidden = true;
+});
+profileOv.addEventListener('click', (e) => {
+  if (e.target === profileOv) profileOv.hidden = true;
+});
 
 $('btn-road').addEventListener('click', openRoad);
 $('btn-road-close').addEventListener('click', () => {
@@ -640,6 +666,7 @@ portraits.onUpdate(() => {
   refreshPortraits();
   if (!home.hidden) renderHome();
   if (!roadOv.hidden) fillRoadArt();
+  if (!profileOv.hidden) refreshPortraits(profileOv);
   if (!unlockOv.hidden) fillUnlockArt();
 });
 portraits.start(settings.deck);

@@ -46,10 +46,10 @@
       <!-- 主畫面 -->
       <section id="screen-home" class="screen home" hidden>
         <header class="home-bar">
-          <div class="player-chip">
+          <button id="btn-profile" class="player-chip" type="button" aria-label="個人資料與對戰紀錄">
             <span class="lvl-badge">11</span>
             <span class="player-meta"><b>你 <span class="trophy-count"><svg class="trophy-ico" viewBox="0 0 20 20" aria-hidden="true"><path d="M5 2h10v3h3v2a4 4 0 0 1-4 4h-.4A4.5 4.5 0 0 1 11 13.4V15h3v3H6v-3h3v-1.6A4.5 4.5 0 0 1 6.4 11H6a4 4 0 0 1-4-4V5h3zM4 7a2 2 0 0 0 1.2 1.8A9 9 0 0 1 5 7zm11 0c0 .6-.1 1.2-.2 1.8A2 2 0 0 0 16 7z" /></svg><span id="home-trophies">0</span></span></b><small id="home-record">還沒有戰績</small></span>
-          </div>
+          </button>
           <button id="btn-mute-home" class="chip-btn" type="button" aria-pressed="false">音效：開</button>
         </header>
         <div class="home-main">
@@ -143,6 +143,23 @@
           <p class="road-note">贏電腦拿獎盃（難度越高拿越多），累積到門檻就換到下一座競技場。</p>
           <ol id="road-list" class="road-list"></ol>
           <button id="btn-road-close" class="btn" type="button">關閉</button>
+        </div>
+      </div>
+
+      <!-- 個人資料與對戰紀錄 -->
+      <div id="ov-profile" class="overlay top sheet" hidden>
+        <div class="panel sheet-panel profile-panel" role="dialog" aria-labelledby="profile-title">
+          <div class="profile-head">
+            <span class="lvl-badge">11</span>
+            <div class="profile-name"><h3 id="profile-title">你</h3><small id="profile-arena"></small></div>
+            <span class="road-count"><svg class="trophy-ico" viewBox="0 0 20 20" aria-hidden="true"><path d="M5 2h10v3h3v2a4 4 0 0 1-4 4h-.4A4.5 4.5 0 0 1 11 13.4V15h3v3H6v-3h3v-1.6A4.5 4.5 0 0 1 6.4 11H6a4 4 0 0 1-4-4V5h3zM4 7a2 2 0 0 0 1.2 1.8A9 9 0 0 1 5 7zm11 0c0 .6-.1 1.2-.2 1.8A2 2 0 0 0 16 7z" /></svg><b id="profile-trophies">0</b></span>
+          </div>
+          <div class="profile-scroll">
+            <dl id="profile-stats" class="stats"></dl>
+            <h4 class="profile-sub">對戰紀錄<small>最近 10 場・只存在這台裝置</small></h4>
+            <ol id="profile-log" class="battle-log"></ol>
+          </div>
+          <button id="btn-profile-close" class="btn" type="button">關閉</button>
         </div>
       </div>
 

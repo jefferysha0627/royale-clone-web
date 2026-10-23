@@ -1,7 +1,23 @@
-import { DEFAULT_PLAYER_DECK, isValidDeck, type AiLevel } from '../sim';
+import { CARDS, DEFAULT_PLAYER_DECK, isValidDeck, type AiLevel, type Team } from '../sim';
 import { load, save } from './storage';
 
 // 只存在本機瀏覽器；儲存失敗時使用預設值，不影響開戰。
+
+/** 對戰紀錄的一筆（最新的在最前面）。 */
+export interface BattleLogEntry {
+  at: number; // 結束時間（毫秒）
+  w: Team | null; // 勝方（0 = 你）
+  c: [number, number]; // 皇冠（你、電腦）
+  lvl: AiLevel;
+  foe: string; // 電腦牌組名稱
+  foeCards: string[];
+  deck: string[];
+  d: number; // 獎盃增減
+  t: number; // 打完後的獎盃
+}
+
+export const LOG_MAX = 20;
+
 export interface Settings {
   /** 目前使用的牌組（= decks[slot]）。 */
   deck: string[];
@@ -13,6 +29,11 @@ export interface Settings {
   howtoSeen: boolean;
   record: { win: number; lose: number; draw: number };
   trophies: number;
+  bestTrophies: number;
+  threeCrowns: number;
+  /** 每張卡累計出過幾次。 */
+  cardPlays: Record<string, number>;
+  log: BattleLogEntry[];
 }
 
 const KEY = 'bridge-tower-duel.v1';
@@ -37,6 +58,11 @@ export function loadSettings(): Settings {
   // 第一次來的玩家預設「簡單」（多半是從社群連結點進來的新手）；選過難度就沿用
   const level: AiLevel = raw.level === 'easy' || raw.level === 'normal' || raw.level === 'hard' ? raw.level : 'easy';
   const r = raw.record;
+  const trophies = Math.max(0, Math.floor(Number(raw.trophies) || 0));
+  const cardPlays: Record<string, number> = {};
+  if (raw.cardPlays && typeof raw.cardPlays === 'object') {
+    for (const [id, n] of Object.entries(raw.cardPlays)) if (id in CARDS && Number(n) > 0) cardPlays[id] = Math.floor(Number(n));
+  }
   return {
     deck: decks[slot],
     decks,
@@ -49,8 +75,25 @@ export function loadSettings(): Settings {
       lose: Number(r?.lose) || 0,
       draw: Number(r?.draw) || 0,
     },
-    trophies: Math.max(0, Math.floor(Number(raw.trophies) || 0)),
+    trophies,
+    bestTrophies: Math.max(trophies, Math.floor(Number(raw.bestTrophies) || 0)),
+    threeCrowns: Math.max(0, Math.floor(Number(raw.threeCrowns) || 0)),
+    cardPlays,
+    log: Array.isArray(raw.log) ? raw.log.filter(validEntry).slice(0, LOG_MAX) : [],
   };
+}
+
+const validCards = (v: unknown): v is string[] => Array.isArray(v) && v.length === 8 && v.every((id) => typeof id === 'string' && id in CARDS);
+
+function validEntry(e: unknown): e is BattleLogEntry {
+  if (!e || typeof e !== 'object') return false;
+  const x = e as Record<string, unknown>;
+  const c = x.c as unknown[];
+  return (
+    typeof x.at === 'number' && (x.w === 0 || x.w === 1 || x.w === null) && Array.isArray(c) && c.length === 2 && c.every((n) => typeof n === 'number') &&
+    (x.lvl === 'easy' || x.lvl === 'normal' || x.lvl === 'hard') && typeof x.foe === 'string' && validCards(x.foeCards) && validCards(x.deck) &&
+    typeof x.d === 'number' && typeof x.t === 'number'
+  );
 }
 
 /** 換到另一個牌組欄位（deck 跟著指向那一副）。 */

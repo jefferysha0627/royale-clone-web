@@ -439,6 +439,33 @@ if (run('2')) {
   const arenaName = await page.locator('#home-arena').textContent();
   results.trophies = { log: trophyLog, home: homeTrophies, arena: arenaName };
   check('[desktop] 主畫面顯示目前獎盃與競技場', homeTrophies === savedTrophies && !!arenaName, `獎盃 ${homeTrophies}，${arenaName}`);
+  // 個人資料與對戰紀錄：每打完一場就多一筆（雙方各 8 張牌、皇冠、獎盃增減）
+  await page.click('#btn-profile');
+  await page.waitForSelector('#ov-profile:not([hidden])');
+  await sleep(300);
+  const prof = await page.evaluate(() => {
+    const s = window.__btd.settings;
+    const items = [...document.querySelectorAll('#profile-log .log-item')];
+    return {
+      items: items.length,
+      decks: items.map((li) => li.querySelectorAll('.log-deck .card').length),
+      deltas: items.map((li) => li.querySelector('.log-delta').textContent),
+      saved: s.log.map((e) => e.d),
+      best: s.bestTrophies,
+      trophies: s.trophies,
+      wins: s.record.win,
+      stats: document.getElementById('profile-stats').textContent,
+    };
+  });
+  check(
+    '[desktop] 個人資料顯示最高獎盃與戰績，對戰紀錄每場一筆且有雙方牌組與獎盃增減',
+    prof.items === Math.min(10, prof.saved.length) && prof.saved.length >= 4 && prof.decks.every((n) => n === 16) && prof.best >= prof.trophies &&
+      prof.stats.includes(`勝場${prof.wins}`) && prof.deltas.every((d, i) => d === (prof.saved[i] > 0 ? `+${prof.saved[i]}` : prof.saved[i] < 0 ? String(prof.saved[i]) : '±0')),
+    `${prof.items} 筆（${prof.deltas.join(' ')}），最高 ${prof.best}`,
+  );
+  await shot(page, `${vp.name}-19-profile`);
+  await page.click('#btn-profile-close');
+  check('[desktop] 個人資料可關閉', await page.isHidden('#ov-profile'));
   await ctx.close();
 }
 

@@ -838,3 +838,34 @@ p.small { font-size: 12px; line-height: 1.45; margin: -2px 0 2px; }
 .slot-tabs.mini .slot-tab { flex: 0 0 auto; width: 40px; min-width: 44px; min-height: 44px; padding: 0; border: 0; background: none; box-shadow: none; display: inline-flex; align-items: center; justify-content: center; }
 .slot-tabs.mini .slot-tab span { width: 26px; height: 26px; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; background: rgba(0, 0, 0, .3); border: 1.5px solid rgba(255, 255, 255, .18); font-size: 13px; color: #c9d6ef; }
 .slot-tabs.mini .slot-tab.active span { background: linear-gradient(#3f7fe8, #2a5fc4); border-color: #8fb6ff; color: #fff; }
+
+/* 個人資料與對戰紀錄 */
+button.player-chip { font: inherit; color: inherit; text-align: left; cursor: pointer; min-height: 44px; transition: transform .12s, background .12s; }
+button.player-chip:hover { background: rgba(0, 0, 0, .38); }
+button.player-chip:active { transform: scale(.97); }
+button.player-chip:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
+.profile-panel { max-height: calc(var(--app-h) - 24px - var(--safe-t) - var(--safe-b)); overflow: hidden; }
+.profile-head { display: flex; align-items: center; gap: 10px; }
+.profile-name { flex: 1 1 auto; display: flex; flex-direction: column; min-width: 0; }
+.profile-name h3 { margin: 0; font-size: 22px; }
+.profile-name small { font-size: 13px; font-weight: 800; color: #ffe7a8; }
+.profile-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; display: flex; flex-direction: column; gap: 10px; }
+.profile-sub { margin: 4px 0 0; font-size: 16px; display: flex; align-items: baseline; gap: 8px; }
+.profile-sub small { font-size: 11px; font-weight: 600; color: var(--muted); }
+.battle-log { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.log-empty { padding: 14px; border-radius: 12px; background: rgba(0, 0, 0, .2); color: var(--muted); font-size: 13px; text-align: center; }
+.log-item { display: flex; flex-direction: column; gap: 5px; padding: 8px 9px 7px; border-radius: 12px; border-left: 5px solid #7d8794; background: rgba(0, 0, 0, .22); }
+.log-item.win { border-left-color: #3f8fe8; background: linear-gradient(90deg, rgba(63, 143, 232, .2), rgba(0, 0, 0, .2) 60%); }
+.log-item.lose { border-left-color: #e0574e; background: linear-gradient(90deg, rgba(224, 87, 78, .18), rgba(0, 0, 0, .2) 60%); }
+.log-top { display: flex; align-items: center; gap: 8px; }
+.log-res { font-size: 16px; }
+.log-item.win .log-res { color: #9cc4ff; }
+.log-item.lose .log-res { color: #ff9d94; }
+.log-crowns { display: inline-flex; align-items: center; gap: 4px; margin-right: auto; font-weight: 900; font-variant-numeric: tabular-nums; }
+.log-crowns i { display: inline-flex; width: 17px; height: 14px; }
+.log-crowns i svg { width: 100%; height: 100%; stroke: rgba(0, 0, 0, .35); stroke-width: 1; }
+.log-crowns .me svg { fill: #4fa8ff; }
+.log-crowns .foe svg { fill: #ff5a4f; }
+.log-delta { font-weight: 900; color: #ffd54a; font-variant-numeric: tabular-nums; }
+.log-delta.down { color: #ff9a8f; }
+.log-meta { font-size: 11.5px; color: var(--muted); }

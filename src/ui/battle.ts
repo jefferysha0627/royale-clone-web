@@ -73,6 +73,9 @@ export class Battle {
   private deck: string[] = [];
   private level: AiLevel = 'normal';
   private aiDeckName = '';
+  private aiDeckCards: string[] = [];
+  /** 這場玩家每張卡出了幾次（寫進對戰紀錄與「最常出的卡」）。 */
+  private plays: Record<string, number> = {};
   private seed = 0;
   private handKey = '';
   private hudKey = '';
@@ -159,6 +162,8 @@ export class Battle {
     const pick = new Rng(this.seed ^ 0x5bd1e995);
     const aiDeck = pick.pick(AI_DECKS);
     this.aiDeckName = aiDeck.name;
+    this.aiDeckCards = [...aiDeck.cards];
+    this.plays = {};
     this.game = new Game({ seed: this.seed, decks: [this.deck, [...aiDeck.cards]] });
     this.ai = new AiController(this.game, 1, this.game.rng.fork(), AI_LEVELS[level]);
     this.renderer.reset();
@@ -362,6 +367,11 @@ export class Battle {
     return [r.left + sx, r.top + sy];
   }
 
+  /** 這場的對手與出牌統計（結算時寫進對戰紀錄）。 */
+  matchInfo(): { foe: string; foeCards: string[]; level: AiLevel; deck: string[]; plays: Record<string, number> } {
+    return { foe: this.aiDeckName, foeCards: [...this.aiDeckCards], level: this.level, deck: [...this.deck], plays: { ...this.plays } };
+  }
+
   /** 推進一個固定步長（AI 先決策，再模擬）。 */
   simStep(): void {
     this.ai.update();
@@ -379,6 +389,7 @@ export class Battle {
       switch (ev.type) {
         case 'deploy':
           this.sound.play(ev.team === 0 ? 'deploy' : 'enemyDeploy');
+          if (ev.team === 0) this.plays[ev.cardId] = (this.plays[ev.cardId] ?? 0) + 1;
           break;
         case 'spawn':
           if (ev.source === 'card' && CARDS[this.game.get(ev.id)?.cardId ?? '']?.kind === 'troop') {
