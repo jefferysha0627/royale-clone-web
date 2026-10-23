@@ -35,7 +35,7 @@ const HUMANOIDS: Record<string, (t: TeamPal) => HumanoidSpec> = {
   }),
   giant: (t) => ({
     height: 2.15, build: 1.3, headScale: 0.62, torsoScale: 1.3, legScale: 1.15, skin: '#e0a878', face: 'angry', nose: 'ball', ears: 'round',
-    beard: { color: '#3a2a1e', size: 1.1 }, hair: { style: 'tuft', color: '#3a2a1e' }, torso: '#8a6a4a', torso2: t.main, legs: '#6b5a40', boots: '#4a3a2a',
+    beard: { color: '#6a4228', size: 1.5 }, mustache: '#5a3620', hair: { style: 'tuft', color: '#6a4228' }, torso: '#8a6a4a', torso2: t.main, legs: '#6b5a40', boots: '#4a3a2a',
     arms: '#e0a878', hands: '#e0a878', belly: true, strap: '#5a3a1e', bracers: '#6b4a2a',
   }),
   goblin: () => ({

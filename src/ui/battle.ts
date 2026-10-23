@@ -416,7 +416,7 @@ export class Battle {
           this.sound.play(ev.isKing ? 'kingDown' : 'tower');
           if (!ev.cascade) this.flyCrowns(ev.team === 1 ? 0 : 1, ev.x, ev.y);
           if (!ev.isKing && !ev.cascade) {
-            this.banner(ev.team === 1 ? '拿下一頂皇冠！' : '我方的塔倒了', ev.team === 1 ? '繼續進攻國王塔' : '守住國王塔', ev.team === 1 ? 'gold' : '');
+            // 塔倒下的回饋是皇冠飛到上方的皇冠格（不另外跳大字橫幅，避免擋住戰場）
             // 電腦的反應（像真人一樣偶爾發表情）
             this.enemyEmote(ev.team === 1 ? (Math.random() < 0.5 ? 'grr' : 'wow') : Math.random() < 0.5 ? 'haha' : 'good', 0.9);
           }
