@@ -25,8 +25,8 @@
     <meta name="twitter:description" content="點開就能玩：出牌派兵、過橋推倒對方的塔。單人對電腦，免安裝免登入。非官方克隆，與 Supercell 無關。" />
     <meta name="twitter:image" content="https://jefferysha0627.github.io/royale-clone-web/og-image.png" />
     <style>html,body{color:#f4efe4;background:#16212c;height:100%;margin:0;font-family:system-ui,-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Noto Sans,Ubuntu,Cantarell,Helvetica Neue,PingFang TC,Noto Sans TC,Microsoft JhengHei,sans-serif}.boot{z-index:50;background:#16212c;flex-direction:column;justify-content:center;align-items:center;gap:14px;display:flex;position:fixed;top:0;bottom:0;left:0;right:0}.boot-logo{letter-spacing:2px;font-size:34px;font-weight:900}.boot-bar{background:#2b3a48;border-radius:4px;width:180px;height:8px;overflow:hidden}.boot-bar i{background:#f2b233;width:30%;height:100%;transition:width .3s;display:block}.boot p{color:#b8c2cc;margin:0;font-size:14px}.boot button{font:inherit;color:#1d1405;background:#f2b233;border:0;border-radius:10px;min-height:44px;padding:10px 20px;font-weight:700}</style>
-    <script type="module" crossorigin src="./assets/index-4mBGT04V.js"></script>
-    <link rel="stylesheet" crossorigin href="./assets/index-SaZAxh78.css">
+    <script type="module" crossorigin src="./assets/index-BXQtCRR1.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-BF5GIYXG.css">
   </head>
   <body>
     <div id="boot" class="boot">
@@ -39,82 +39,173 @@
     <div id="app">
       <!-- 主畫面 -->
       <section id="screen-home" class="screen home" hidden>
-        <div class="home-top">
+        <header class="home-bar">
+          <button id="btn-profile" class="player-chip" type="button" aria-label="個人資料與對戰紀錄">
+            <span class="lvl-badge">11</span>
+            <span class="player-meta"><b>你 <span class="trophy-count"><svg class="trophy-ico" viewBox="0 0 20 20" aria-hidden="true"><path d="M5 2h10v3h3v2a4 4 0 0 1-4 4h-.4A4.5 4.5 0 0 1 11 13.4V15h3v3H6v-3h3v-1.6A4.5 4.5 0 0 1 6.4 11H6a4 4 0 0 1-4-4V5h3zM4 7a2 2 0 0 0 1.2 1.8A9 9 0 0 1 5 7zm11 0c0 .6-.1 1.2-.2 1.8A2 2 0 0 0 16 7z" /></svg><span id="home-trophies">0</span></span></b><small id="home-record">還沒有戰績</small></span>
+          </button>
           <button id="btn-mute-home" class="chip-btn" type="button" aria-pressed="false">音效：開</button>
-        </div>
-        <div class="home-hero">
-          <svg class="logo-mark" viewBox="0 0 64 64" aria-hidden="true">
-            <rect x="6" y="20" width="18" height="30" rx="3" fill="#2f6fe0" />
-            <rect x="40" y="20" width="18" height="30" rx="3" fill="#d8423a" />
-            <rect x="4" y="14" width="5" height="8" fill="#2f6fe0" /><rect x="12.5" y="14" width="5" height="8" fill="#2f6fe0" /><rect x="21" y="14" width="5" height="8" fill="#2f6fe0" />
-            <rect x="38" y="14" width="5" height="8" fill="#d8423a" /><rect x="46.5" y="14" width="5" height="8" fill="#d8423a" /><rect x="55" y="14" width="5" height="8" fill="#d8423a" />
-            <rect x="17" y="41" width="30" height="12" rx="2" fill="#9b6b3d" /><path d="M24 41 V53 M32 41 V53 M40 41 V53" stroke="#6e4826" stroke-width="2" /><rect x="15" y="39" width="34" height="3" rx="1.5" fill="#f2b233" />
-            <rect x="2" y="50" width="60" height="6" rx="3" fill="#3b8fd0" />
-          </svg>
-          <h1 class="title">皇室戰爭克隆</h1>
-          <p class="tagline">出牌派兵、過橋推塔，三分鐘一局</p>
-          <p class="mode-note">單人對電腦・免安裝・免登入</p>
-        </div>
-        <div class="home-actions">
-          <button id="btn-play" class="btn primary big" type="button">開始對戰</button>
-          <div class="seg" role="radiogroup" aria-label="電腦難度">
-            <button type="button" class="seg-btn" data-diff="easy" role="radio">簡單</button>
-            <button type="button" class="seg-btn" data-diff="normal" role="radio">普通</button>
-            <button type="button" class="seg-btn" data-diff="hard" role="radio">困難</button>
+        </header>
+        <div class="home-main">
+          <div class="home-hero">
+            <h1 class="title">皇室戰爭<span class="title-sub">克隆</span></h1>
+            <p class="tagline">出牌派兵、過橋推塔・三分鐘一局</p>
+            <button id="btn-road" class="arena-banner" type="button" aria-label="獎盃之路：查看所有競技場">
+              <span class="arena-name"><span id="home-arena" aria-live="polite">綠野競技場</span><i class="road-chev" aria-hidden="true">›</i></span>
+              <span class="arena-bar" aria-hidden="true"><i id="home-arena-fill"></i></span>
+              <small id="home-arena-next"></small>
+            </button>
+            <div class="hero-art"><img id="hero-img" alt="" hidden /><div class="hero-fallback" id="hero-fallback"></div></div>
           </div>
-          <div class="row">
-            <button id="btn-deck" class="btn" type="button">編輯牌組</button>
-            <button id="btn-howto" class="btn" type="button">玩法說明</button>
+          <div class="home-actions">
+            <div class="seg" role="radiogroup" aria-label="電腦難度">
+              <button type="button" class="seg-btn" data-diff="easy" role="radio">簡單</button>
+              <button type="button" class="seg-btn" data-diff="normal" role="radio">普通</button>
+              <button type="button" class="seg-btn" data-diff="hard" role="radio">困難</button>
+            </div>
+            <button id="btn-play" class="btn battle-btn" type="button">對戰</button>
+            <p class="mode-note">單人對電腦・免安裝・免登入</p>
           </div>
+          <div class="home-deck">
+            <div class="home-deck-head">
+              <span class="home-deck-title">牌組<span id="home-deck-tabs" class="slot-tabs mini" role="tablist" aria-label="切換牌組"></span></span>
+              <span id="home-avg"></span>
+            </div>
+            <div id="home-deck-cards" class="mini-deck"></div>
+          </div>
+          <button id="btn-share-home" class="btn ghost" type="button">分享遊戲連結給朋友</button>
+          <div id="share-manual-home" class="share-manual" hidden>
+            <label for="share-input-home">長按或全選後複製：</label>
+            <input id="share-input-home" class="share-input" type="text" readonly />
+          </div>
+          <footer class="foot">非官方粉絲作品，與 Supercell 無關，角色與素材皆為原創 · <span class="credit">Site by JeffreySha</span></footer>
         </div>
-        <div class="home-deck">
-          <div class="home-deck-head"><span>目前牌組</span><span id="home-avg"></span></div>
-          <div id="home-deck-cards" class="mini-deck"></div>
-        </div>
-        <p id="home-record" class="record"></p>
-        <button id="btn-share-home" class="btn ghost" type="button">分享遊戲連結給朋友</button>
-        <div id="share-manual-home" class="share-manual" hidden>
-          <label for="share-input-home">長按或全選後複製：</label>
-          <input id="share-input-home" class="share-input" type="text" readonly />
-        </div>
-        <footer class="foot">非官方粉絲作品，與 Supercell 無關，素材皆為自製 · <span class="credit">Site by JeffreySha</span></footer>
+        <nav class="tabbar" aria-label="主選單">
+          <button id="btn-deck" class="tab" type="button"><span class="tab-ico">🂠</span>牌組</button>
+          <button class="tab active" type="button" aria-current="page"><span class="tab-ico">⚔</span>對戰</button>
+          <button id="btn-howto" class="tab" type="button"><span class="tab-ico">?</span>玩法</button>
+        </nav>
       </section>
 
       <!-- 牌組編輯 -->
       <section id="screen-deck" class="screen deck" hidden>
         <div class="deck-head">
-          <div class="deck-title">
-            <h2>編輯牌組</h2>
-            <span id="deck-count" class="deck-count"></span>
-          </div>
+          <h2>我的牌組</h2>
+          <span id="deck-count" class="deck-count"></span>
           <button id="btn-deck-done" class="btn small primary" type="button">完成</button>
         </div>
-        <p id="deck-hint" class="deck-hint">點卡牌加入或移出牌組，需要剛好 8 張。</p>
-        <div id="deck-grid" class="deck-grid"></div>
-        <div class="deck-foot">
-          <span id="deck-avg" class="deck-avg"></span>
-          <button id="btn-deck-reset" class="btn small ghost" type="button">恢復預設牌組</button>
+        <div id="deck-tabs" class="slot-tabs" role="tablist" aria-label="牌組欄位"></div>
+        <div class="deck-current">
+          <div id="deck-slots" class="deck-slots"></div>
+          <div class="deck-meta">
+            <span class="avg-drop"><b id="deck-avg-num">0</b></span><span id="deck-avg" class="deck-avg"></span>
+            <button id="btn-deck-reset" class="btn small ghost" type="button">恢復預設</button>
+          </div>
         </div>
+        <p id="deck-hint" class="deck-hint">點卡牌看詳細數值，再選「使用」或「移出」。牌組需要剛好 8 張。</p>
+        <h3 class="collection-title">卡牌收藏 <small id="collection-note"></small></h3>
+        <div id="deck-grid" class="deck-grid"></div>
       </section>
+
+      <!-- 卡牌資訊 -->
+      <div id="ov-card" class="overlay top sheet" hidden>
+        <div class="panel sheet-panel" role="dialog" aria-labelledby="info-name">
+          <div class="sheet-head">
+            <div id="info-card" class="card info-card"></div>
+            <div class="sheet-title">
+              <h3 id="info-name"></h3>
+              <p id="info-meta" class="info-meta"></p>
+              <p id="info-role" class="info-role"></p>
+            </div>
+          </div>
+          <dl id="info-stats" class="stats"></dl>
+          <p class="info-note">數值為 11 級（錦標賽標準），依公開資料校準。</p>
+          <div class="row">
+            <button id="btn-info-use" class="btn primary" type="button">使用</button>
+            <button id="btn-info-close" class="btn" type="button">關閉</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 獎盃之路 -->
+      <div id="ov-road" class="overlay top sheet" hidden>
+        <div class="panel sheet-panel road-panel" role="dialog" aria-labelledby="road-title">
+          <div class="road-head">
+            <h3 id="road-title">獎盃之路</h3>
+            <span class="road-count"><svg class="trophy-ico" viewBox="0 0 20 20" aria-hidden="true"><path d="M5 2h10v3h3v2a4 4 0 0 1-4 4h-.4A4.5 4.5 0 0 1 11 13.4V15h3v3H6v-3h3v-1.6A4.5 4.5 0 0 1 6.4 11H6a4 4 0 0 1-4-4V5h3zM4 7a2 2 0 0 0 1.2 1.8A9 9 0 0 1 5 7zm11 0c0 .6-.1 1.2-.2 1.8A2 2 0 0 0 16 7z" /></svg><b id="road-count">0</b></span>
+          </div>
+          <p class="road-note">贏電腦拿獎盃（難度越高拿越多），累積到門檻就換到下一座競技場。</p>
+          <ol id="road-list" class="road-list"></ol>
+          <button id="btn-road-close" class="btn" type="button">關閉</button>
+        </div>
+      </div>
+
+      <!-- 個人資料與對戰紀錄 -->
+      <div id="ov-profile" class="overlay top sheet" hidden>
+        <div class="panel sheet-panel profile-panel" role="dialog" aria-labelledby="profile-title">
+          <div class="profile-head">
+            <span class="lvl-badge">11</span>
+            <div class="profile-name"><h3 id="profile-title">你</h3><small id="profile-arena"></small></div>
+            <span class="road-count"><svg class="trophy-ico" viewBox="0 0 20 20" aria-hidden="true"><path d="M5 2h10v3h3v2a4 4 0 0 1-4 4h-.4A4.5 4.5 0 0 1 11 13.4V15h3v3H6v-3h3v-1.6A4.5 4.5 0 0 1 6.4 11H6a4 4 0 0 1-4-4V5h3zM4 7a2 2 0 0 0 1.2 1.8A9 9 0 0 1 5 7zm11 0c0 .6-.1 1.2-.2 1.8A2 2 0 0 0 16 7z" /></svg><b id="profile-trophies">0</b></span>
+          </div>
+          <div class="profile-scroll">
+            <dl id="profile-stats" class="stats"></dl>
+            <h4 class="profile-sub">對戰紀錄<small>最近 10 場・只存在這台裝置</small></h4>
+            <ol id="profile-log" class="battle-log"></ol>
+          </div>
+          <button id="btn-profile-close" class="btn" type="button">關閉</button>
+        </div>
+      </div>
+
+      <!-- 新競技場解鎖 -->
+      <div id="ov-unlock" class="overlay top" hidden>
+        <div class="panel unlock-panel" role="dialog" aria-labelledby="unlock-name">
+          <p class="unlock-kicker">解鎖新競技場！</p>
+          <h2 id="unlock-name" class="unlock-name"></h2>
+          <div class="unlock-art"><i class="unlock-rays" aria-hidden="true"></i><img id="unlock-img" alt="" /></div>
+          <p id="unlock-note" class="unlock-note"></p>
+          <button id="btn-unlock-ok" class="btn primary" type="button">太好了！</button>
+        </div>
+      </div>
 
       <!-- 對戰 -->
       <section id="screen-battle" class="screen battle" hidden>
         <div id="arena-wrap" class="arena-wrap">
           <canvas id="arena" aria-label="對戰場地"></canvas>
-          <button id="btn-pause" class="hud-pause" type="button" aria-label="暫停">
-            <svg viewBox="0 0 20 20" aria-hidden="true"><rect x="4" y="3" width="4" height="14" rx="1" /><rect x="12" y="3" width="4" height="14" rx="1" /></svg>
-          </button>
-          <div class="hud-time">
-            <span class="hud-time-label" id="hud-time-label">剩餘時間</span>
-            <span id="hud-timer" class="hud-timer">3:00</span>
-            <span id="hud-x2" class="hud-x2" hidden>能量 ×2</span>
-          </div>
-          <div class="hud-crowns" aria-label="皇冠數">
-            <span class="crown enemy"><svg viewBox="0 0 20 16" aria-hidden="true"><path d="M1 14 L3 3 L7 8 L10 1 L13 8 L17 3 L19 14 Z" /></svg><b id="hud-crown-enemy">0</b></span>
-            <span class="crown me"><svg viewBox="0 0 20 16" aria-hidden="true"><path d="M1 14 L3 3 L7 8 L10 1 L13 8 L17 3 L19 14 Z" /></svg><b id="hud-crown-me">0</b></span>
+          <canvas id="arena-ui" aria-hidden="true"></canvas>
+          <div class="hud-top">
+            <button id="btn-pause" class="hud-pause" type="button" aria-label="暫停">
+              <svg viewBox="0 0 20 20" aria-hidden="true"><rect x="4" y="3" width="4" height="14" rx="1" /><rect x="12" y="3" width="4" height="14" rx="1" /></svg>
+            </button>
+            <div class="hud-players" aria-label="雙方皇冠數">
+              <div class="hud-player enemy"><span class="hud-crowns" id="hud-crowns-enemy"></span><span class="hud-name" id="hud-name-enemy">電腦</span></div>
+              <div class="hud-player me"><span class="hud-crowns" id="hud-crowns-me"></span><span class="hud-name" id="hud-name-me">你</span></div>
+            </div>
+            <div class="hud-right">
+              <div class="hud-time" id="hud-time-box">
+                <span class="hud-time-label" id="hud-time-label">剩餘時間</span>
+                <span id="hud-timer" class="hud-timer">3:00</span>
+              </div>
+              <div id="hud-mult" class="hud-mult" hidden><b id="hud-mult-text">x2</b></div>
+            </div>
           </div>
           <div id="banner" class="banner" hidden></div>
+          <div id="countdown" class="countdown" hidden></div>
+          <button id="btn-emote" class="hud-emote" type="button" aria-label="表情"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h16a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H10l-5 4v-4H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z" /></svg></button>
+          <div id="emote-picker" class="emote-picker" hidden></div>
+          <div id="emote-me" class="emote-bubble me" hidden></div>
+          <div id="emote-enemy" class="emote-bubble enemy" hidden></div>
           <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+          <div id="coach" class="coach" hidden>
+            <i id="coach-ring" class="coach-ring" aria-hidden="true"></i>
+            <i id="coach-hand" class="coach-hand" aria-hidden="true"><svg viewBox="0 0 48 48"><path d="M19 3a5 5 0 0 1 5 5v13l9.5 1.6a6 6 0 0 1 5 6.5l-1 8.6A9 9 0 0 1 28.6 45H22a10 10 0 0 1-8.2-4.3l-6.6-9.4a3.6 3.6 0 0 1 5.6-4.5l1.2 1.4V8a5 5 0 0 1 5-5z" /></svg></i>
+            <p id="coach-tip" class="coach-tip" role="status" aria-live="polite"></p>
+          </div>
+          <div id="rotate-hint" class="rotate-hint" role="alert" hidden>
+            <div class="rotate-phone" aria-hidden="true"></div>
+            <b>請把手機轉成直向</b>
+            <span>橫拿時畫面太小，轉回直向後點「繼續」</span>
+          </div>
         </div>
         <div id="hand-panel" class="hand-panel">
           <div class="hand-row">
@@ -131,8 +222,16 @@
           </div>
           <div class="elixir" aria-label="能量">
             <span class="elixir-drop"><span id="elixir-num">5</span></span>
-            <div class="elixir-bar"><div id="elixir-fill" class="elixir-fill"></div><div class="elixir-ticks"></div></div>
+            <div class="elixir-bar"><div id="elixir-fill" class="elixir-fill"></div><div class="elixir-ticks"></div><span id="elixir-full" class="elixir-full" hidden>能量已滿！</span></div>
           </div>
+        </div>
+
+        <!-- 開場 -->
+        <div id="ov-vs" class="vs" hidden>
+          <div class="vs-side enemy"><span class="vs-name" id="vs-name-enemy">電腦</span><span class="vs-sub" id="vs-sub-enemy"></span></div>
+          <div class="vs-mid">VS</div>
+          <div class="vs-arena" id="vs-arena"></div>
+          <div class="vs-side me"><span class="vs-name">你</span><span class="vs-sub" id="vs-sub-me"></span></div>
         </div>
 
         <!-- 暫停 -->
@@ -142,23 +241,30 @@
             <p id="pause-note" class="muted"></p>
             <button id="btn-resume" class="btn primary big" type="button">繼續</button>
             <button id="btn-mute-pause" class="btn" type="button">音效：開</button>
+            <p class="muted small">聽不到聲音？iPhone 開著靜音開關時，網頁不會出聲。</p>
             <button id="btn-restart" class="btn" type="button">重新開始</button>
             <button id="btn-quit" class="btn ghost" type="button">離開對戰</button>
           </div>
         </div>
 
         <!-- 結算 -->
-        <div id="ov-result" class="overlay" hidden>
+        <div id="ov-result" class="overlay result-ov" hidden>
           <div class="panel result">
+            <div class="result-row enemy" id="result-row-enemy">
+              <span class="result-winner">勝利者</span>
+              <span class="result-name" id="result-name-enemy">電腦</span>
+              <div class="result-crowns" id="result-crowns-enemy"></div>
+            </div>
             <h2 id="result-title" class="result-title">勝利！</h2>
-            <div class="result-crowns">
-              <span class="rc me"><b id="result-crown-me">0</b><small>你</small></span>
-              <span class="rc-sep">:</span>
-              <span class="rc enemy"><b id="result-crown-enemy">0</b><small>電腦</small></span>
+            <p id="result-trophies" class="result-trophies" hidden></p>
+            <div class="result-row me" id="result-row-me">
+              <span class="result-winner">勝利者</span>
+              <span class="result-name">你</span>
+              <div class="result-crowns" id="result-crowns-me"></div>
             </div>
             <p id="result-reason" class="muted"></p>
             <p id="result-stats" class="result-stats"></p>
-            <button id="btn-again" class="btn primary big" type="button">再玩一場</button>
+            <button id="btn-again" class="btn primary big" type="button">再戰一場</button>
             <div class="row">
               <button id="btn-result-deck" class="btn" type="button">換牌組</button>
               <button id="btn-result-home" class="btn" type="button">回主畫面</button>
@@ -177,10 +283,10 @@
         <div class="panel howto">
           <h2>怎麼玩</h2>
           <ol class="howto-list">
-            <li><b>出兵</b>：把下方卡牌拖到己方半場；或先點卡牌，再點地面。紅色區域不能放。</li>
-            <li><b>能量</b>：出牌會花能量，能量會自動回復。最後 1 分鐘回復速度加倍。</li>
-            <li><b>推塔</b>：推倒側塔得 1 頂皇冠，推倒中間的國王塔直接獲勝。</li>
-            <li><b>時間到</b>：3 分鐘後皇冠多者勝；平手進入延長賽，先拿到皇冠的一方獲勝。</li>
+            <li><b>出兵</b>：把下方卡牌拖到己方半場放開；或先點卡牌、再點地面。紅色格子不能放，法術可以丟到任何地方。</li>
+            <li><b>能量</b>：出牌會花能量（上限 10），每 2.8 秒回 1 點；最後 1 分鐘加倍。剛出完牌，新卡要等一下才補進手牌。</li>
+            <li><b>推塔</b>：推倒側塔得 1 頂皇冠，並可往那一路前進部署；推倒中間的國王塔直接 3 頂皇冠獲勝。國王塔被打到才會醒來。</li>
+            <li><b>延長賽</b>：3 分鐘後皇冠一樣多就進入 2 分鐘驟死延長賽（最後 1 分鐘能量三倍），先推倒任一座塔就贏；還平手就比塔的血量。</li>
           </ol>
           <button id="btn-howto-ok" class="btn primary big" type="button">知道了</button>
         </div>
