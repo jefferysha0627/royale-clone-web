@@ -2,7 +2,9 @@
 
 直向手機優先的即時推塔對戰網頁遊戲，單人對電腦，可放在任何靜態網站主機。以《皇室戰爭》核心玩法為參考的非官方作品，與 Supercell 無關。**角色、塔、場地、卡圖、音效與音樂全部為原創**：3D 模型由程式建模（Three.js），音效以 WebAudio 即時合成，不含任何官方圖片、模型、字型或音效。
 
-v2：規則與 34 張卡的數值依公開資料校準到 11 級（來源與近似值見上層 `EVIDENCE.md`），畫面改為 3D、版面依原作結構重建。
+目前公開版本是 v3.1（tag `v3.1-rc`）：47 張卡的數值依公開資料校準到 11 級（來源與近似值見上層 `EVIDENCE.md`），3D 畫面與原創模型（盔甲與金屬會反光），獎盃與 6 座各有外觀的競技場、獎盃之路與解鎖畫面，3 個牌組欄位，個人資料與對戰紀錄，第一場新手教學，競技場環境動態。
+
+正式網址：https://royale-clone-web.pages.dev/ 、 https://jefferysha0627.github.io/royale-clone-web/
 
 ## 需求
 
@@ -21,11 +23,11 @@ npm run dev        # 開發伺服器，手機可用區網 IP 連入
 
 | 指令 | 用途 |
 | --- | --- |
-| `npm run build` | 型別檢查 + production build，輸出到 `dist/`（gzip 後約 210 KB） |
+| `npm run build` | 型別檢查 + production build，輸出到 `dist/`（gzip 後約 255 KB） |
 | `npm run preview` | 在 4173 埠預覽 `dist/` |
 | `npm test` | 規則與電腦對手的自動測試（vitest） |
 | `npm run sim -- 30 1 normal hard --swap --quiet` | 無畫面電腦對電腦批次模擬（場數、起始 seed、雙方難度；`--swap` 交換座位）；`scripts/dev/deckmatrix.ts` 牌組矩陣、`scripts/dev/novice.ts` 新手腳本對各難度 |
-| `npm run e2e` | 先 `npm run build`。用真實瀏覽器操作桌面與 360×640、390×844、430×932，含一場以觸控即時打完的對戰（約 8 分鐘）；加 `-- --quick` 略過即時整場。結果寫入上一層 `verification/v3/`（`E2E_OUT=資料夾名` 可改） |
+| `npm run e2e` | 先 `npm run build`。用真實瀏覽器操作桌面與 360×640、390×844、430×932，含一場以觸控即時打完的對戰（約 10 分鐘）；加 `-- --quick` 略過即時整場（結果另存 `e2e-results-quick.json`）。結果寫入上一層 `verification/v3/`（`E2E_OUT=資料夾名` 可改，例如 v3.1 的證據在 `verification/v3.1/`） |
 | `npm run assets` | 用遊戲自己的 3D 渲染器重新產生 `public/og-image.png`（1200×630）與 `public/apple-touch-icon.png` |
 | `npm run check` | 型別檢查 + 測試 + build |
 
@@ -56,7 +58,7 @@ npm run dev        # 開發伺服器，手機可用區網 IP 連入
 src/
   sim/          戰鬥模擬（與畫面無關，可在 Node 執行）
     config.ts     場地、時間、能量、塔等規則參數（註明來源）
-    cards.ts      34 張卡與單位的 11 級數值
+    cards.ts      卡牌與單位的 11 級數值（v3.1：47 張）
     game.ts       固定步長模擬：部署、索敵、移動繞障、投射物、法術、特殊機制、勝負
     ai.ts、ai/    電腦對手
     rng.ts        可指定 seed 的亂數
