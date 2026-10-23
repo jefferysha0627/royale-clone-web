@@ -982,6 +982,12 @@ export class Battle {
       this.sound.play('tap');
     });
     $('btn-replay-exit').addEventListener('click', () => this.host.onQuit());
+    $('btn-result-replay').addEventListener('click', () => {
+      const rep = this.replayData();
+      if (!rep) return;
+      this.sound.unlock();
+      this.startReplay(rep, 'me');
+    });
     $('btn-result-home').addEventListener('click', () => this.host.onQuit());
     $('btn-result-deck').addEventListener('click', () => this.host.onDeck());
     $('btn-share-result').addEventListener('click', () => void this.shareResult());
@@ -1062,6 +1068,7 @@ export class Battle {
     $('btn-again').textContent = replaying ? '再看一次' : '再戰一場';
     $('btn-result-deck').hidden = replaying;
     $('btn-share-result').hidden = replaying;
+    $('btn-result-replay').hidden = replaying;
     if (replaying) $('result-trophies').hidden = true;
     $('result-name-me').textContent = who;
     this.ovResult.hidden = false;

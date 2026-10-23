@@ -933,3 +933,4 @@ button.player-chip:focus-visible { outline: 3px solid var(--gold); outline-offse
 .replay-invite { gap: 12px; }
 .replay-invite-info { font-size: 14px; color: var(--muted); line-height: 1.5; }
 .replay-invite-decks { display: flex; flex-direction: column; gap: 6px; }
+.result-extra .btn { flex: 1 1 0; min-width: 0; padding-left: 8px; padding-right: 8px; }
