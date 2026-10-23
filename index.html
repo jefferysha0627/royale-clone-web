@@ -163,6 +163,17 @@
         </div>
       </div>
 
+      <!-- 朋友分享的重播 -->
+      <div id="ov-replay-invite" class="overlay top" hidden>
+        <div class="panel replay-invite" role="dialog" aria-labelledby="replay-invite-title">
+          <h2 id="replay-invite-title">朋友分享了一場對戰</h2>
+          <p id="replay-invite-info" class="replay-invite-info"></p>
+          <div id="replay-invite-decks" class="replay-invite-decks"></div>
+          <button id="btn-replay-watch" class="btn primary big" type="button">觀看重播</button>
+          <button id="btn-replay-skip" class="btn" type="button">先不要，直接玩</button>
+        </div>
+      </div>
+
       <!-- 新競技場解鎖 -->
       <div id="ov-unlock" class="overlay top" hidden>
         <div class="panel unlock-panel" role="dialog" aria-labelledby="unlock-name">
@@ -194,6 +205,11 @@
               </div>
               <div id="hud-mult" class="hud-mult" hidden><b id="hud-mult-text">x2</b></div>
             </div>
+          </div>
+          <div id="replay-bar" class="replay-bar" hidden>
+            <span class="replay-tag"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M6 4l10 6-10 6z" /></svg>重播</span>
+            <button id="btn-replay-speed" class="replay-btn" type="button" aria-label="重播速度">1×</button>
+            <button id="btn-replay-exit" class="replay-btn" type="button">離開</button>
           </div>
           <div id="banner" class="banner" hidden></div>
           <div id="countdown" class="countdown" hidden></div>
@@ -265,7 +281,7 @@
             <p id="result-trophies" class="result-trophies" hidden></p>
             <div class="result-row me" id="result-row-me">
               <span class="result-winner">勝利者</span>
-              <span class="result-name">你</span>
+              <span class="result-name" id="result-name-me">你</span>
               <div class="result-crowns" id="result-crowns-me"></div>
             </div>
             <p id="result-reason" class="muted"></p>

@@ -2,7 +2,7 @@ import { Renderer2D } from '../render/renderer2d';
 import type { BattleRenderer } from '../render/types';
 import { portraits } from '../render3d/portraits';
 import { tryCreateRenderer3D } from '../render3d/renderer3d';
-import { AI_DECKS, AI_LEVELS, AiController, ARENA, CARDS, DT, Game, MATCH, Rng, type AiLevel, type GameEvent, type MatchResult } from '../sim';
+import { AI_DECKS, AI_LEVELS, AiController, ARENA, applyReplayStep, CARDS, DT, encodeReplay, Game, MATCH, newReplayGame, Rng, type AiLevel, type GameEvent, type MatchResult, type Replay } from '../sim';
 import type { Sound } from './audio';
 import { crownSlots, crownSvg, fillCard } from './cardview';
 import { shareGame, shareUrl } from './share';
@@ -90,6 +90,13 @@ export class Battle {
   skipIntro = false;
   /** 這場顯示新手教學提示（第一場）。 */
   coach = false;
+  /** 正在播放的重播（null = 一般對戰）。 */
+  private replay: Replay | null = null;
+  private replayCursor = 0;
+  /** 重播速度（1、2、4 倍）。 */
+  replaySpeed = 1;
+  /** 'friend' = 朋友分享的重播（藍方顯示「朋友」）。 */
+  private replayOwner: 'me' | 'friend' = 'me';
   /** 教學進度：1 示範拖曳出牌、2 說明能量、3 等電腦的部隊過河、4 提醒防守、5 結束。 */
   private coachStep = 0;
   private coachT = 0;
@@ -164,17 +171,44 @@ export class Battle {
   playerTrophies = 0;
 
   start(deck: string[], level: AiLevel, seed?: number): void {
-    this.deck = [...deck];
-    this.level = level;
-    this.renderer.setArenaTheme?.(this.arenaTheme);
+    this.replay = null;
     this.seed = seed ?? Math.floor(Math.random() * 2 ** 31);
     const pick = new Rng(this.seed ^ 0x5bd1e995);
     const aiDeck = pick.pick(AI_DECKS);
-    this.aiDeckName = aiDeck.name;
-    this.aiDeckCards = [...aiDeck.cards];
+    const game = new Game({ seed: this.seed, decks: [[...deck], [...aiDeck.cards]] });
+    this.ai = new AiController(game, 1, game.rng.fork(), AI_LEVELS[level]);
+    this.begin(game, deck, level, aiDeck.name, aiDeck.cards);
+  }
+
+  /** 播放對戰重播：不放電腦對手，雙方都照紀錄出牌（模擬是確定性的，結果會和當時一模一樣）。 */
+  startReplay(rep: Replay, owner: 'me' | 'friend' = 'me'): void {
+    this.replay = rep;
+    this.replayCursor = 0;
+    this.replaySpeed = 1;
+    this.replayOwner = owner;
+    this.seed = rep.seed;
+    this.arenaTheme = rep.arena;
+    this.begin(newReplayGame(rep), rep.decks[0], rep.lvl, rep.foe, rep.decks[1]);
+  }
+
+  /** 剛打完（或正在打）的這場的重播資料；重播模式下回傳 null。 */
+  replayData(): Replay | null {
+    if (this.replay) return null;
+    return { seed: this.seed, decks: [[...this.deck], [...this.aiDeckCards]], actions: [...this.game.actions], foe: this.aiDeckName, lvl: this.level, arena: this.arenaTheme };
+  }
+
+  get isReplay(): boolean {
+    return !!this.replay;
+  }
+
+  private begin(game: Game, deck: string[], level: AiLevel, aiDeckName: string, aiDeckCards: string[]): void {
+    this.deck = [...deck];
+    this.level = level;
+    this.renderer.setArenaTheme?.(this.arenaTheme);
+    this.aiDeckName = aiDeckName;
+    this.aiDeckCards = [...aiDeckCards];
     this.plays = {};
-    this.game = new Game({ seed: this.seed, decks: [this.deck, [...aiDeck.cards]] });
-    this.ai = new AiController(this.game, 1, this.game.rng.fork(), AI_LEVELS[level]);
+    this.game = game;
     this.renderer.reset();
     this.selected = null;
     this.drag = null;
@@ -197,7 +231,12 @@ export class Battle {
     const enemyName = `電腦（${LEVEL_NAME[level]}）`;
     this.nameEnemy.textContent = enemyName;
     $('vs-name-enemy').textContent = enemyName;
-    $('vs-sub-enemy').textContent = `牌組：${aiDeck.name}`;
+    $('vs-sub-enemy').textContent = `牌組：${aiDeckName}`;
+    const replaying = !!this.replay;
+    $('hud-name-me').textContent = replaying && this.replayOwner === 'friend' ? '朋友' : '你';
+    $('replay-bar').hidden = !replaying;
+    $('btn-replay-speed').textContent = '1×';
+    $('btn-emote').hidden = replaying;
     $('vs-sub-me').textContent = `獎盃 ${this.playerTrophies}・平均 ${(deck.reduce((s, id) => s + CARDS[id].cost, 0) / deck.length).toFixed(1)} 能量`;
     $('vs-arena').textContent = this.arenaName;
     crownSlots(this.crownsMe, 3, 0);
@@ -210,19 +249,21 @@ export class Battle {
     this.emoteTimers = [];
     this.lastEnemyEmote = -99;
     this.root.querySelectorAll('.crown-fly').forEach((el) => el.remove());
-    if (!this.skipIntro && Math.random() < 0.5) this.enemyEmote('luck', 2.2);
+    if (!this.skipIntro && !replaying && Math.random() < 0.5) this.enemyEmote('luck', 2.2);
     this.root.hidden = false;
     this.active = true;
-    this.coachStep = this.coach ? 1 : 0;
+    this.coachStep = this.coach && !replaying ? 1 : 0;
     this.coachT = 0;
     this.coachEl.hidden = true;
-    this.intro = this.skipIntro ? 0 : INTRO_VS + INTRO_COUNT * 4;
+    // 重播不播開場 VS 與倒數，直接開始
+    const noIntro = this.skipIntro || replaying;
+    this.intro = noIntro ? 0 : INTRO_VS + INTRO_COUNT * 4;
     this.sound.stopMusic();
-    if (this.skipIntro) this.sound.startMusic();
+    if (noIntro) this.sound.startMusic();
     this.introStep = -1;
-    this.ovVs.hidden = this.skipIntro;
+    this.ovVs.hidden = noIntro;
     this.ovVs.classList.remove('out');
-    if (!this.skipIntro) {
+    if (!noIntro) {
       // 重新觸發進場動畫
       for (const el of [this.ovVs, ...Array.from(this.ovVs.children)] as HTMLElement[]) {
         el.style.animation = 'none';
@@ -323,7 +364,7 @@ export class Battle {
     // 打擊停頓：大招命中、塔倒下時讓戰鬥停一瞬間（只影響畫面節奏，不影響模擬結果）
     const stopped = (this.renderer as { hitStop?: number }).hitStop ?? 0;
     if (!this.paused && this.intro <= 0 && g.phase !== 'ended' && stopped <= 0) {
-      this.acc += dt;
+      this.acc += dt * (this.replay ? this.replaySpeed : 1);
       while (this.acc >= DT) {
         this.simStep();
         this.acc -= DT;
@@ -457,7 +498,8 @@ export class Battle {
 
   /** 推進一個固定步長（AI 先決策，再模擬）。 */
   simStep(): void {
-    this.ai.update();
+    if (this.replay) this.replayCursor = applyReplayStep(this.game, this.replay.actions, this.replayCursor);
+    else this.ai.update();
     this.game.step();
     this.stepsRun++;
     this.handleEvents(this.game.drainEvents());
@@ -657,6 +699,7 @@ export class Battle {
 
   /** 電腦發表情：同一場最多每 8 秒一次。 */
   private enemyEmote(id: string, delaySec: number): void {
+    if (this.replay) return;
     const now = performance.now() / 1000;
     if (now - this.lastEnemyEmote < 8) return;
     this.lastEnemyEmote = now;
@@ -757,7 +800,7 @@ export class Battle {
   }
 
   private canInteract(): boolean {
-    return this.active && !this.paused && this.intro <= 0 && this.game.playing;
+    return this.active && !this.paused && this.intro <= 0 && this.game.playing && !this.replay;
   }
 
   /** 螢幕座標 → 場地格座標；不在場地上回傳 null。 */
@@ -789,6 +832,7 @@ export class Battle {
 
   /** 玩家在場地格座標 (x, y) 出第 index 張手牌。 */
   deployAt(index: number, x: number, y: number): boolean {
+    if (this.replay) return false;
     const cardId = this.game.players[0].hand[index];
     if (!cardId) return false;
     const res = this.game.deploy(0, index, x, y);
@@ -925,16 +969,28 @@ export class Battle {
     $('btn-resume').addEventListener('click', () => this.resume());
     $('btn-restart').addEventListener('click', () => {
       this.sound.unlock();
-      this.start(this.deck, this.level);
+      this.again();
     });
     $('btn-quit').addEventListener('click', () => this.host.onQuit());
     $('btn-again').addEventListener('click', () => {
       this.sound.unlock();
-      this.start(this.deck, this.level);
+      this.again();
     });
+    $('btn-replay-speed').addEventListener('click', () => {
+      this.replaySpeed = this.replaySpeed >= 4 ? 1 : this.replaySpeed * 2;
+      $('btn-replay-speed').textContent = `${this.replaySpeed}×`;
+      this.sound.play('tap');
+    });
+    $('btn-replay-exit').addEventListener('click', () => this.host.onQuit());
     $('btn-result-home').addEventListener('click', () => this.host.onQuit());
     $('btn-result-deck').addEventListener('click', () => this.host.onDeck());
     $('btn-share-result').addEventListener('click', () => void this.shareResult());
+  }
+
+  /** 「再戰一場」：一般對戰重新開打；重播模式下從頭再看一次。 */
+  private again(): void {
+    if (this.replay) this.startReplay(this.replay, this.replayOwner);
+    else this.start(this.deck, this.level);
   }
 
   pause(note = ''): void {
@@ -996,13 +1052,21 @@ export class Battle {
       }, 350 + i * 380);
     }
     $('result-reason').textContent = REASON_TEXT[r.reason](r.winner);
+    const who = this.replay && this.replayOwner === 'friend' ? '朋友' : '你';
     $('result-stats').textContent =
-      `對手：${LEVEL_NAME[this.level]}電腦（${this.aiDeckName}）\n你出牌 ${p.cardsPlayed} 張、花費 ${Math.round(p.elixirSpent)} 能量・對戰 ${fmtTime(r.time)}`;
+      `對手：${LEVEL_NAME[this.level]}電腦（${this.aiDeckName}）\n${who}出牌 ${p.cardsPlayed} 張、花費 ${Math.round(p.elixirSpent)} 能量・對戰 ${fmtTime(r.time)}`;
     $('btn-share-result').textContent = '分享戰績給朋友';
     $('share-manual-result').hidden = true;
+    // 重播：不計獎盃與戰績，按鈕改成「再看一次」
+    const replaying = !!this.replay;
+    $('btn-again').textContent = replaying ? '再看一次' : '再戰一場';
+    $('btn-result-deck').hidden = replaying;
+    $('btn-share-result').hidden = replaying;
+    if (replaying) $('result-trophies').hidden = true;
+    $('result-name-me').textContent = who;
     this.ovResult.hidden = false;
     this.sound.play(r.winner === 0 ? 'win' : r.winner === 1 ? 'lose' : 'draw');
-    this.host.onResult(r);
+    if (!replaying) this.host.onResult(r);
   }
 
   private async shareResult(): Promise<void> {
@@ -1017,12 +1081,15 @@ export class Battle {
           ? `我在《皇室戰爭克隆》以 ${a}:${b} 輸給${lv}電腦了，換你來挑戰：`
           : `我在《皇室戰爭克隆》和${lv}電腦打成平手，你能贏嗎？`;
     const btn = $('btn-share-result');
-    const outcome = await shareGame(text);
-    if (outcome === 'copied') btn.textContent = '已複製遊戲連結！';
+    // 分享的連結附上這場的重播：朋友點開可以先看你怎麼打，再自己玩
+    const rep = this.replayData();
+    const url = rep ? `${shareUrl()}?replay=${encodeReplay(rep)}` : shareUrl();
+    const outcome = await shareGame(`${text}`, url);
+    if (outcome === 'copied') btn.textContent = '已複製戰績與重播連結！';
     else if (outcome === 'manual') {
       const box = $('share-manual-result');
       const input = $<HTMLInputElement>('share-input-result');
-      input.value = shareUrl();
+      input.value = url;
       box.hidden = false;
       input.focus();
       input.select();

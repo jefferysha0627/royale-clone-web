@@ -398,7 +398,7 @@ if (run('2')) {
       await sleep(400);
       const btnText = await page.locator('#btn-share-result').textContent();
       const clip = await page.evaluate(() => navigator.clipboard.readText().catch(() => ''));
-      check('[desktop] 結算「分享戰績」在無原生分享時改為複製連結', btnText.includes('已複製') && clip === BASE, `按鈕「${btnText}」，剪貼簿「${clip}」`);
+      check('[desktop] 結算「分享戰績」在無原生分享時改為複製連結（附這場的重播）', btnText.includes('已複製') && clip.startsWith(`${BASE}?replay=r1.`), `按鈕「${btnText}」，剪貼簿「${clip.slice(0, 60)}…」`);
     }
     domCounts.push(await page.evaluate(() => document.getElementsByTagName('*').length));
     gpuCounts.push(await page.evaluate(() => window.__btd.battle.gpuStats));
@@ -477,6 +477,41 @@ if (run('2')) {
     `${prof.items} 筆（${prof.deltas.join(' ')}），最高 ${prof.best}`,
   );
   await shot(page, `${vp.name}-19-profile`);
+  // 對戰重播：從紀錄重播最新一場，快轉到結束，結果要和當時一樣；重播不計獎盃、不新增紀錄
+  const logged = await page.evaluate(() => ({ c: window.__btd.settings.log[0].c, w: window.__btd.settings.log[0].w, n: window.__btd.settings.log.length, rep: window.__btd.settings.log[0].rep }));
+  await page.click('#profile-log .log-item:first-child .log-replay');
+  await page.waitForSelector('#screen-battle:not([hidden])');
+  const barShown = await page.isVisible('#replay-bar');
+  await page.evaluate(() => window.__btd.fastForward(600));
+  await page.waitForSelector('#ov-result:not([hidden])', { timeout: 10000 });
+  const replayed = await page.evaluate(() => ({ r: window.__btd.game().result, again: document.getElementById('btn-again').textContent, n: window.__btd.settings.log.length, trophyHidden: document.getElementById('result-trophies').hidden }));
+  check(
+    '[desktop] 對戰紀錄的重播：照紀錄重跑，結果與當時完全相同，不計獎盃也不新增紀錄',
+    barShown && replayed.r.crowns.join() === logged.c.join() && replayed.r.winner === logged.w && replayed.n === logged.n && replayed.trophyHidden && replayed.again === '再看一次',
+    `當時 ${logged.c.join(':')}、重播 ${replayed.r.crowns.join(':')}`,
+  );
+  await page.click('#btn-result-home');
+  await page.waitForSelector('#screen-home:not([hidden])');
+  // 朋友分享的重播連結：先問要不要看，網址上的參數會被清掉；觀看時藍方顯示「朋友」
+  await page.goto(`${BASE}?test=1&replay=${logged.rep}`);
+  await page.waitForSelector('#ov-replay-invite:not([hidden])');
+  const inv = await page.evaluate(() => ({ info: document.getElementById('replay-invite-info').textContent, search: location.search }));
+  await shot(page, `${vp.name}-20-replay-invite`);
+  await page.click('#btn-replay-watch');
+  await page.waitForSelector('#screen-battle:not([hidden])');
+  const friendName = await page.locator('#hud-name-me').textContent();
+  await page.evaluate(() => window.__btd.fastForward(600));
+  await page.waitForSelector('#ov-result:not([hidden])', { timeout: 10000 });
+  const fr = await page.evaluate(() => window.__btd.game().result);
+  check(
+    '[desktop] 朋友分享的重播連結：主畫面先詢問、清掉網址參數，觀看結果與原對戰相同',
+    inv.info.includes('朋友') && inv.search === '' && friendName === '朋友' && fr.crowns.join() === logged.c.join(),
+    inv.info,
+  );
+  await page.click('#btn-result-home');
+  await page.waitForSelector('#screen-home:not([hidden])');
+  await page.click('#btn-profile');
+  await page.waitForSelector('#ov-profile:not([hidden])');
   await page.click('#btn-profile-close');
   check('[desktop] 個人資料可關閉', await page.isHidden('#ov-profile'));
   await ctx.close();

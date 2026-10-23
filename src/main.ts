@@ -1,5 +1,5 @@
 import './style.css';
-import { AiController, AI_LEVELS, CARD_IDS, CARDS, UNITS, canHitAir, isValidDeck, type AiLevel, type CardDef } from './sim';
+import { AiController, AI_LEVELS, CARD_IDS, CARDS, Rng, UNITS, canHitAir, decodeReplay, encodeReplay, isValidDeck, runReplay, type AiLevel, type CardDef, type Replay } from './sim';
 import { Sound } from './ui/audio';
 import { Battle } from './ui/battle';
 import { avgCost, cardTags, fillCard, rarityName, refreshPortraits } from './ui/cardview';
@@ -48,7 +48,8 @@ const battle = new Battle(sound, {
     const before = settings.trophies;
     const delta = trophyDelta(settings.level, r.winner, r.crowns[0], before);
     settings.trophies = Math.max(0, before + delta);
-    recordBattle(settings, r, battle.matchInfo(), settings.trophies - before);
+    const rep = battle.replayData();
+    recordBattle(settings, r, battle.matchInfo(), settings.trophies - before, Date.now(), rep ? encodeReplay(rep) : undefined);
     saveSettings(settings);
     showTrophyResult(delta, before, settings.trophies);
     // 升到新競技場：回主畫面時播放解鎖畫面（先準備好場景圖）
@@ -275,13 +276,84 @@ function openProfile(): void {
   $('profile-stats').innerHTML = profileRows(settings)
     .map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`)
     .join('');
-  renderBattleLog($('profile-log'), settings.log);
+  renderBattleLog($('profile-log'), settings.log, 10, Date.now(), (rep) => {
+    profileOv.hidden = true;
+    watchReplay(rep, 'me');
+  });
   profileOv.hidden = false;
   profileOv.querySelector('.profile-scroll')!.scrollTop = 0;
   sound.play('tap');
 }
 
 $('btn-profile').addEventListener('click', openProfile);
+
+// ───────── 對戰重播（自己的紀錄，或朋友分享的連結） ─────────
+
+function watchReplay(s: string | Replay, owner: 'me' | 'friend'): boolean {
+  const rep = typeof s === 'string' ? decodeReplay(s) : s;
+  if (!rep) return false;
+  sound.unlock();
+  home.hidden = true;
+  deckScreen.hidden = true;
+  battle.arenaName = ARENAS.find((a) => a.theme === rep.arena)?.name ?? '';
+  battle.startReplay(rep, owner);
+  pushBattleEntry();
+  return true;
+}
+
+const LEVEL_TEXT: Record<AiLevel, string> = { easy: '簡單', normal: '普通', hard: '困難' };
+let invited: Replay | null = null;
+
+/** 網址帶 ?replay=：先在主畫面問要不要看朋友分享的重播（結果先用無畫面模擬算出來）。 */
+function offerSharedReplay(): void {
+  const s = params.get('replay');
+  if (!s) return;
+  // 不留在網址上，重新整理不會一直跳出來
+  try {
+    history.replaceState(history.state, '', location.pathname);
+  } catch {
+    // 忽略
+  }
+  const rep = decodeReplay(s);
+  const ov = $('ov-replay-invite');
+  if (!rep) {
+    $('replay-invite-title').textContent = '這個重播無法播放';
+    $('replay-invite-info').textContent = '可能來自不同版本的遊戲。直接開始玩吧！';
+    $('replay-invite-decks').innerHTML = '';
+    $<HTMLButtonElement>('btn-replay-watch').hidden = true;
+    ov.hidden = false;
+    return;
+  }
+  invited = rep;
+  const r = runReplay(rep).result;
+  const outcome = !r ? '' : r.winner === 0 ? `朋友 ${r.crowns[0]}:${r.crowns[1]} 獲勝` : r.winner === 1 ? `朋友 ${r.crowns[0]}:${r.crowns[1]} 落敗` : `雙方 ${r.crowns[0]}:${r.crowns[1]} 平手`;
+  $('replay-invite-info').textContent = `對手：${LEVEL_TEXT[rep.lvl]}電腦（${rep.foe}）${outcome ? `・${outcome}` : ''}`;
+  const decks = $('replay-invite-decks');
+  decks.innerHTML = '';
+  rep.decks.forEach((d, i) => {
+    const label = document.createElement('small');
+    label.textContent = i === 0 ? '朋友的牌組' : '電腦的牌組';
+    const row = document.createElement('div');
+    row.className = 'mini-deck';
+    for (const id of d) {
+      const el = document.createElement('div');
+      el.className = 'card';
+      fillCard(el, id);
+      row.appendChild(el);
+    }
+    decks.append(label, row);
+  });
+  ov.hidden = false;
+}
+
+$('btn-replay-watch').addEventListener('click', () => {
+  $('ov-replay-invite').hidden = true;
+  if (invited) watchReplay(invited, 'friend');
+});
+$('btn-replay-skip').addEventListener('click', () => {
+  $('ov-replay-invite').hidden = true;
+  sound.play('tap');
+});
 $('btn-profile-close').addEventListener('click', () => {
   profileOv.hidden = true;
 });
@@ -640,7 +712,8 @@ if (testMode) {
     /** 以玩家側 AI 代打並快轉 sec 秒（用於多場穩定性測試）。 */
     autoplay(sec: number): void {
       const g = battle.game;
-      const bot = new AiController(g, 0, g.rng.fork(), AI_LEVELS.normal);
+      // 代打用獨立的亂數（不動遊戲主亂數，這場的重播才會和實際對戰一致）
+      const bot = new AiController(g, 0, new Rng(1234 + g.tick), AI_LEVELS.normal);
       const steps = Math.round(sec * 30);
       for (let i = 0; i < steps && g.phase !== 'ended'; i++) {
         bot.update();
@@ -669,12 +742,14 @@ const bootFill = document.getElementById('boot-fill');
 if (bootFill) bootFill.style.width = '100%';
 document.getElementById('boot')?.remove();
 showHome();
+offerSharedReplay();
 // 卡面圖在背景分批產生：先做目前牌組，再做主畫面插圖與其他卡
 portraits.onUpdate(() => {
   refreshPortraits();
   if (!home.hidden) renderHome();
   if (!roadOv.hidden) fillRoadArt();
   if (!profileOv.hidden) refreshPortraits(profileOv);
+  if (!$('ov-replay-invite').hidden) refreshPortraits($('ov-replay-invite'));
   if (!unlockOv.hidden) fillUnlockArt();
 });
 portraits.start(settings.deck);

@@ -15,8 +15,7 @@ function preferNativeShare(): boolean {
 }
 
 /** 觸控裝置優先原生分享，其次剪貼簿，最後顯示可手動複製的網址。 */
-export async function shareGame(text: string): Promise<ShareOutcome> {
-  const url = shareUrl();
+export async function shareGame(text: string, url = shareUrl()): Promise<ShareOutcome> {
   if (preferNativeShare()) {
     try {
       await navigator.share({ title: document.title, text, url });

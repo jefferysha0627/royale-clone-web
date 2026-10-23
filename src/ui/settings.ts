@@ -14,6 +14,7 @@ export interface BattleLogEntry {
   deck: string[];
   d: number; // 獎盃增減
   t: number; // 打完後的獎盃
+  rep?: string; // 重播（encodeReplay 的字串）
 }
 
 export const LOG_MAX = 20;
@@ -95,7 +96,7 @@ function validEntry(e: unknown): e is BattleLogEntry {
   return (
     typeof x.at === 'number' && (x.w === 0 || x.w === 1 || x.w === null) && Array.isArray(c) && c.length === 2 && c.every((n) => typeof n === 'number') &&
     (x.lvl === 'easy' || x.lvl === 'normal' || x.lvl === 'hard') && typeof x.foe === 'string' && validCards(x.foeCards) && validCards(x.deck) &&
-    typeof x.d === 'number' && typeof x.t === 'number'
+    typeof x.d === 'number' && typeof x.t === 'number' && (x.rep === undefined || typeof x.rep === 'string')
   );
 }
 

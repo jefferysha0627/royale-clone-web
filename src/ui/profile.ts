@@ -1,4 +1,4 @@
-import { CARDS, type AiLevel, type MatchResult } from '../sim';
+import { CARDS, decodeReplay, type AiLevel, type MatchResult } from '../sim';
 import { crownSvg, fillCard } from './cardview';
 import { arenaOf } from './progress';
 import { LOG_MAX, type BattleLogEntry, type Settings } from './settings';
@@ -16,11 +16,11 @@ export interface MatchInfo {
 }
 
 /** 一場打完（獎盃已更新後呼叫）：更新最高獎盃、三皇冠勝場、出牌統計，並把這場加到對戰紀錄最前面。 */
-export function recordBattle(s: Settings, r: MatchResult, info: MatchInfo, delta: number, now = Date.now()): void {
+export function recordBattle(s: Settings, r: MatchResult, info: MatchInfo, delta: number, now = Date.now(), rep?: string): void {
   s.bestTrophies = Math.max(s.bestTrophies, s.trophies);
   if (r.winner === 0 && r.crowns[0] >= 3) s.threeCrowns++;
   for (const [id, n] of Object.entries(info.plays)) s.cardPlays[id] = (s.cardPlays[id] ?? 0) + n;
-  s.log.unshift({ at: now, w: r.winner, c: [r.crowns[0], r.crowns[1]], lvl: info.level, foe: info.foe, foeCards: [...info.foeCards], deck: [...info.deck], d: delta, t: s.trophies });
+  s.log.unshift({ at: now, w: r.winner, c: [r.crowns[0], r.crowns[1]], lvl: info.level, foe: info.foe, foeCards: [...info.foeCards], deck: [...info.deck], d: delta, t: s.trophies, rep });
   if (s.log.length > LOG_MAX) s.log.length = LOG_MAX;
 }
 
@@ -73,8 +73,8 @@ function miniDeck(cards: string[], label: string): HTMLElement {
   return row;
 }
 
-/** 畫出對戰紀錄（最多 limit 筆）；沒有紀錄時顯示提示。 */
-export function renderBattleLog(list: HTMLElement, log: BattleLogEntry[], limit = 10, now = Date.now()): void {
+/** 畫出對戰紀錄（最多 limit 筆）；沒有紀錄時顯示提示。有重播的那幾筆會有「重播」按鈕（onReplay）。 */
+export function renderBattleLog(list: HTMLElement, log: BattleLogEntry[], limit = 10, now = Date.now(), onReplay?: (rep: string) => void): void {
   list.innerHTML = '';
   if (!log.length) {
     const li = document.createElement('li');
@@ -95,6 +95,16 @@ export function renderBattleLog(list: HTMLElement, log: BattleLogEntry[], limit 
       `<b class="log-res">${res.text}</b>` +
       `<span class="log-crowns" aria-label="皇冠 ${e.c[0]} 比 ${e.c[1]}"><i class="me">${crown}</i>${e.c[0]} : ${e.c[1]}<i class="foe">${crown}</i></span>` +
       `<span class="log-delta ${e.d < 0 ? 'down' : ''}">${delta}</span>`;
+    if (e.rep && onReplay && decodeReplay(e.rep)) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'log-replay';
+      b.innerHTML = '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M6 4l10 6-10 6z" /></svg>重播';
+      b.setAttribute('aria-label', '觀看這場的重播');
+      const rep = e.rep;
+      b.addEventListener('click', () => onReplay(rep));
+      top.appendChild(b);
+    }
     const meta = document.createElement('small');
     meta.className = 'log-meta';
     meta.textContent = `對手：${LEVEL_NAME[e.lvl]}電腦（${e.foe}）・${timeAgo(e.at, now)}`;

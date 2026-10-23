@@ -1,6 +1,7 @@
 import { ARENA, DEPLOY, DT, KING_ACTIVATION_TIME, KNOCKBACK_TIME, MATCH, SEPARATION_STRENGTH, TOWERS, TOWER_LAYOUT } from './config';
 import { CARDS, UNITS, type CardDef, type ProjectileVisual, type SpellStats, type UnitStats } from './cards';
 import { Rng } from './rng';
+import type { ReplayAction } from './replay';
 
 export type Team = 0 | 1;
 export type EntityKind = 'troop' | 'building' | 'tower';
@@ -246,6 +247,8 @@ export class Game {
   readonly seed: number;
   time = 0;
   tick = 0;
+  /** 雙方每次成功出牌的紀錄（對戰重播用，見 replay.ts）。 */
+  readonly actions: ReplayAction[] = [];
   phase: Phase = 'regular';
   timeLeft = MATCH.regularTime;
   players: [PlayerState, PlayerState];
@@ -409,6 +412,7 @@ export class Game {
     this.fillHand(p);
 
     this.events.push({ type: 'deploy', team, cardId, x: sx, y: sy, cost: card.cost });
+    this.actions.push({ t: this.tick, team, c: cardId, x: sx, y: sy });
     if (card.kind === 'spell') this.castSpell(team, card, sx, sy);
     else this.spawnCard(team, card, sx, sy);
     return { ok: true, x: sx, y: sy };
