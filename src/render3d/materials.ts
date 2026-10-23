@@ -47,7 +47,7 @@ export function toonMaterial(opts: ToonOptions = {}): MeshLambertMaterial {
 }
 
 /** 受擊閃白、冰凍、暈眩等狀態色，寫入 emissive。 */
-export function setStatusTint(m: MeshLambertMaterial, flash: number, frozen: boolean, stunned: boolean, raged = 0): void {
+export function setStatusTint(m: MeshLambertMaterial, flash: number, frozen: boolean, stunned: boolean, raged = 0, slowed = false): void {
   let r = flash;
   let g = flash;
   let b = flash;
@@ -65,6 +65,10 @@ export function setStatusTint(m: MeshLambertMaterial, flash: number, frozen: boo
     r += 0.2;
     g += 0.2;
     b += 0.04;
+  } else if (slowed) {
+    // 被冰彈減速：淡淡的冰藍色
+    g += 0.1;
+    b += 0.24;
   }
   m.emissive.setRGB(Math.min(1, r), Math.min(1, g), Math.min(1, b));
 }

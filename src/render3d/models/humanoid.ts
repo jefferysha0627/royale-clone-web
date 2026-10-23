@@ -8,7 +8,7 @@ export type Hat =
   | 'none' | 'helmet' | 'horned' | 'wizard' | 'hood' | 'cap' | 'band' | 'iron' | 'winged' | 'skull' | 'bandana' | 'witch' | 'crest' | 'goggles' | 'royal' | 'hardhat';
 export type Weapon =
   | 'none' | 'sword' | 'greatsword' | 'axe2' | 'club' | 'spear' | 'musket' | 'staff' | 'skullstaff' | 'bow' | 'bomb' | 'lance' | 'mace' | 'crossbow' | 'cleaver' | 'scepter' | 'pickaxe'
-  | 'handcannon' | 'handaxe' | 'blowpipe';
+  | 'handcannon' | 'handaxe' | 'blowpipe' | 'warhammer' | 'froststaff' | 'stormstaff';
 export type Face = 'dot' | 'angry' | 'skull' | 'visor' | 'glow' | 'sleepy' | 'happy' | 'laugh' | 'wink' | 'wow';
 
 export interface HumanoidSpec {
@@ -471,6 +471,30 @@ function addWeapon(k: Kit, w: Weapon, h: V3, armR: number, H: number, team: { ma
       k.sphere(0.085 * H, { at: [x, y + 0.6 * H, z + 0.05], color: gold, bone: armR, shine: 0.9 }, 10);
       k.gem(0.07 * H, { at: [x, y + 0.71 * H, z + 0.05], color: team.light, bone: armR, shine: 1 });
       k.torus(0.07 * H, 0.018 * H, { at: [x, y + 0.5 * H, z + 0.05], rot: [Math.PI / 2, 0, 0], color: gold, bone: armR, shine: 0.9 }, 10);
+      break;
+    case 'warhammer':
+      // 雙手巨錘：長木柄、方形鐵錘頭兩側包銅、尾端尖刺，握把纏隊伍色布帶
+      k.cyl(0.036 * H, 0.036 * H, 0.98 * H, { at: [x, y + 0.3 * H, z + 0.05], color: wood, bone: armR }, 6);
+      k.box(0.46 * H, 0.26 * H, 0.26 * H, { at: [x, y + 0.8 * H, z + 0.05], color: '#5d636e', bone: armR, shine: 0.85 });
+      for (const sx of [1, -1]) k.box(0.06 * H, 0.3 * H, 0.3 * H, { at: [x + sx * 0.2 * H, y + 0.8 * H, z + 0.05], color: '#b87333', bone: armR, shine: 0.9 });
+      k.cone(0.06 * H, 0.16 * H, { at: [x, y + 0.98 * H, z + 0.05], color: '#c9ced6', bone: armR, shine: 1 }, 6);
+      k.cyl(0.048 * H, 0.048 * H, 0.18 * H, { at: [x, y + 0.04 * H, z + 0.05], color: team.main, bone: armR }, 6);
+      break;
+    case 'froststaff':
+      // 冰晶法杖：銀白杖身，頂端一大顆冰晶與三顆小冰晶
+      k.cyl(0.024 * H, 0.03 * H, 1.0 * H, { at: [x, y + 0.25 * H, z + 0.04], color: '#c9d6e6', bone: armR, shine: 0.6 }, 6);
+      k.gem(0.12 * H, { at: [x, y + 0.86 * H, z + 0.04], scale: [0.8, 1.6, 0.8], color: '#bfe8ff', bone: armR, shine: 1 });
+      for (let i = 0; i < 3; i++) {
+        const a = (i / 3) * Math.PI * 2;
+        k.gem(0.05 * H, { at: [x + Math.cos(a) * 0.1 * H, y + 0.74 * H, z + 0.04 + Math.sin(a) * 0.1 * H], scale: [0.7, 1.4, 0.7], color: '#e8f8ff', bone: armR, shine: 1 });
+      }
+      break;
+    case 'stormstaff':
+      // 引雷杖：深色金屬杖身、三圈銅線圈，頂端發光的雷球
+      k.cyl(0.026 * H, 0.03 * H, 1.0 * H, { at: [x, y + 0.25 * H, z + 0.04], color: '#3a3f4a', bone: armR, shine: 0.7 }, 6);
+      for (const yy of [0.6, 0.66, 0.72]) k.torus(0.07 * H, 0.018 * H, { at: [x, y + yy * H, z + 0.04], rot: [Math.PI / 2, 0, 0], color: '#c87a3a', bone: armR, shine: 0.9 }, 10);
+      k.sphere(0.1 * H, { at: [x, y + 0.84 * H, z + 0.04], color: '#a8e4ff', bone: armR, shine: 1 }, 10);
+      k.torus(0.13 * H, 0.012 * H, { at: [x, y + 0.84 * H, z + 0.04], rot: [0.6, 0.3, 0], color: '#e8f8ff', bone: armR }, 12);
       break;
     case 'mace':
       k.cyl(0.03 * H, 0.03 * H, 0.42 * H, { at: [x, y + 0.18 * H, z + 0.05], color: wood, bone: armR }, 6);

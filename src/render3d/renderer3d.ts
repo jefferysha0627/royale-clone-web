@@ -87,6 +87,7 @@ export class Renderer3D implements BattleRenderer {
   private logs = new Map<number, Mesh>();
   private bombs = new Map<number, Mesh>();
   private beams = new Map<number, Mesh>();
+  private axes = new Map<number, Mesh>();
   private rain: RainArrow[] = [];
   private pendingSpawn = new Map<number, string>();
   private time = 0;
@@ -292,6 +293,8 @@ export class Renderer3D implements BattleRenderer {
     this.bombs.clear();
     for (const b of this.beams.values()) this.disposeMesh(b);
     this.beams.clear();
+    for (const a of this.axes.values()) a.removeFromParent();
+    this.axes.clear();
     for (const r of this.rain) r.mesh.removeFromParent();
     this.rain = [];
     this.pendingSpawn.clear();
@@ -352,11 +355,30 @@ export class Renderer3D implements BattleRenderer {
               this.stop(ev.charge ? 0.07 : 0.035);
             }
             if (ev.unit === 'axe_dwarf') fx.ring(toX(ev.x), toZ(ev.y), 0.4, 2.1, '#ffffff', 0.35, 0.6);
+            if (ev.unit === 'storm_mage') {
+              // 從法杖頂端劈出電弧到每個目標
+              const sx = toX(ev.x);
+              const sz = toZ(ev.y);
+              const targets = [{ id: ev.targetId, x: ev.tx, y: ev.ty }, ...(ev.extra ?? [])];
+              for (const o of targets) {
+                const ov = this.units.get(o.id);
+                const oy = ov ? ov.hover + 0.6 : game.get(o.id)?.kind === 'tower' ? 1.6 : 0.7;
+                fx.arc(sx, 1.55, sz, toX(o.x), oy, toZ(o.y), '#bfe8ff');
+                fx.arc(sx, 1.55, sz, toX(o.x), oy, toZ(o.y), '#ffffff', 0.5);
+                fx.burst('stun', toX(o.x), oy, toZ(o.y), 0.6, 6);
+              }
+            }
             if (ev.unit === 'bomb_blimp') {
               fx.burst('fire', tx, 0.4, tz, 1.2);
               fx.burst('smoke', tx, 0.3, tz, 1);
               fx.ring(tx, tz, 0.3, 1.4, '#ffb347', 0.4);
             }
+          } else if (ev.unit === 'volt_cart') {
+            const sx = toX(ev.x);
+            const sz = toZ(ev.y);
+            fx.flash(sx, 1.0, sz, 0.2, 1.1, '#bfe8ff', 0.2);
+            fx.burst('spark', sx, 1.0, sz, 0.8, 10);
+            this.shake(0.06);
           } else if (ev.unit === 'musketeer' || ev.unit === 'cannon' || ev.unit === 'king') {
             fx.burst('smoke', toX(ev.x), ev.unit === 'king' ? 3.2 : 0.9, toZ(ev.y), 0.4, 3);
           }
@@ -386,8 +408,22 @@ export class Renderer3D implements BattleRenderer {
               break;
             case 'fireball':
             case 'fire':
+            case 'flame-arrow':
               fx.burst('fire', X, 0.5, Z, ev.radius * 0.6);
               fx.ring(X, Z, 0.2, ev.radius, '#ffb347', 0.3, 0.7);
+              break;
+            case 'volt':
+              // 雷能砲車的電砲：強光、電弧四射、地面焦痕
+              fx.flash(X, 0.6, Z, 0.3, ev.radius * 1.2, '#dff4ff', 0.3);
+              for (let i = 0; i < 4; i++) {
+                const a = (i / 4) * Math.PI * 2 + Math.random();
+                fx.arc(X, 0.7, Z, X + Math.cos(a) * ev.radius, 0.1, Z + Math.sin(a) * ev.radius, '#bfe8ff', 0.4);
+              }
+              fx.burst('stun', X, 0.4, Z, ev.radius, 18);
+              fx.ring(X, Z, 0.3, ev.radius, '#bfe8ff', 0.45);
+              fx.decal(X, Z, ev.radius * 0.6, '#1f2a36', 3);
+              this.shake(0.18);
+              this.stop(0.06);
               break;
             case 'magic':
               fx.burst('magic', X, 0.5, Z, ev.radius);
@@ -442,6 +478,43 @@ export class Renderer3D implements BattleRenderer {
           this.stop(ev.cascade ? 0.05 : 0.14);
           const t = [...this.towers.values()].find((tv) => tv.e.x === ev.x && tv.e.y === ev.y);
           if (t && !t.down) t.collapse();
+          break;
+        }
+        case 'deployHit': {
+          const X = toX(ev.x);
+          const Z = toZ(ev.y);
+          if (ev.visual === 'zap') {
+            fx.bolt(X, Z, '#bfe8ff');
+            fx.bolt(X + 0.2, Z, '#ffffff');
+            fx.ring(X, Z, 0.3, ev.radius, '#bfe8ff', 0.4);
+            fx.burst('stun', X, 0.4, Z, ev.radius * 0.7, 14);
+            this.shake(0.05);
+          } else if (ev.visual === 'frost') {
+            fx.burst('ice', X, 0.3, Z, ev.radius * 0.8, 24);
+            fx.ring(X, Z, 0.3, ev.radius, '#dff4ff', 0.55, 0.8);
+            fx.decal(X, Z, ev.radius * 0.7, '#cfe8ff', 1.5);
+          } else {
+            fx.burst('dust', X, 0, Z, ev.radius, 28);
+            fx.burst('debris', X, 0.3, Z, ev.radius * 0.6, 14);
+            fx.ring(X, Z, 0.4, ev.radius, '#e8d9b8', 0.5);
+            fx.decal(X, Z, ev.radius * 0.6, '#3a2e22', 3);
+            this.shake(0.22);
+            this.stop(0.06);
+          }
+          break;
+        }
+        case 'leap':
+          fx.burst('dust', toX(ev.x), 0, toZ(ev.y), 0.9, 10);
+          break;
+        case 'land': {
+          const X = toX(ev.x);
+          const Z = toZ(ev.y);
+          fx.burst('dust', X, 0, Z, ev.radius, 30);
+          fx.burst('debris', X, 0.3, Z, ev.radius * 0.6, 14);
+          fx.ring(X, Z, 0.4, ev.radius, '#ffe2a0', 0.45);
+          fx.decal(X, Z, ev.radius * 0.6, '#3a2e22', 3);
+          this.shake(0.25);
+          this.stop(0.07);
           break;
         }
         case 'emerge': {
@@ -695,6 +768,7 @@ export class Renderer3D implements BattleRenderer {
     }
 
     this.syncProjectiles(game);
+    this.syncAxes(game, dt);
     this.syncSpells(game, dt);
     this.updateRain(dt);
     this.zone.update(game, this.showZone, this.selectedCard, this.preview, this.time);
@@ -722,7 +796,7 @@ export class Renderer3D implements BattleRenderer {
   }
 
   private updateBeam(e: Entity, v: UnitView, game: Game): void {
-    if (e.unit !== 'inferno') return;
+    if (e.unit !== 'inferno' && e.unit !== 'inferno_drake') return;
     const t = e.attacking && e.targetId >= 0 ? game.get(e.targetId) : undefined;
     let beam = this.beams.get(e.id);
     if (!t || e.stunTimer > 0) {
@@ -737,7 +811,8 @@ export class Renderer3D implements BattleRenderer {
     }
     const stage = Math.min(2, Math.floor(e.rampTime / (e.stats.ramp?.stageTime ?? 2)));
     const tv = this.units.get(t.id);
-    const a = new Vector3(v.x, 1.8, v.z);
+    // 熔岩塔從頂端水晶發射；灼焰飛龍從嘴巴（飛行高度＋身體前方）
+    const a = e.unit === 'inferno' ? new Vector3(v.x, 1.8, v.z) : new Vector3(v.x + Math.sin(v.yaw) * 0.6, v.hover + 0.95, v.z + Math.cos(v.yaw) * 0.6);
     const b = new Vector3(toX(t.x), tv ? tv.hover + 0.6 : t.kind === 'tower' ? 1.5 : 0.6, toZ(t.y));
     const d = b.clone().sub(a);
     const len = d.length();
@@ -818,6 +893,30 @@ export class Renderer3D implements BattleRenderer {
       if (live.has(id)) continue;
       v.mesh.removeFromParent();
       this.projs.delete(id);
+    }
+  }
+
+  /** 回旋斧：水平旋轉著飛出去再飛回來。 */
+  private syncAxes(game: Game, dt: number): void {
+    const live = new Set<number>();
+    for (const b of game.boomerangs) {
+      if (b.done) continue;
+      live.add(b.id);
+      let m = this.axes.get(b.id);
+      if (!m) {
+        m = this.projMesh('axe');
+        m.scale.setScalar(1.3);
+        this.layer.add(m);
+        this.axes.set(b.id, m);
+      }
+      m.position.set(toX(b.x), 0.95, toZ(b.y));
+      m.rotation.y += dt * 22;
+      if (Math.random() < 0.3) this.fx.trail('smoke', m.position.x, 0.9, m.position.z);
+    }
+    for (const [id, m] of this.axes) {
+      if (live.has(id)) continue;
+      m.removeFromParent();
+      this.axes.delete(id);
     }
   }
 

@@ -165,6 +165,15 @@ export function runClash(list: ClashUnit[], horizon = 11, dt = 0.2, hits: ClashH
     return best;
   };
 
+  /** 暈眩：停止行動、打斷蓄力與光束（與 Game.stun 相同）。 */
+  const stunU = (o: ClashUnit, now: number, time: number): void => {
+    o.ready = Math.max(o.ready, now + time);
+    o.attacking = false;
+    o.rampT = 0;
+    o.charging = false;
+    o.moved = 0;
+  };
+
   const strike = (u: ClashUnit, tgt: ClashUnit, now: number): void => {
     const s = u.st;
     let dmg = s.damage;
@@ -174,9 +183,25 @@ export function runClash(list: ClashUnit[], horizon = 11, dt = 0.2, hits: ClashH
       u.moved = 0;
     }
     if (s.ramp) dmg = s.ramp.damages[Math.min(2, Math.floor(u.rampT / s.ramp.stageTime))];
-    const splash = s.splash ?? s.projectile?.splash ?? 0;
+    // 回旋斧：以目標附近的範圍估算，去回兩趟約 1.6 倍
+    const boom = s.projectile?.boomerang;
+    if (boom) dmg *= 1.6;
+    const splash = s.splash ?? s.projectile?.splash ?? boom?.radius ?? 0;
     const freeze = s.projectile?.freeze ?? 0;
-    if (splash > 0) {
+    // 冰彈減速：以少行動 time ×（1 − 倍率）秒估算
+    const slowT = s.projectile?.slow ? s.projectile.slow.time * (1 - s.projectile.slow.mul) : 0;
+    if (s.multiTarget && splash <= 0) {
+      const others = list
+        .filter((o) => o !== tgt && o.alive && o.side !== u.side && now >= o.exists && canHit(u, o) && edge(u, o) <= s.range)
+        .sort((a, b) => edge(u, a) - edge(u, b))
+        .slice(0, s.multiTarget - 1);
+      const hitsOn = [tgt, ...others];
+      while (hitsOn.length < s.multiTarget) hitsOn.push(tgt);
+      for (const o of hitsOn) {
+        hurt(o, dmg, now);
+        if (s.stunOnHit && o.alive) stunU(o, now, s.stunOnHit);
+      }
+    } else if (splash > 0) {
       const cx = s.splashSelf ? u.x : tgt.x;
       const cy = s.splashSelf ? u.y : tgt.y;
       const air = s.targets === 'air-ground';
@@ -187,16 +212,31 @@ export function runClash(list: ClashUnit[], horizon = 11, dt = 0.2, hits: ClashH
         if (reach(cx, cy, o) > splash) continue;
         hurt(o, dmg, now);
         if (freeze > 0 && o.alive) o.ready = Math.max(o.ready, now + freeze);
+        if (slowT > 0 && o.alive) o.ready = Math.max(o.ready, now + slowT);
       }
     } else {
       hurt(tgt, dmg, now);
       if (freeze > 0 && tgt.alive) tgt.ready = Math.max(tgt.ready, now + freeze);
+      if (slowT > 0 && tgt.alive) tgt.ready = Math.max(tgt.ready, now + slowT);
+      if (s.stunOnHit && tgt.alive) stunU(tgt, now, s.stunOnHit);
     }
     if (s.kamikaze) {
       u.alive = false;
       u.hp = 0;
     }
   };
+
+  // 假想部署的單位（ref < 0）出場時的範圍效果（雷擊、寒氣、砸地）
+  for (const u of [...list]) {
+    const dh = u.st.deployHit;
+    if (!dh || u.ref >= 0) continue;
+    for (const o of list) {
+      if (o.side === u.side || !o.alive || reach(u.x, u.y, o) > dh.radius) continue;
+      const dmg = o.kind === 'tower' ? Math.round(dh.damage * dh.towerMul) : dh.damage;
+      queue.push({ u: o, dmg, at: u.exists, stun: dh.stun ?? (dh.slow ? dh.slow.time * (1 - dh.slow.mul) : 0) });
+    }
+  }
+  queue.sort((a, b) => a.at - b.at);
 
   let clear = horizon;
   const steps = Math.ceil(horizon / dt);

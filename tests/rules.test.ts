@@ -840,6 +840,194 @@ describe('v3 第三批：龍捲風、墓地、熔岩飛獸、迫擊砲', () => {
   });
 });
 
+describe('v3 第四批：重裝武士、長弓遊俠、灼焰飛龍、寒霜術士、風暴術士、雷能砲車、巨錘騎士、回旋斧手', () => {
+  /** 把敵方部隊直接放到指定位置（略過部署區與部署時間，測試用）。 */
+  function foeAt(g: Game, cardId: string, x: number, y: number): Entity[] {
+    const list = place(g, 1, cardId, 9, 8);
+    for (const e of list) {
+      e.x += x - 9;
+      e.y += y - 8;
+      e.px = e.x;
+      e.py = e.y;
+      e.deployTimer = 0;
+    }
+    return list;
+  }
+  const hitsOn = (ev: GameEvent[], id: number, out: number[]) => ev.forEach((v) => v.type === 'hit' && v.id === id && out.push(v.amount));
+
+  it('重裝武士：單下 816，三下就能打倒騎士', () => {
+    const g = newGame();
+    place(g, 0, 'heavy_warrior', 9, 22);
+    run(g, 1.1);
+    const [kn] = foeAt(g, 'knight', 9, 20.2);
+    const hits: number[] = [];
+    run(g, 7, (ev) => hitsOn(ev, kn.id, hits));
+    const big = hits.filter((a) => a === 816).length;
+    expect(big).toBeGreaterThanOrEqual(2);
+    expect(big).toBeLessThanOrEqual(3);
+    expect(816 * 3).toBeGreaterThan(UNITS.knight.stats.hp);
+    expect(kn.alive).toBe(false);
+  });
+
+  it('長弓遊俠：從 8 格外射出範圍火箭，落點附近的蝙蝠群一次倒下大半（可打空中）', () => {
+    const g = newGame();
+    const [r] = place(g, 0, 'ranger', 9, 24);
+    run(g, 1.1);
+    const bats = foeAt(g, 'bats', 9, 14.6);
+    for (const b of bats) b.stunTimer = 10; // 讓蝙蝠停在原地
+    let shotFrom = 0;
+    run(g, 4, (ev) => ev.forEach((v) => v.type === 'attack' && v.id === r.id && !shotFrom && (shotFrom = Math.hypot(v.x - v.tx, v.y - v.ty))));
+    expect(shotFrom).toBeGreaterThan(8);
+    expect(bats.filter((b) => !b.alive).length).toBeGreaterThanOrEqual(3);
+  });
+
+  it('灼焰飛龍：飛行光束越燒越痛（36 → 121 → 423）', () => {
+    const g = newGame();
+    place(g, 0, 'inferno_drake', 9, 22);
+    run(g, 1.1);
+    const [gi] = foeAt(g, 'giant', 9, 19);
+    gi.stunTimer = 10;
+    const hits: number[] = [];
+    run(g, 7, (ev) => hitsOn(ev, gi.id, hits));
+    const beam = hits.filter((a) => a === 36 || a === 121 || a === 423);
+    expect(beam[0]).toBe(36);
+    expect(beam).toContain(121);
+    expect(beam[beam.length - 1]).toBe(423);
+  });
+
+  it('寒霜術士：出場寒氣（83 傷害、慢 1 秒），冰彈讓目標的移動與攻擊慢 35%、持續 2.5 秒', () => {
+    const g = newGame();
+    const [kn] = foeAt(g, 'knight', 9, 21);
+    const hp0 = kn.hp;
+    place(g, 0, 'frost_mage', 9, 23.5);
+    expect(hp0 - kn.hp).toBe(83);
+    expect(kn.slowMul).toBeCloseTo(0.65);
+    expect(kn.slowAtk).toBeCloseTo(0.65);
+    run(g, 1.1);
+    expect(kn.slowAtk).toBe(1);
+    run(g, 2.4);
+    expect(kn.slowTimer).toBeGreaterThan(0.5);
+    expect(kn.slowAtk).toBeCloseTo(0.65);
+  });
+
+  it('風暴術士：出場雷擊（192、暈眩）；同時電擊兩個目標並暈眩；只有一個目標時兩道都打它', () => {
+    const g = newGame();
+    const [a] = foeAt(g, 'knight', 8, 21);
+    const [b] = foeAt(g, 'knight', 10.5, 21);
+    const [m] = place(g, 0, 'storm_mage', 9, 23.5);
+    expect(UNITS.knight.stats.hp - a.hp).toBe(192);
+    expect(UNITS.knight.stats.hp - b.hp).toBe(192);
+    expect(a.stunTimer).toBeGreaterThan(0.4);
+    const hitsA: number[] = [];
+    const hitsB: number[] = [];
+    let extra = -1;
+    run(g, 2.5, (ev) => {
+      hitsOn(ev, a.id, hitsA);
+      hitsOn(ev, b.id, hitsB);
+      ev.forEach((v) => v.type === 'attack' && v.id === m.id && extra < 0 && (extra = v.extra?.length ?? 0));
+    });
+    expect(extra).toBe(1);
+    expect(hitsA.filter((x) => x === 110).length).toBe(1);
+    expect(hitsB.filter((x) => x === 110).length).toBe(1);
+
+    const g2 = newGame();
+    const [solo] = foeAt(g2, 'knight', 9, 21);
+    solo.stunTimer = 10;
+    place(g2, 0, 'storm_mage', 9, 23.5);
+    const hits: number[] = [];
+    let at = -1;
+    run(g2, 2.6, (ev) => {
+      const n = hits.length;
+      hitsOn(ev, solo.id, hits);
+      if (at < 0 && hits.slice(n).filter((x) => x === 110).length === 2) at = g2.tick;
+    });
+    expect(at).toBeGreaterThan(0);
+  });
+
+  it('雷能砲車：出場蓄力 3 秒才開砲（1331、範圍），開砲後退；被暈眩要重新蓄力 3 秒', () => {
+    const g = newGame();
+    const [c] = place(g, 0, 'volt_cart', 9, 22);
+    const [gi] = foeAt(g, 'giant', 9, 18.6);
+    gi.stunTimer = 30;
+    const t0 = g.time;
+    const shots: number[] = [];
+    const hits: number[] = [];
+    let yBefore = 0;
+    let yAfter = 0;
+    run(g, 3.4, (ev) => {
+      hitsOn(ev, gi.id, hits);
+      ev.forEach((v) => {
+        if (v.type === 'attack' && v.id === c.id) {
+          shots.push(g.time - t0);
+          yBefore = c.y;
+        }
+      });
+    });
+    expect(shots).toHaveLength(1);
+    expect(shots[0]).toBeGreaterThan(2.9);
+    expect(shots[0]).toBeLessThan(3.1);
+    run(g, 0.8, (ev) => hitsOn(ev, gi.id, hits));
+    yAfter = c.y;
+    expect(hits).toContain(1331);
+    expect(yAfter - yBefore).toBeGreaterThan(0.5);
+    // 被雷擊暈眩：下一砲要再蓄力 3 秒
+    run(g, 0.5);
+    hold(g, 1, 'zap');
+    expect(g.deploy(1, 0, c.x, c.y).ok).toBe(true);
+    const tz = g.time;
+    const later: number[] = [];
+    run(g, 5, (ev) => ev.forEach((v) => v.type === 'attack' && v.id === c.id && later.push(g.time - tz)));
+    expect(later[0]).toBeGreaterThan(3);
+  });
+
+  it('巨錘騎士：出場砸地（429）；跳向 3.5～5 格外的敵人，落地 536 範圍傷害；不會跳向塔', () => {
+    const g = newGame();
+    const [k] = foeAt(g, 'knight', 9, 21.6);
+    place(g, 0, 'hammer_knight', 9, 23);
+    expect(UNITS.knight.stats.hp - k.hp).toBe(429);
+
+    const g2 = newGame();
+    const [h] = place(g2, 0, 'hammer_knight', 9, 24);
+    run(g2, 1.1);
+    const [k2] = foeAt(g2, 'knight', 9, 18.6);
+    const evs: string[] = [];
+    const hits: number[] = [];
+    run(g2, 1.5, (ev) => {
+      hitsOn(ev, k2.id, hits);
+      ev.forEach((v) => (v.type === 'leap' || v.type === 'land') && v.id === h.id && evs.push(v.type));
+    });
+    expect(evs).toEqual(['leap', 'land']);
+    expect(hits).toContain(536);
+
+    const g3 = newGame();
+    const [h3] = place(g3, 0, 'hammer_knight', 3.5, 22);
+    let leaps = 0;
+    run(g3, 22, (ev) => ev.forEach((v) => v.type === 'leap' && v.id === h3.id && leaps++));
+    expect(leaps).toBe(0);
+    expect(g3.players[0].crowns + (princess(g3, 1, 0).hp < TOWERS.princess.hp ? 1 : 0)).toBeGreaterThan(0);
+  });
+
+  it('回旋斧手：斧頭穿過沿路所有敵人，飛出去再飛回來，每個敵人去回各挨一下', () => {
+    const g = newGame();
+    const [ax] = place(g, 0, 'axe_thrower', 9, 24);
+    run(g, 1.1);
+    const [k1] = foeAt(g, 'knight', 9, 20.5);
+    const [k2] = foeAt(g, 'knight', 9, 19.6);
+    k1.stunTimer = 10;
+    k2.stunTimer = 10;
+    const h1: number[] = [];
+    const h2: number[] = [];
+    run(g, 2.2, (ev) => {
+      hitsOn(ev, k1.id, h1);
+      hitsOn(ev, k2.id, h2);
+    });
+    expect(h1.filter((a) => a === 169).length).toBe(2);
+    expect(h2.filter((a) => a === 169).length).toBe(2);
+    expect(g.boomerangs.length).toBe(0);
+    expect(ax.alive).toBe(true);
+  });
+});
+
 describe('卡池', () => {
   it('至少 30 張卡，每張都有對應單位或法術資料', () => {
     const ids = Object.keys(CARDS);

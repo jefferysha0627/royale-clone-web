@@ -67,6 +67,7 @@ export class UnitView {
       st.charging = e.charging;
       st.jumping = e.jumping;
       st.frozen = e.frozen && e.stunTimer > 0;
+      if (e.stats.chargeUp) st.charge = 1 - Math.min(1, e.cooldown / Math.max(0.1, e.stats.loadTime));
       // 出手準備：冷卻剩餘時間落在 loadTime 內時拉弓／舉起武器
       if (e.attacking && e.deployTimer <= 0 && e.stunTimer <= 0) {
         const lt = Math.max(0.15, e.stats.loadTime);
@@ -86,8 +87,13 @@ export class UnitView {
     animate(this.inst, this.prof, st, animDt);
     const m = this.inst.mesh;
     let lift = this.hover > 0 ? this.hover + Math.sin(st.t * 2.2) * 0.08 : 0;
-    // 跳河：在河道範圍內做拋物線
-    if (e.jumping) {
+    // 巨錘騎士的跳躍：高高躍起再落下
+    const lp = e.stats.leap;
+    if (lp && e.leapT >= 0) {
+      const k = Math.min(1, Math.max(0, e.leapT - (1 - alpha) / 30) / lp.time);
+      lift += Math.sin(k * Math.PI) * 2.4;
+    } else if (e.jumping) {
+      // 跳河：在河道範圍內做拋物線
       const k = (y - ARENA.riverTop) / (ARENA.riverBottom - ARENA.riverTop);
       lift += Math.sin(Math.max(0, Math.min(1, k)) * Math.PI) * 0.9;
     }
@@ -128,7 +134,7 @@ export class UnitView {
     this.flash = Math.max(0, this.flash - dt * 9);
     const deploying = e.deployTimer > 0 && this.dyingT < 0;
     const raged = e.rageTimer > 0 ? 0.6 + Math.sin(st.t * 9) * 0.4 : 0;
-    setStatusTint(this.mat, this.flash * this.flash * 0.5, st.frozen, e.stunTimer > 0 && !e.frozen, raged);
+    setStatusTint(this.mat, this.flash * this.flash * 0.5, st.frozen, e.stunTimer > 0 && !e.frozen, raged, e.slowAtk < 1);
     if (this.dyingT < 0) {
       this.mat.transparent = deploying;
       this.mat.opacity = deploying ? 0.55 + 0.45 * (1 - e.deployTimer / Math.max(0.3, e.stats.deployTime)) : 1;
@@ -251,6 +257,19 @@ function projGeometry(kind: string): BufferGeometry {
       k.cone(0.06, 0.16, { at: [0, 0, 0.42], rot: [Math.PI / 2, 0, 0], color: '#cfd6de' }, 5);
       k.box(0.12, 0.02, 0.14, { at: [0, 0, -0.3], color: kind === 'tower-arrow' ? '#ffffff' : '#5fbf7a' });
       break;
+    case 'flame-arrow':
+      // 長弓遊俠的火箭：箭頭裹著火焰
+      k.cyl(0.025, 0.025, 0.8, { rot: [Math.PI / 2, 0, 0], color: '#8a5a2e' }, 5);
+      k.cone(0.07, 0.18, { at: [0, 0, 0.48], rot: [Math.PI / 2, 0, 0], color: '#ffb347' }, 5);
+      k.sphere(0.1, { at: [0, 0, 0.36], color: '#ff7a2a' }, 6);
+      k.box(0.12, 0.02, 0.14, { at: [0, 0, -0.34], color: '#c9a24a' });
+      break;
+    case 'axe':
+      // 回旋斧：雙刃斧頭＋短柄（飛行時水平旋轉）
+      k.cyl(0.035, 0.035, 0.6, { rot: [Math.PI / 2, 0, 0], color: '#8a5a2e' }, 5);
+      for (const sx of [1, -1]) k.blob(0.32, 0.04, 0.26, { at: [sx * 0.18, 0, 0.22], color: '#dfe5ec' }, 8);
+      k.cyl(0.07, 0.07, 0.1, { at: [0, 0, 0.22], color: '#5d636e' }, 8);
+      break;
     case 'spear':
       k.cyl(0.03, 0.03, 0.9, { rot: [Math.PI / 2, 0, 0], color: '#8a5a2e' }, 5);
       k.cone(0.07, 0.2, { at: [0, 0, 0.55], rot: [Math.PI / 2, 0, 0], color: '#dfe5ec' }, 5);
@@ -302,6 +321,7 @@ const GLOW: Record<string, { color: string; r: number; trail: 'fire' | 'magic' |
   magic: { color: '#c86bff', r: 0.24, trail: 'magic' },
   ice: { color: '#bfe8ff', r: 0.26, trail: 'ice' },
   spit: { color: '#7fe0ff', r: 0.14, trail: null },
+  volt: { color: '#a8e4ff', r: 0.46, trail: 'spark' },
 };
 
 const glowGeo = new SphereGeometry(1, 10, 8);
@@ -325,7 +345,7 @@ export function makeProjectileMesh(visual: string): Mesh {
   }
   const m = new Mesh(projGeometry(visual), sharedLambert);
   m.castShadow = true;
-  m.userData.trail = visual === 'bomb' ? 'spark' : visual === 'rocket' ? 'smoke' : null;
+  m.userData.trail = visual === 'bomb' ? 'spark' : visual === 'rocket' ? 'smoke' : visual === 'flame-arrow' ? 'fire' : null;
   return m;
 }
 

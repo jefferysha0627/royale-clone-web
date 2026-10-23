@@ -1,5 +1,5 @@
 import { ARENA, DEPLOY, DT, KING_ACTIVATION_TIME, KNOCKBACK_TIME, MATCH, SEPARATION_STRENGTH, TOWERS, TOWER_LAYOUT } from './config';
-import { CARDS, UNITS, type CardDef, type ProjectileVisual, type SpellStats, type UnitStats } from './cards';
+import { CARDS, UNITS, type CardDef, type DeployHit, type ProjectileVisual, type SpellStats, type UnitStats } from './cards';
 import { dcos, dsin, len } from './dmath';
 import { Rng } from './rng';
 import type { ReplayAction } from './replay';
@@ -56,6 +56,13 @@ export interface Entity {
   tunnelX: number;
   tunnelY: number;
   genTimer: number; // 能量收集器：距離下次產生能量的秒數
+  slowAtk: number; // 攻擊速度倍率（被寒霜術士的冰彈打中時 < 1）
+  leapT: number; // 巨錘騎士跳躍：起跳後經過的秒數，-1 = 沒有在跳
+  leapX0: number;
+  leapY0: number;
+  leapX1: number;
+  leapY1: number;
+  leapCd: number; // 跳躍冷卻
 }
 
 export interface Projectile {
@@ -72,6 +79,8 @@ export interface Projectile {
   damage: number;
   splash: number;
   freeze: number;
+  slowMul: number; // 命中後減速（1 = 不減速）
+  slowTime: number;
   hitsAir: boolean;
   hitsGround: boolean;
   visual: ProjectileVisual;
@@ -125,6 +134,27 @@ export interface Roller {
   hit: Set<number>;
 }
 
+/** 回旋斧：飛出去再飛回丟出者手上；去程、回程各對沿路的敵人造成一次傷害。 */
+export interface Boomerang {
+  id: number;
+  team: Team;
+  ownerId: number;
+  x: number;
+  y: number;
+  dx: number; // 去程方向（單位向量）
+  dy: number;
+  out: number; // 去程還要飛的距離（回程時為已飛回的距離）
+  length: number; // 去程總長
+  back: boolean;
+  speed: number;
+  damage: number;
+  radius: number;
+  hitsAir: boolean;
+  hit: number[]; // 這一趟已經打到的實體
+  source: string;
+  done: boolean;
+}
+
 /** 延遲爆炸的死亡炸彈。 */
 export interface Bomb {
   id: number;
@@ -139,7 +169,10 @@ export interface Bomb {
 export type GameEvent =
   | { type: 'deploy'; team: Team; cardId: string; x: number; y: number; cost: number }
   | { type: 'spawn'; id: number; team: Team; unit: string; x: number; y: number; source: 'card' | 'spawner' | 'death' | 'barrel' | 'tunnel' }
-  | { type: 'attack'; id: number; unit: string; team: Team; x: number; y: number; tx: number; ty: number; targetId: number; ranged: boolean; charge: boolean }
+  | {
+      type: 'attack'; id: number; unit: string; team: Team; x: number; y: number; tx: number; ty: number; targetId: number; ranged: boolean; charge: boolean;
+      extra?: { id: number; x: number; y: number }[]; // 同時打到的其他目標（風暴術士）
+    }
   | { type: 'hit'; id: number; team: Team; x: number; y: number; amount: number; isTower: boolean; isBuilding: boolean }
   | { type: 'impact'; team: Team; x: number; y: number; radius: number; visual: ProjectileVisual }
   | { type: 'death'; id: number; team: Team; kind: EntityKind; unit: string; x: number; y: number; kamikaze: boolean }
@@ -156,6 +189,9 @@ export type GameEvent =
   | { type: 'elixir'; team: Team; x: number; y: number; amount: number }
   | { type: 'phase'; phase: Phase }
   | { type: 'elixirRate'; mult: number }
+  | { type: 'deployHit'; team: Team; unit: string; x: number; y: number; radius: number; visual: 'zap' | 'frost' | 'slam' }
+  | { type: 'leap'; id: number; team: Team; x: number; y: number; tx: number; ty: number; time: number }
+  | { type: 'land'; id: number; team: Team; x: number; y: number; radius: number }
   | { type: 'end'; result: MatchResult };
 
 export interface PlayerState {
@@ -270,6 +306,7 @@ export class Game {
   areas: AreaEffect[] = [];
   rollers: Roller[] = [];
   bombs: Bomb[] = [];
+  boomerangs: Boomerang[] = [];
   events: GameEvent[] = [];
   result: MatchResult | null = null;
   private nextId = 1;
@@ -318,7 +355,10 @@ export class Game {
       activateTimer: 0, avoidSide: 0, chargeDist: 0, charging: false, rampTime: 0, spawnTimer: 0, spawnLeft: 0, spawnGap: 0,
       kbx: 0, kby: 0, kbTime: 0, moving: false, facing: team === 0 ? -Math.PI / 2 : Math.PI / 2, jumping: false, lastAttack: -99,
       rageTimer: 0, rageMul: 1, tunneling: false, tunnelX: x, tunnelY: y, genTimer: stats.elixirGen?.interval ?? 0,
+      slowAtk: 1, leapT: -1, leapX0: x, leapY0: y, leapX1: x, leapY1: y, leapCd: 0,
     };
+    // 雷能砲車出場要先蓄力
+    if (stats.chargeUp) e.cooldown = stats.loadTime;
     this.entities.push(e);
     return e;
   }
@@ -474,6 +514,30 @@ export class Game {
     for (const [ox, oy] of formation(count)) {
       this.spawnUnit(team, def.id, card.id, x + ox, y + oy * sign, def.stats.deployTime, 'card');
     }
+    if (def.stats.deployHit) this.deployHit(team, def.id, def.stats.deployHit, x, y);
+  }
+
+  /** 部署落地的範圍效果：傷害、暈眩、減速、擊退（只打敵方，塔依 towerMul）。 */
+  private deployHit(team: Team, unit: string, d: DeployHit, x: number, y: number): void {
+    this.events.push({ type: 'deployHit', team, unit, x, y, radius: d.radius, visual: d.visual });
+    for (const o of this.entities) {
+      if (!o.alive || o.team === team || o.tunneling) continue;
+      if (distTo(x, y, o) > d.radius) continue;
+      const dmg = o.kind === 'tower' ? Math.round(d.damage * d.towerMul) : d.damage;
+      if (dmg > 0) this.applyDamage(o, dmg);
+      if (!o.alive) continue;
+      if (d.stun) this.stun(o, d.stun, false);
+      if (d.slow) this.slow(o, d.slow.mul, d.slow.time);
+      if (d.pushback) this.knockback(o, x, y, d.pushback, false);
+    }
+  }
+
+  /** 減速：移動與攻擊都變慢（取最強的一個，時間取最長）。 */
+  private slow(e: Entity, mul: number, time: number): void {
+    if (!e.alive) return;
+    e.slowTimer = Math.max(e.slowTimer, time);
+    e.slowMul = Math.min(e.slowMul, mul);
+    e.slowAtk = Math.min(e.slowAtk, mul);
   }
 
   private spawnUnit(team: Team, unit: string, cardId: string, x: number, y: number, deployTime: number, source: 'card' | 'spawner' | 'death' | 'barrel'): Entity {
@@ -569,8 +633,10 @@ export class Game {
     for (const e of this.entities) if (e.alive) this.updateEntity(e);
     this.resolveCollisions();
     this.updateProjectiles();
+    this.updateBoomerangs();
     this.entities = this.entities.filter((e) => e.alive || e.kind === 'tower');
     this.projectiles = this.projectiles.filter((p) => !p.done);
+    this.boomerangs = this.boomerangs.filter((b) => !b.done);
     this.updateClock();
   }
 
@@ -610,6 +676,7 @@ export class Game {
     this.areas = [];
     this.rollers = [];
     this.bombs = [];
+    this.boomerangs = [];
     this.phase = 'tiebreak';
     this.drainRate = Math.min(l0, l1) / MATCH.tiebreakDrainTime;
     this.events.push({ type: 'phase', phase: 'tiebreak' });
@@ -891,11 +958,19 @@ export class Game {
       haste = e.rageMul;
       if (e.rageTimer <= 0) e.rageMul = 1;
     }
-    e.cooldown = Math.max(0, e.cooldown - DT * haste);
+    e.cooldown = Math.max(0, e.cooldown - DT * haste * e.slowAtk);
     e.moving = false;
     if (e.slowTimer > 0) {
       e.slowTimer -= DT;
-      if (e.slowTimer <= 0) e.slowMul = 1;
+      if (e.slowTimer <= 0) {
+        e.slowMul = 1;
+        e.slowAtk = 1;
+      }
+    }
+    if (e.leapCd > 0) e.leapCd -= DT;
+    if (e.leapT >= 0) {
+      this.updateLeap(e);
+      return;
     }
     if (e.lifetime !== Infinity) {
       e.lifetime -= DT;
@@ -933,11 +1008,18 @@ export class Game {
     const target = this.acquireTarget(e);
     if (!target) return;
 
-    if (this.edgeDist(e, target) <= e.stats.range) {
+    const reachD = this.edgeDist(e, target);
+    const lp = e.stats.leap;
+    if (lp && e.leapCd <= 0 && !e.attacking && target.kind !== 'tower' && reachD >= lp.min && reachD <= lp.max) {
+      this.startLeap(e, target);
+      return;
+    }
+    if (reachD <= e.stats.range) {
       e.facing = Math.atan2(target.y - e.y, target.x - e.x);
       if (!e.attacking) {
         e.attacking = true;
-        e.cooldown = Math.max(e.cooldown, e.stats.loadTime);
+        // 雷能砲車蓄滿的電力會保留，看到目標就開砲
+        if (!e.stats.chargeUp) e.cooldown = Math.max(e.cooldown, e.stats.loadTime);
       }
       e.locked = true;
       e.chargeDist = 0;
@@ -1037,7 +1119,11 @@ export class Game {
     const ranged = !!s.projectile;
     const charged = e.charging && !!s.charge;
     e.lastAttack = this.time;
-    this.events.push({ type: 'attack', id: e.id, unit: e.unit, team: e.team, x: e.x, y: e.y, tx: t.x, ty: t.y, targetId: t.id, ranged, charge: charged });
+    const extra = s.multiTarget && s.multiTarget > 1 ? this.extraTargets(e, t, s.multiTarget - 1) : [];
+    this.events.push({
+      type: 'attack', id: e.id, unit: e.unit, team: e.team, x: e.x, y: e.y, tx: t.x, ty: t.y, targetId: t.id, ranged, charge: charged,
+      ...(extra.length ? { extra: extra.map((o) => ({ id: o.id, x: o.x, y: o.y })) } : {}),
+    });
     if (charged) {
       e.charging = false;
       e.chargeDist = 0;
@@ -1058,6 +1144,7 @@ export class Game {
     }
     if (ranged) {
       this.launch(e, t, s.damage);
+      if (s.recoil) this.knockback(e, t.x, t.y, s.recoil, true);
       return;
     }
     let dmg = charged ? s.charge!.damage : s.damage;
@@ -1070,27 +1157,144 @@ export class Game {
       const cx = s.splashSelf ? e.x : t.x;
       const cy = s.splashSelf ? e.y : t.y;
       this.areaDamage(e.team, cx, cy, s.splash, dmg, s.targets === 'air-ground', true);
+    } else if (s.multiTarget) {
+      // 同時打數個目標；目標不夠時其餘幾道都打在主要目標上
+      const hits = [t, ...extra];
+      while (hits.length < s.multiTarget) hits.push(t);
+      for (const o of hits) {
+        this.applyDamage(o, dmg);
+        if (s.stunOnHit && o.alive) this.stun(o, s.stunOnHit, false);
+      }
     } else {
       this.applyDamage(t, dmg);
+      if (s.stunOnHit && t.alive) this.stun(t, s.stunOnHit, false);
     }
+  }
+
+  /** 主要目標以外、射程內最近的幾個可攻擊目標。 */
+  private extraTargets(e: Entity, primary: Entity, n: number): Entity[] {
+    const cands: { d: number; o: Entity }[] = [];
+    for (const o of this.entities) {
+      if (o === primary || !this.canTarget(e, o)) continue;
+      const d = this.edgeDist(e, o);
+      if (d <= e.stats.range) cands.push({ d, o });
+    }
+    cands.sort((a, b) => a.d - b.d || a.o.id - b.o.id);
+    return cands.slice(0, n).map((c) => c.o);
+  }
+
+  /** 巨錘騎士起跳：飛向目標前緣（在空中 leap.time 秒），落地範圍傷害與擊退。 */
+  private startLeap(e: Entity, t: Entity): void {
+    const lp = e.stats.leap!;
+    const d = dist(e.x, e.y, t.x, t.y) || 1;
+    const stop = Math.max(0, d - (t.half > 0 ? t.half : t.stats.radius) - e.stats.radius * 0.5);
+    e.leapT = 0;
+    e.leapX0 = e.x;
+    e.leapY0 = e.y;
+    e.leapX1 = e.x + ((t.x - e.x) / d) * stop;
+    e.leapY1 = e.y + ((t.y - e.y) / d) * stop;
+    e.facing = Math.atan2(t.y - e.y, t.x - e.x);
+    e.attacking = false;
+    e.jumping = true;
+    this.events.push({ type: 'leap', id: e.id, team: e.team, x: e.x, y: e.y, tx: e.leapX1, ty: e.leapY1, time: lp.time });
+  }
+
+  private updateLeap(e: Entity): void {
+    const lp = e.stats.leap!;
+    e.leapT += DT;
+    const k = Math.min(1, e.leapT / lp.time);
+    e.x = e.leapX0 + (e.leapX1 - e.leapX0) * k;
+    e.y = e.leapY0 + (e.leapY1 - e.leapY0) * k;
+    e.jumping = true;
+    e.moving = true;
+    if (k < 1) return;
+    e.leapT = -1;
+    e.jumping = false;
+    e.leapCd = lp.cooldown;
+    // 落地後稍停才出手
+    e.cooldown = Math.max(e.cooldown, e.stats.loadTime * 0.5);
+    this.events.push({ type: 'land', id: e.id, team: e.team, x: e.x, y: e.y, radius: lp.radius });
+    for (const o of this.entities) {
+      if (!o.alive || o.team === e.team || o.tunneling || o.stats.flying) continue;
+      if (distTo(e.x, e.y, o) > lp.radius) continue;
+      this.applyDamage(o, lp.damage);
+      if (o.alive) this.knockback(o, e.x, e.y, lp.pushback, false);
+    }
+    this.constrain(e, false);
   }
 
   private launch(e: Entity, t: Entity, damage: number): void {
     const p = e.stats.projectile!;
+    if (p.boomerang) {
+      // 回旋斧：朝目標直線飛出（至少 reach 格），再飛回丟出者
+      const d = dist(e.x, e.y, t.x, t.y) || 1;
+      this.boomerangs.push({
+        id: this.nextId++, team: e.team, ownerId: e.id, x: e.x, y: e.y, dx: (t.x - e.x) / d, dy: (t.y - e.y) / d, out: Math.max(p.boomerang.reach, d),
+        length: Math.max(p.boomerang.reach, d), back: false, speed: p.speed, damage, radius: p.boomerang.radius, hitsAir: e.stats.targets === 'air-ground', hit: [], source: e.unit, done: false,
+      });
+      return;
+    }
     this.projectiles.push({
       id: this.nextId++, team: e.team, x: e.x, y: e.y, sx: e.x, sy: e.y, targetId: t.id, tx: t.x, ty: t.y, speed: p.speed,
-      damage, splash: p.splash ?? 0, freeze: p.freeze ?? 0, hitsAir: e.stats.targets === 'air-ground', hitsGround: true,
-      visual: p.visual, arc: p.arc ?? 0, source: e.unit, done: false,
+      damage, splash: p.splash ?? 0, freeze: p.freeze ?? 0, slowMul: p.slow?.mul ?? 1, slowTime: p.slow?.time ?? 0,
+      hitsAir: e.stats.targets === 'air-ground', hitsGround: true, visual: p.visual, arc: p.arc ?? 0, source: e.unit, done: false,
     });
   }
 
-  private areaDamage(team: Team, x: number, y: number, radius: number, damage: number, hitsAir: boolean, hitsGround: boolean, freeze = 0): void {
+  /** 回旋斧的飛行：沿路打到的敵人（去程、回程各一次）。 */
+  private updateBoomerangs(): void {
+    for (const b of this.boomerangs) {
+      if (b.done) continue;
+      const step = b.speed * DT;
+      if (!b.back) {
+        const mv = Math.min(step, b.out);
+        b.x += b.dx * mv;
+        b.y += b.dy * mv;
+        b.out -= mv;
+        if (b.out <= 1e-9) {
+          b.back = true;
+          b.out = 0;
+          b.hit = [];
+        }
+      } else {
+        const owner = this.get(b.ownerId);
+        if (owner && owner.alive) {
+          const d = dist(b.x, b.y, owner.x, owner.y);
+          if (d <= step) {
+            b.x = owner.x;
+            b.y = owner.y;
+            b.done = true;
+          } else {
+            b.x += ((owner.x - b.x) / d) * step;
+            b.y += ((owner.y - b.y) / d) * step;
+          }
+        } else {
+          // 丟出者已倒下：斧頭照原路飛回，飛完去程的距離就消失
+          b.x -= b.dx * step;
+          b.y -= b.dy * step;
+          b.out += step;
+          if (b.out >= b.length) b.done = true;
+        }
+      }
+      if (!this.playing) continue;
+      for (const o of this.entities) {
+        if (!o.alive || o.team === b.team || o.tunneling || b.hit.includes(o.id)) continue;
+        if (o.stats.flying && !b.hitsAir) continue;
+        if (distTo(b.x, b.y, o) > b.radius) continue;
+        b.hit.push(o.id);
+        this.applyDamage(o, b.damage);
+      }
+    }
+  }
+
+  private areaDamage(team: Team, x: number, y: number, radius: number, damage: number, hitsAir: boolean, hitsGround: boolean, freeze = 0, slowMul = 1, slowTime = 0): void {
     for (const o of this.entities) {
       if (!o.alive || o.team === team || o.tunneling) continue;
       if (o.stats.flying ? !hitsAir : !hitsGround) continue;
       if (distTo(x, y, o) > radius) continue;
       this.applyDamage(o, damage);
       if (freeze > 0 && o.alive) this.stun(o, freeze, true);
+      if (slowTime > 0 && o.alive) this.slow(o, slowMul, slowTime);
     }
   }
 
@@ -1115,10 +1319,11 @@ export class Game {
       if (!this.playing) continue;
       if (p.splash > 0) {
         this.events.push({ type: 'impact', team: p.team, x: p.tx, y: p.ty, radius: p.splash, visual: p.visual });
-        this.areaDamage(p.team, p.tx, p.ty, p.splash, p.damage, p.hitsAir, p.hitsGround, p.freeze);
+        this.areaDamage(p.team, p.tx, p.ty, p.splash, p.damage, p.hitsAir, p.hitsGround, p.freeze, p.slowMul, p.slowTime);
       } else if (t && t.alive) {
         this.applyDamage(t, p.damage);
         if (p.freeze > 0 && t.alive) this.stun(t, p.freeze, true);
+        if (p.slowTime > 0 && t.alive) this.slow(t, p.slowMul, p.slowTime);
       }
       // 目標已死亡的單體投射物直接消散
     }
@@ -1343,7 +1548,8 @@ export class Game {
   }
 
   private resolveCollisions(): void {
-    const movers = this.entities.filter((e) => e.alive && e.kind === 'troop' && !e.tunneling);
+    // 跳躍中的巨錘騎士在空中，不參與推擠與地形限制（可以跳過河）
+    const movers = this.entities.filter((e) => e.alive && e.kind === 'troop' && !e.tunneling && e.leapT < 0);
     for (let i = 0; i < movers.length; i++) {
       const a = movers[i];
       for (let j = i + 1; j < movers.length; j++) {
@@ -1437,6 +1643,7 @@ export class Game {
     for (const p of this.players) parts.push(p.elixir.toFixed(4), p.hand.join(','), p.queue.join(','), p.crowns.toString());
     for (const e of this.entities) parts.push(`${e.id}:${e.unit}:${e.x.toFixed(4)}:${e.y.toFixed(4)}:${e.hp.toFixed(2)}:${e.alive ? 1 : 0}`);
     for (const p of this.projectiles) parts.push(`p${p.id}:${p.x.toFixed(4)}:${p.y.toFixed(4)}`);
+    for (const b of this.boomerangs) parts.push(`b${b.id}:${b.x.toFixed(4)}:${b.y.toFixed(4)}`);
     let h = 2166136261;
     const s = parts.join('|');
     for (let i = 0; i < s.length; i++) {

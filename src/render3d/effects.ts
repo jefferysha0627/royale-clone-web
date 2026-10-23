@@ -461,6 +461,21 @@ export class Effects {
     }
   }
 
+  /** 兩點之間的鋸齒電弧（風暴術士的電擊、雷能砲車的放電）。 */
+  arc(ax: number, ay: number, az: number, bx: number, by: number, bz: number, color = '#bfe8ff', jitter = 0.35): void {
+    const segs = 4;
+    let p = new Vector3(ax, ay, az);
+    for (let i = 1; i <= segs; i++) {
+      const t = i / segs;
+      const n =
+        i === segs
+          ? new Vector3(bx, by, bz)
+          : new Vector3(ax + (bx - ax) * t + (Math.random() - 0.5) * jitter, ay + (by - ay) * t + (Math.random() - 0.5) * jitter, az + (bz - az) * t + (Math.random() - 0.5) * jitter);
+      this.segment(p, n, color, 0.16);
+      p = n;
+    }
+  }
+
   private segment(a: Vector3, b: Vector3, color: string, life: number): void {
     let fx = this.bolts.find((f) => f.t >= f.life);
     if (!fx) {

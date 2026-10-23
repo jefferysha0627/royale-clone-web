@@ -57,6 +57,8 @@ const CARD_THEME: Record<string, string> = {
   mega_gargoyle: 'storm', gargoyle_horde: 'sky', siege_ram: 'canyon', siege_giant: 'steel', berserkers: 'ember', blowgun_goblin: 'forest',
   spirit_hut: 'ember', bomb_turret: 'canyon', lightning: 'storm',
   tornado: 'sky', graveyard: 'grave', lava_hound: 'ember', mortar: 'canyon',
+  heavy_warrior: 'steel', ranger: 'forest', inferno_drake: 'ember', frost_mage: 'frost', storm_mage: 'storm', volt_cart: 'canyon',
+  hammer_knight: 'steel', axe_thrower: 'dusk',
 };
 
 function themeOf(cardId: string): Theme {
@@ -534,7 +536,8 @@ function buildSubject(cardId: string): Group {
     animate(inst, prof, st, 0.016);
     const m = inst.mesh;
     m.position.set(ox * getAsset(unit, 0).height, oy + lift, oz);
-    m.rotation.y = -0.38 + ox * 0.3;
+    // 龍類轉成四分之三側面，看得出細長的吻部（正面看起來像圓鼻子）
+    m.rotation.y = (prof.attack === 'breath' ? -0.95 : -0.38) + ox * 0.3;
     g.add(m);
   });
   g.scale.setScalar(scale);
@@ -559,7 +562,7 @@ function frame(cam: OrthographicCamera, subject: Group, cardId: string): void {
       viewH = size.y * 0.78;
       viewH = Math.max(viewH, size.x * (H / W) * 0.82);
     } else {
-      viewH *= 0.95;
+      viewH *= prof.attack === 'breath' ? 0.8 : 0.95;
     }
   } else if (card.kind === 'building') {
     // 建築卡拉近一點，主體佔滿卡面

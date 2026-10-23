@@ -544,7 +544,7 @@ export class Battle {
           else this.sound.play('hit');
           break;
         case 'impact':
-          this.sound.play(ev.visual === 'ice' ? 'freeze' : ev.visual === 'magic' ? 'magic' : 'boom');
+          this.sound.play(ev.visual === 'ice' ? 'freeze' : ev.visual === 'magic' ? 'magic' : ev.visual === 'volt' ? 'bigBoom' : ev.visual === 'flame-arrow' ? 'fire' : 'boom');
           break;
         case 'death':
           if (ev.kind === 'building') this.sound.play('crumble');
@@ -590,6 +590,15 @@ export class Battle {
           break;
         case 'charge':
           this.sound.play('charge');
+          break;
+        case 'deployHit':
+          this.sound.play(ev.visual === 'zap' ? 'zap' : ev.visual === 'frost' ? 'freeze' : 'bigBoom');
+          break;
+        case 'leap':
+          this.sound.play('whoosh');
+          break;
+        case 'land':
+          this.sound.play('bigBoom');
           break;
         case 'stun':
           if (ev.freeze) this.sound.play('freeze');
@@ -1135,7 +1144,21 @@ function attackSound(unit: string, ranged: boolean): string {
   switch (unit) {
     case 'princess':
     case 'archer':
+    case 'ranger':
       return 'bow';
+    case 'storm_mage':
+      return 'zap';
+    case 'volt_cart':
+      return 'thunder';
+    case 'frost_mage':
+      return 'magic';
+    case 'axe_thrower':
+      return 'whoosh';
+    case 'inferno_drake':
+      return 'beam';
+    case 'hammer_knight':
+    case 'heavy_warrior':
+      return 'heavyHit';
     case 'musketeer':
       return 'gun';
     case 'king':

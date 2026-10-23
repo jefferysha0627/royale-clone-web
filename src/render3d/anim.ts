@@ -18,10 +18,11 @@ export interface AnimState {
   active: boolean; // 國王塔已喚醒
   aimYaw: number; // 砲塔／守衛相對本體的瞄準角
   wakeT: number; // 國王塔喚醒後經過的秒數
+  charge: number; // 雷能砲車的蓄力（0～1）
 }
 
 export function newAnimState(): AnimState {
-  return { t: Math.random() * 10, walk: Math.random() * 6, moving: false, speed: 1, windup: -1, sinceHit: 9, flinch: 0, charging: false, jumping: false, frozen: false, active: false, aimYaw: 0, wakeT: 0 };
+  return { t: Math.random() * 10, walk: Math.random() * 6, moving: false, speed: 1, windup: -1, sinceHit: 9, flinch: 0, charging: false, jumping: false, frozen: false, active: false, aimYaw: 0, wakeT: 0, charge: 0 };
 }
 
 const ease = (x: number): number => (x < 0 ? 0 : x > 1 ? 1 : x * x * (3 - 2 * x));
@@ -59,6 +60,7 @@ export function animate(inst: ModelInstance, p: AnimProfile, s: AnimState, dt: n
     case 'tomb': return tomb(inst, s);
     case 'princess': return princessTower(inst, s);
     case 'king': return kingTower(inst, s);
+    case 'cart': return cart(inst, s);
     default: return;
   }
 }
@@ -174,6 +176,15 @@ function biped(inst: ModelInstance, p: AnimProfile, s: AnimState, seated = false
     default:
       break;
   }
+  // 跳躍（巨錘騎士）：雙手把武器高舉過頭、雙腿收起
+  if (s.jumping && !seated) {
+    aL = -2.7;
+    aR = -2.7;
+    zL = -0.25;
+    zR = 0.25;
+    rot(b.legL, -0.7);
+    rot(b.legR, 0.35);
+  }
   rot(b.armL, aL, 0, zL);
   rot(b.armR, aR, yR, zR);
   if (seated) {
@@ -209,6 +220,27 @@ function mount(inst: ModelInstance, p: AnimProfile, s: AnimState): void {
   rot(b.mhead, mv ? Math.sin(w * 2) * 0.1 : Math.sin(s.t * 1.5) * 0.05);
   rot(b.tail, 0, Math.sin(s.t * (mv ? 9 : 3)) * 0.4);
   biped(inst, p, s, true);
+}
+
+/** 車輛（雷能砲車）：輪子隨移動轉動、車身微晃，雷球隨蓄力變大並旋轉，開砲時車身往後一頓。 */
+function cart(inst: ModelInstance, s: AnimState): void {
+  const b = inst.byName;
+  if (b.wheelF) b.wheelF.rotation.x = s.walk * 0.9;
+  if (b.wheelB) b.wheelB.rotation.x = s.walk * 0.9;
+  const body = b.body;
+  if (body) {
+    const ri = inst.bones.indexOf(body);
+    body.position.y = inst.rest[ri].y + (s.moving ? Math.abs(Math.sin(s.walk * 2)) * 0.025 : 0);
+    const kick = s.sinceHit < 0.3 ? (1 - s.sinceHit / 0.3) : 0;
+    body.rotation.x = -kick * 0.12 + (s.moving ? Math.sin(s.walk) * 0.02 : 0);
+  }
+  const orb = b.orb;
+  if (orb) {
+    const c = Math.max(0, Math.min(1, s.charge));
+    const pulse = c >= 1 ? 1 + Math.sin(s.t * 14) * 0.08 : 1;
+    orb.scale.setScalar((0.45 + 0.75 * c) * pulse);
+    orb.rotation.y = s.t * (1 + c * 6);
+  }
 }
 
 function flyer(inst: ModelInstance, p: AnimProfile, s: AnimState): void {

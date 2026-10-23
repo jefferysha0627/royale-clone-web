@@ -10,14 +10,27 @@ export type CardKind = 'troop' | 'spell' | 'building';
 
 /** 投射物外觀（只影響渲染與音效）。 */
 export type ProjectileVisual =
-  | 'arrow' | 'bullet' | 'fireball' | 'spear' | 'bomb' | 'spit' | 'cannonball' | 'magic' | 'ice' | 'fire' | 'tower-arrow' | 'king-ball';
+  | 'arrow' | 'bullet' | 'fireball' | 'spear' | 'bomb' | 'spit' | 'cannonball' | 'magic' | 'ice' | 'fire' | 'tower-arrow' | 'king-ball' | 'flame-arrow' | 'volt' | 'axe';
 
 export interface ProjectileSpec {
   speed: number; // 格／秒
   visual: ProjectileVisual;
   splash?: number; // 落點範圍半徑
   freeze?: number; // 命中冰凍秒數
+  slow?: { mul: number; time: number }; // 命中後移動與攻擊變慢（寒霜術士）
   arc?: number; // 拋物線高度（格，只影響畫面）
+  boomerang?: { reach: number; radius: number }; // 回旋斧：至少飛 reach 格再飛回手上，去程、回程各打一次沿路的敵人
+}
+
+/** 部署落地時的範圍效果（風暴術士的雷擊、寒霜術士的寒氣、巨錘騎士砸地）。 */
+export interface DeployHit {
+  damage: number;
+  radius: number;
+  stun?: number;
+  slow?: { mul: number; time: number };
+  pushback?: number;
+  towerMul: number;
+  visual: 'zap' | 'frost' | 'slam';
 }
 
 export interface UnitStats {
@@ -51,6 +64,12 @@ export interface UnitStats {
   towerMul?: number; // 對公主塔／國王塔的傷害倍率（地道挖掘者 25%）
   tunnelSpeed?: number; // 可部署到場上任何地方：從己方國王塔由地底鑽過去的速度（格／秒）
   elixirGen?: { amount: number; interval: number; onDeath: number }; // 能量收集器
+  multiTarget?: number; // 一次攻擊同時打幾個目標（只有一個目標時全部打在它身上）
+  stunOnHit?: number; // 每次命中讓目標暈眩的秒數（會打斷蓄力與熔岩光束）
+  deployHit?: DeployHit;
+  chargeUp?: boolean; // 雷能砲車：出場先蓄力 loadTime 秒，蓄滿後保持到看見目標立刻開砲；被暈眩要重新蓄力
+  recoil?: number; // 開砲後自己往後退的距離（格）
+  leap?: { min: number; max: number; damage: number; radius: number; time: number; pushback: number; cooldown: number }; // 巨錘騎士：跳向這個距離內的目標，落地範圍傷害
 }
 
 export interface UnitDef {
@@ -305,6 +324,67 @@ export const UNITS: Record<string, UnitDef> = {
       deathSpawn: { unit: 'skeleton', count: 4 },
     }),
   },
+  // v3 第四批（數值見 EVIDENCE.md §4；標 [A] 者為推定）
+  heavy_warrior: {
+    id: 'heavy_warrior', name: '重裝武士',
+    // 資料集 Pekka 的 11 級值 [R]
+    stats: ground({ hp: 3760, damage: 816, hitSpeed: 1.8, loadTime: 1.3, range: 1.2, speed: 0.75, sight: 5, radius: 0.75, mass: 18, ignorePushback: true }),
+  },
+  ranger: {
+    id: 'ranger', name: '長弓遊俠',
+    // 資料集 Princess：射程 9、每 3 秒一輪火箭、落點範圍 2 [R]
+    stats: ground({
+      hp: 261, damage: 169, hitSpeed: 3, loadTime: 2.5, range: 9, sight: 9.5, speed: 1, mass: 3, targets: 'air-ground',
+      projectile: { speed: 10, visual: 'flame-arrow', splash: 2, arc: 2.6 },
+    }),
+  },
+  inferno_drake: {
+    id: 'inferno_drake', name: '灼焰飛龍',
+    // 資料集 InfernoDragon：第 1 段 11 級值，第 2、3 段以稀有度倍率換算 [R＋A]
+    stats: air({ hp: 1294, damage: 36, hitSpeed: 0.4, loadTime: 1.2, range: 3.5, speed: 1, flyHeight: 3.5, mass: 5, ramp: { damages: [36, 121, 423], stageTime: 2 } }),
+  },
+  frost_mage: {
+    id: 'frost_mage', name: '寒霜術士',
+    // 資料集 IceWizard：冰彈範圍 1、命中後慢 35% 2.5 秒；出場寒氣 83 傷害、半徑 3、慢 1 秒、不傷塔 [R]
+    stats: ground({
+      hp: 688, damage: 90, hitSpeed: 1.7, loadTime: 1.2, range: 5.5, speed: 1, mass: 5, targets: 'air-ground',
+      projectile: { speed: 700 / 60, visual: 'ice', splash: 1, slow: { mul: 0.65, time: 2.5 }, arc: 0.6 },
+      deployHit: { damage: 83, radius: 3, slow: { mul: 0.65, time: 1 }, towerMul: 0, visual: 'frost' },
+    }),
+  },
+  storm_mage: {
+    id: 'storm_mage', name: '風暴術士',
+    // 資料集 ElectroWizard：同時打 2 個目標、每下暈眩 0.5 秒；出場雷擊 192、半徑 2.5、不傷塔 [R]；只有一個目標時兩道都打它 [A]
+    stats: ground({
+      hp: 713, damage: 110, hitSpeed: 1.8, loadTime: 1.2, range: 5, speed: 1.5, mass: 5, targets: 'air-ground', multiTarget: 2, stunOnHit: 0.5,
+      deployHit: { damage: 192, radius: 2.5, stun: 0.5, towerMul: 0, visual: 'zap' },
+    }),
+  },
+  volt_cart: {
+    id: 'volt_cart', name: '雷能砲車',
+    // 資料集 ZapMachine：蓄力 3 秒、每 4 秒一砲、範圍 1.8、只打地面、開砲後退 0.75 格 [R]
+    stats: ground({
+      hp: 1452, damage: 1331, hitSpeed: 4, loadTime: 3, range: 5, sight: 5, speed: 0.75, radius: 1, mass: 18, ignorePushback: true, chargeUp: true, recoil: 0.75,
+      projectile: { speed: 1400 / 60, visual: 'volt', splash: 1.8 },
+    }),
+  },
+  hammer_knight: {
+    id: 'hammer_knight', name: '巨錘騎士',
+    // 資料集 MegaKnight：近戰範圍 1.3；出場砸地 429、半徑 2.2；跳向 3.5～5 格的目標，落地 536（以稀有度倍率換算）[R＋A]；不跳向公主塔與國王塔 [A]
+    stats: ground({
+      hp: 3993, damage: 268, hitSpeed: 1.7, loadTime: 1.2, range: 1.2, speed: 1, radius: 0.75, mass: 18, ignorePushback: true, splash: 1.3,
+      deployHit: { damage: 429, radius: 2.2, pushback: 1, towerMul: 1, visual: 'slam' },
+      leap: { min: 3.5, max: 5, damage: 536, radius: 2.2, time: 0.8, pushback: 1, cooldown: 0.9 },
+    }),
+  },
+  axe_thrower: {
+    id: 'axe_thrower', name: '回旋斧手',
+    // 資料集 AxeMan：斧頭至少飛 4.5 格、半徑 1、去回各打一次、可打空中 [R]；攻擊間隔以出手 0.9 秒＋回收 1.5 秒計 [A]
+    stats: ground({
+      hp: 1280, damage: 169, hitSpeed: 2.4, loadTime: 0.9, range: 4.5, speed: 1, radius: 0.6, mass: 4, targets: 'air-ground',
+      projectile: { speed: 550 / 60, visual: 'axe', boomerang: { reach: 4.5, radius: 1 } },
+    }),
+  },
 };
 
 // ───────── 卡牌 ─────────
@@ -349,6 +429,14 @@ export const CARDS: Record<string, CardDef> = {
   bomb_turret: { id: 'bomb_turret', name: '炸彈砲塔', glyph: '彈', color: '#7a6a5a', cost: 4, kind: 'building', rarity: 'rare', role: '範圍轟炸地面部隊，倒下時留下炸彈', unit: 'bomb_turret' },
   lava_hound: { id: 'lava_hound', name: '熔岩飛獸', glyph: '熔', color: '#c8502a', cost: 7, kind: 'troop', rarity: 'legendary', role: '只打建築的飛行巨獸，倒下分裂成 6 隻小熔岩獸', unit: 'lava_hound' },
   mortar: { id: 'mortar', name: '迫擊砲', glyph: '迫', color: '#7a7060', cost: 4, kind: 'building', rarity: 'common', role: '射程極遠的範圍砲擊，太近的敵人打不到', unit: 'mortar' },
+  heavy_warrior: { id: 'heavy_warrior', name: '重裝武士', glyph: '武', color: '#5a5f8a', cost: 7, kind: 'troop', rarity: 'epic', role: '血厚、單下傷害極高的重裝近戰，專剋坦克', unit: 'heavy_warrior' },
+  ranger: { id: 'ranger', name: '長弓遊俠', glyph: '遊', color: '#4f9a7a', cost: 3, kind: 'troop', rarity: 'legendary', role: '射程 9 格的範圍火箭，可打空中，血很少', unit: 'ranger' },
+  inferno_drake: { id: 'inferno_drake', name: '灼焰飛龍', glyph: '灼', color: '#c4402a', cost: 4, kind: 'troop', rarity: 'legendary', role: '飛行熔岩光束，越燒越痛，剋坦克', unit: 'inferno_drake' },
+  frost_mage: { id: 'frost_mage', name: '寒霜術士', glyph: '霜', color: '#5aa8d8', cost: 3, kind: 'troop', rarity: 'legendary', role: '範圍冰彈讓敵人變慢，出場放一圈寒氣', unit: 'frost_mage' },
+  storm_mage: { id: 'storm_mage', name: '風暴術士', glyph: '暴', color: '#4a6ad8', cost: 4, kind: 'troop', rarity: 'legendary', role: '同時電擊兩個目標並打斷動作，出場放雷擊', unit: 'storm_mage' },
+  volt_cart: { id: 'volt_cart', name: '雷能砲車', glyph: '砲', color: '#d8a42a', cost: 6, kind: 'troop', rarity: 'legendary', role: '蓄力後轟出超強範圍電砲，被暈眩就要重新蓄力', unit: 'volt_cart' },
+  hammer_knight: { id: 'hammer_knight', name: '巨錘騎士', glyph: '錘', color: '#6a5a8a', cost: 7, kind: 'troop', rarity: 'legendary', role: '出場砸地造成範圍傷害，會跳向稍遠的敵人', unit: 'hammer_knight' },
+  axe_thrower: { id: 'axe_thrower', name: '回旋斧手', glyph: '斧', color: '#8a5a3a', cost: 5, kind: 'troop', rarity: 'epic', role: '擲出回旋斧，來回各打一次沿路所有敵人', unit: 'axe_thrower' },
   fireball: {
     id: 'fireball', name: '火球', glyph: '球', color: '#e0782f', cost: 4, kind: 'spell', rarity: 'rare', role: '中範圍高傷害並擊退',
     spell: { kind: 'projectile', radius: 2.5, damage: 689, towerPct: 0.3, speed: 10, hitsAir: true, pushback: 1 },
@@ -423,6 +511,9 @@ export const AI_DECKS: { name: string; cards: string[] }[] = [
   { name: '攻城砲擊', cards: ['siege_giant', 'spirit_hut', 'gargoyle_horde', 'lightning', 'log', 'bomber', 'ice_spirit', 'archers'] },
   { name: '熔岩空襲', cards: ['lava_hound', 'mega_gargoyle', 'bats', 'musketeer', 'fireball', 'zap', 'skeletons', 'tombstone'] },
   { name: '墓地迫擊', cards: ['graveyard', 'mortar', 'tornado', 'poison', 'knight', 'blowgun_goblin', 'archers', 'bomb_turret'] },
+  { name: '重裝橋頭', cards: ['heavy_warrior', 'siege_ram', 'storm_mage', 'blowgun_goblin', 'poison', 'zap', 'spear_goblins', 'mega_gargoyle'] },
+  { name: '巨錘地道', cards: ['hammer_knight', 'tunneler', 'inferno_drake', 'bats', 'skeleton_army', 'frost_mage', 'fireball', 'zap'] },
+  { name: '巨人砲車', cards: ['giant', 'volt_cart', 'ranger', 'axe_thrower', 'goblins', 'tombstone', 'arrows', 'zap'] },
 ];
 
 export function isValidDeck(deck: readonly string[]): boolean {
