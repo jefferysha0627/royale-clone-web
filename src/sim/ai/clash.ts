@@ -33,6 +33,7 @@ export interface ClashUnit {
   repickAt: number;
   ref: number; // 對應的實體 id（-1 = 假想單位）
   lockRef: number; // 開打中的目標實體 id
+  leapAt: number; // 幾秒後可以再跳（巨錘騎士）
 }
 
 export interface ClashResult {
@@ -41,6 +42,7 @@ export interface ClashResult {
   enemyTowerDamage: number; // 反推時對方塔損失的血量
   enemyRemain: number; // 對手剩下的能量價值（依血量比例）
   ourRemain: number; // 我方部隊／建築剩下的能量價值
+  ourHeavy: number; // 其中血厚、能接著反攻的地面部隊（≥ 1200 血）的部分
   clearTime: number; // 對手部隊全滅的時間（沒清完 = horizon）
 }
 
@@ -61,7 +63,7 @@ export function clashUnit(
   return {
     side, kind, st, x, y, hp, hp0: hp, maxHp: st.hp, value: o.value ?? 0, ready, exists: o.exists ?? 0, alive: hp > 0,
     active: o.active ?? true, target: null, locked: false, attacking: false, nextHit: 0, rampT: o.rampT ?? 0, moved: 0,
-    charging: !!o.charging, spawnAt: ready + (st.spawner?.start ?? 0), repickAt: 0, ref: o.ref ?? -1, lockRef: o.lockRef ?? -1,
+    charging: !!o.charging, spawnAt: ready + (st.spawner?.start ?? 0), repickAt: 0, ref: o.ref ?? -1, lockRef: o.lockRef ?? -1, leapAt: 0,
   };
 }
 
@@ -90,7 +92,7 @@ function canHit(a: ClashUnit, b: ClashUnit): boolean {
 const KING_WAKE = KING_ACTIVATION_TIME + 0.7;
 
 export function runClash(list: ClashUnit[], horizon = 11, dt = 0.2, hits: ClashHit[] = [], trace?: (msg: string) => void): ClashResult {
-  const blasts: { at: number; side: 0 | 1; x: number; y: number; st: UnitStats }[] = [];
+  const blasts: { at: number; side: 0 | 1; x: number; y: number; st: UnitStats; leap?: boolean }[] = [];
   const queue = [...hits].sort((a, b) => a.at - b.at);
   for (const u of list) {
     if (u.lockRef < 0) continue;
@@ -258,7 +260,8 @@ export function runClash(list: ClashUnit[], horizon = 11, dt = 0.2, hits: ClashH
       const b = blasts[i];
       if (b.at > now) continue;
       blasts.splice(i, 1);
-      const dd = b.st.deathDamage!;
+      // 死亡爆炸，或巨錘騎士跳躍落地（與 Game.updateLeap 相同：打地面、塔也算）
+      const dd = b.leap ? { ...b.st.leap!, towerMul: 1 } : b.st.deathDamage!;
       for (let j = 0; j < list.length; j++) {
         const o = list[j];
         if (!o.alive || o.side === b.side || o.st.flying || now < o.exists) continue;
@@ -307,6 +310,19 @@ export function runClash(list: ClashUnit[], horizon = 11, dt = 0.2, hits: ClashH
       }
       if (!t) continue;
       const d = edge(u, t);
+      // 巨錘騎士：目標在跳躍距離內就跳到它前緣，落地時範圍傷害（與 Game 相同，不跳向塔）
+      const lp = s.leap;
+      if (lp && now >= u.leapAt && !u.attacking && t.kind !== 'tower' && d >= lp.min && d <= lp.max) {
+        const len = Math.hypot(t.x - u.x, t.y - u.y) || 1;
+        const stop = Math.max(0, len - t.st.radius - s.radius * 0.5);
+        u.x += ((t.x - u.x) / len) * stop;
+        u.y += ((t.y - u.y) / len) * stop;
+        u.ready = now + lp.time;
+        u.leapAt = now + lp.time + lp.cooldown;
+        u.nextHit = Math.max(u.nextHit, now + lp.time + s.loadTime * 0.5);
+        blasts.push({ at: now + lp.time, side: u.side, x: u.x, y: u.y, st: s, leap: true });
+        continue;
+      }
       if (d <= s.range) {
         if (!u.attacking) {
           u.attacking = true;
@@ -344,7 +360,7 @@ export function runClash(list: ClashUnit[], horizon = 11, dt = 0.2, hits: ClashH
     }
   }
 
-  const r: ClashResult = { towerDamage: 0, towersLost: 0, enemyTowerDamage: 0, enemyRemain: 0, ourRemain: 0, clearTime: clear };
+  const r: ClashResult = { towerDamage: 0, towersLost: 0, enemyTowerDamage: 0, enemyRemain: 0, ourRemain: 0, ourHeavy: 0, clearTime: clear };
   for (const u of list) {
     if (u.kind === 'tower') {
       if (u.side === 0) {
@@ -358,7 +374,10 @@ export function runClash(list: ClashUnit[], horizon = 11, dt = 0.2, hits: ClashH
       r.enemyRemain += u.value * frac;
       // 模擬結束時還在打塔的敵人：之後幾秒也會繼續造成傷害
       if (u.alive && u.attacking && u.target?.kind === 'tower' && u.st.hitSpeed > 0) r.towerDamage += (u.st.damage / u.st.hitSpeed) * 4;
-    } else r.ourRemain += u.value * frac;
+    } else {
+      r.ourRemain += u.value * frac;
+      if (u.alive && u.kind === 'troop' && !u.st.flying && u.st.hp >= 1200 && u.st.targets !== 'buildings') r.ourHeavy += u.value * frac;
+    }
   }
   return r;
 }

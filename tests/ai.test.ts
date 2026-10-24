@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { AI_DECKS, AI_LEVELS, AiController, DEFAULT_PLAYER_DECK, DT, Game, Rng, type AiLevel, type GameEvent, type Team } from '../src/sim';
+import { AI_DECKS, AI_LEVELS, AiController, DEFAULT_PLAYER_DECK, DT, Game, Rng, UNITS, type AiLevel, type GameEvent, type Team } from '../src/sim';
+import { clashUnit, runClash } from '../src/sim/ai/clash';
 
 const deckOf = (name: string): string[] => [...AI_DECKS.find((d) => d.name === name)!.cards];
 
@@ -39,6 +40,25 @@ const princessLoss = (g: Game, team: Team, lane: number): number => {
   const t = g.towers(team).find((x) => x.unit === 'princess' && x.lane === lane)!;
   return t.maxHp - Math.max(0, t.hp);
 };
+
+describe('防守評估的交戰模擬', () => {
+  it('巨錘騎士會跳向 3.5～5 格外的敵人，落地範圍傷害打到旁邊的部隊', () => {
+    const mk = UNITS.hammer_knight.stats;
+    const arch = UNITS.archer.stats;
+    // 兩個弓箭手站在 4.5 格外，不在近戰射程內；不跳的話 0.8 秒內打不到
+    const list = [
+      clashUnit(0, 'troop', mk, 9, 20, { value: 7 }),
+      clashUnit(1, 'troop', arch, 9, 15, { value: 1.5, ready: 99 }),
+      clashUnit(1, 'troop', arch, 9.8, 15, { value: 1.5, ready: 99 }),
+    ];
+    const r = runClash(list, 1.2, 0.1);
+    // 弓箭手血量低於落地傷害：走路過去來不及，只有跳過去落地才打得死
+    expect(arch.hp).toBeLessThan(mk.leap!.damage);
+    expect(list[1].alive).toBe(false);
+    expect(list[2].alive).toBe(false);
+    expect(r.ourHeavy).toBeGreaterThan(0);
+  });
+});
 
 describe('電腦對手的判斷', () => {
   it('會防守：玩家巨人＋火槍手推進時，塔受到的傷害遠少於完全不出牌', () => {

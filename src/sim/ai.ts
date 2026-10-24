@@ -215,7 +215,7 @@ export class AiController {
     if (this.tiebreakChip(s)) return this.report(s, 'chip');
     if (this.chipTower(s)) return this.report(s, 'chip');
     if (this.valueSpell(s)) return this.report(s, 'spell');
-    if (this.support(s)) return this.report(s, 'support');
+    if (!this.savingForTank(s) && this.support(s)) return this.report(s, 'support');
     if (this.pump(s)) return this.report(s, 'pump');
     if (this.push(s, false)) return this.report(s, 'push');
     if (this.avoidLeak(s)) this.report(s, 'leak');
@@ -717,7 +717,7 @@ export class AiController {
   private score(r: ClashResult, cost: number, th: Threat, s: Sit): number {
     const hpe = this.hpPerElixir(th.tower, s);
     return (
-      -r.towerDamage / hpe - r.towersLost * (s.overtime ? 40 : 8) + r.enemyTowerDamage / 400 - r.enemyRemain * 0.75 + r.ourRemain * 0.5 - cost
+      -r.towerDamage / hpe - r.towersLost * (s.overtime ? 40 : 8) + r.enemyTowerDamage / 400 - r.enemyRemain * 0.75 + r.ourRemain * 0.5 + r.ourHeavy * 0.25 - cost
     );
   }
 
@@ -804,6 +804,8 @@ export class AiController {
       const safe = !th.troopHitters;
       return at(tx + tc * (safe ? 2.5 : 1.5), safe ? tvy - 1.5 : tvy + 3);
     }
+    // 出場砸地的近戰（巨錘騎士）：直接壓在敵人頭上，砸地一起打到後排
+    if (st.deployHit && st.deployHit.damage >= 300 && !fst.flying) return at(fx, fvy);
     const big = fst.hp >= 1200 && !fst.flying;
     if ((ci.swarm || ci.count >= 4) && big) return at(fx, fvy + 0.6);
     if (fst.targets === 'buildings' && !fst.flying) return at(fx + tc * 0.8, fvy + 1.2);
@@ -954,7 +956,10 @@ export class AiController {
       if (s.threats.some((t) => t.value >= 4)) thr += 1;
       // 沒有威脅時，坦克可以早一點下在後場（下完還留一點能量補後排）
       const calm = !s.threats.some((t) => t.eta < 9 && t.value >= 2);
-      tankOnly = calm && s.elixir < thr && s.hand.some((h) => h.ci.tank && s.elixir >= h.ci.cost + (s.mult >= 2 ? 0.5 : 1.5));
+      const tankReady = (h: HandCard) => h.ci.tank && s.elixir >= h.ci.cost + (s.mult >= 2 ? 0.5 : 1.5);
+      tankOnly = calm && (s.elixir < thr || s.hand.some((h) => tankReady(h) && h.ci.cost >= 6)) && s.hand.some(tankReady);
+      // 正在為重坦克存能量：除了懲罰對手沒能量，不先把能量花在別的牌上
+      if (!tankOnly && !punish && this.savingForTank(s)) return false;
       if (s.elixir < thr && !punish && !tankOnly) return false;
       // 能量夠多就照常進攻；只有在能量不足門檻、靠「對手沒能量」出手時才算懲罰
       if (s.elixir >= thr || tankOnly) punish = false;
@@ -984,6 +989,16 @@ export class AiController {
       if (pool.length) best = this.rng.pick(pool);
     }
     return this.pushDeploy(best, lane, punish || s.mult >= 2);
+  }
+
+  /**
+   * 手上有 6 費以上的坦克、場面平靜時，先把能量存到夠下坦克（再補一張後排），
+   * 不拿去補支援。否則重坦克一直卡在手上，手牌等於少一張。防守、懲罰與避免溢出照常。
+   */
+  private savingForTank(s: Sit): boolean {
+    if (s.mult >= 2 || this.opts.skill < 0.5) return false;
+    if (s.threats.some((t) => t.eta < 9 && t.value >= 2)) return false;
+    return s.hand.some((h) => h.ci.tank && h.ci.cost >= 6 && s.elixir < h.ci.cost + 1.5);
   }
 
   private pushScore(ci: CardInfo, s: Sit, punish: boolean): number {
