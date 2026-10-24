@@ -87,7 +87,7 @@ export class UnitView {
     animate(this.inst, this.prof, st, animDt);
     const m = this.inst.mesh;
     let lift = this.hover > 0 ? this.hover + Math.sin(st.t * 2.2) * 0.08 : 0;
-    // 巨錘騎士的跳躍：高高躍起再落下
+    // 超級騎士的跳躍：高高躍起再落下
     const lp = e.stats.leap;
     if (lp && e.leapT >= 0) {
       const k = Math.min(1, Math.max(0, e.leapT - (1 - alpha) / 30) / lp.time);
@@ -258,7 +258,7 @@ function projGeometry(kind: string): BufferGeometry {
       k.box(0.12, 0.02, 0.14, { at: [0, 0, -0.3], color: kind === 'tower-arrow' ? '#ffffff' : '#5fbf7a' });
       break;
     case 'flame-arrow':
-      // 長弓遊俠的火箭：箭頭裹著火焰
+      // 公主的火箭：箭頭裹著火焰
       k.cyl(0.025, 0.025, 0.8, { rot: [Math.PI / 2, 0, 0], color: '#8a5a2e' }, 5);
       k.cone(0.07, 0.18, { at: [0, 0, 0.48], rot: [Math.PI / 2, 0, 0], color: '#ffb347' }, 5);
       k.sphere(0.1, { at: [0, 0, 0.36], color: '#ff7a2a' }, 6);

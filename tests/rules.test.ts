@@ -220,7 +220,7 @@ describe('移動與過橋', () => {
     }
   });
 
-  it('飛行單位直線飛越河道；狼騎兵直接跳過河，不必繞到橋', () => {
+  it('飛行單位直線飛越河道；野豬騎士直接跳過河，不必繞到橋', () => {
     const g = newGame();
     const [d] = place(g, 0, 'baby_dragon', 9.5, 22.5);
     const [w] = place(g, 0, 'wolf_rider', 9.5, 19.5);
@@ -283,7 +283,7 @@ describe('索敵', () => {
         if (v.type === 'attack' && v.id === gi.id) attacked.push(g.get(v.targetId)?.unit ?? '?');
       }
     });
-    // 第一個攻擊對象是加農砲，而不是側塔
+    // 第一個攻擊對象是加農炮，而不是側塔
     expect(attacked[0]).toBe('cannon');
   });
 });
@@ -340,7 +340,7 @@ describe('塔', () => {
 });
 
 describe('特殊機制', () => {
-  it('衝鋒騎士直線跑 3 格後衝刺，第一擊造成雙倍傷害', () => {
+  it('王子直線跑 3 格後衝刺，第一擊造成雙倍傷害', () => {
     const g = newGame();
     const [l] = place(g, 0, 'lancer', 9.5, 22.5);
     const [dummy] = place(g, 1, 'giant', 9.5, 13.5);
@@ -358,7 +358,7 @@ describe('特殊機制', () => {
     expect(hits[1]).toBe(UNITS.lancer.stats.damage);
   });
 
-  it('石巨像倒下時造成死亡傷害並分裂成兩個小石像', () => {
+  it('戈侖石人倒下時造成死亡傷害並分裂成兩個小戈侖石人', () => {
     const g = newGame();
     const [golem] = place(g, 0, 'golem', 9.5, 20.5);
     const [enemy] = place(g, 1, 'knight', 10.5, 12.5);
@@ -371,7 +371,7 @@ describe('特殊機制', () => {
     expect(g.entities.filter((e) => e.alive && e.unit === 'golemite' && e.team === 0)).toHaveLength(2);
   });
 
-  it('巨骷髏死後 3 秒炸彈爆炸，對塔雙倍傷害', () => {
+  it('骷髏巨人死後 3 秒炸彈爆炸，對塔雙倍傷害', () => {
     const g = newGame();
     const t = princess(g, 1, 0);
     const [gs] = place(g, 0, 'giant_skeleton', 3.5, 18.5);
@@ -386,7 +386,7 @@ describe('特殊機制', () => {
     expect(before - t.hp).toBe(dd.damage * dd.towerMul);
   });
 
-  it('死靈女巫 1 秒後召喚 4 隻骷髏，之後每 7 秒一次', () => {
+  it('女巫 1 秒後召喚 4 隻骷髏，之後每 7 秒一次', () => {
     const g = newGame();
     place(g, 0, 'witch', 14.5, 30.5);
     const count = () => g.entities.filter((e) => e.alive && e.unit === 'skeleton' && e.team === 0).length;
@@ -409,7 +409,7 @@ describe('特殊機制', () => {
     expect(count()).toBe(n + 4);
   });
 
-  it('冰精靈撲向敵人後消失，並冰凍範圍內的敵人', () => {
+  it('冰雪精靈撲向敵人後消失，並冰凍範圍內的敵人', () => {
     const g = newGame();
     const [s] = place(g, 0, 'ice_spirit', 9.5, 18.5);
     const enemies = place(g, 1, 'goblins', 9.5, 13.5);
@@ -441,7 +441,7 @@ describe('特殊機制', () => {
     expect(gi.y).toBeCloseTo(gy, 5);
   });
 
-  it('滾木只打地面、每個目標一次、對塔 20%，滾 10.1 格後消失', () => {
+  it('復仇滾木只打地面、每個目標一次、對塔 20%，滾 10.1 格後消失', () => {
     const g = newGame();
     const gobs = place(g, 1, 'goblins', 9.5, 12.5);
     const [bat] = place(g, 1, 'bats', 6.5, 12.5);
@@ -456,7 +456,7 @@ describe('特殊機制', () => {
     expect(g.rollers).toHaveLength(0);
   });
 
-  it('毒霧 8 秒內每秒造成傷害並緩速', () => {
+  it('毒藥法術 8 秒內每秒造成傷害並緩速', () => {
     const g = newGame();
     const [k] = place(g, 1, 'knight', 9.5, 10.5);
     k.deployTimer = 99;
@@ -468,7 +468,7 @@ describe('特殊機制', () => {
     expect(k.maxHp - k.hp).toBe(91 * 8);
   });
 
-  it('雷擊暈眩 0.5 秒並重置熔岩塔的蓄力', () => {
+  it('電擊法術暈眩 0.5 秒並重置地獄之塔的蓄力', () => {
     const g = newGame();
     const [inf] = place(g, 0, 'inferno', 9, 22);
     const [gi] = place(g, 1, 'giant', 9.5, 13.5);
@@ -487,7 +487,7 @@ describe('特殊機制', () => {
     expect(inf.rampTime).toBe(0);
   });
 
-  it('箭雨分三波落下；哥布林飛桶在落點放出三隻哥布林', () => {
+  it('萬箭齊發分三波落下；哥布林飛桶在落點放出三隻哥布林', () => {
     const g = newGame();
     const [k] = place(g, 1, 'knight', 9.5, 10.5);
     k.deployTimer = 99;
@@ -566,8 +566,8 @@ describe('建築', () => {
   });
 });
 
-describe('冰凍、狂暴、能量收集器、地道挖掘者', () => {
-  it('冰凍：範圍內敵人（含塔）凍住 4 秒並受 115 傷害、塔 30%；凍住的塔不會攻擊', () => {
+describe('冰凍法術、狂暴法術、聖水收集器、掘地礦工', () => {
+  it('冰凍法術：範圍內敵人（含塔）凍住 4 秒並受 115 傷害、塔 30%；凍住的塔不會攻擊', () => {
     const g = newGame();
     const t = princess(g, 1, 0);
     const [k] = place(g, 1, 'knight', t.x + 2.5, t.y + 1);
@@ -590,7 +590,7 @@ describe('冰凍、狂暴、能量收集器、地道挖掘者', () => {
     expect(t.frozen).toBe(false);
   });
 
-  it('狂暴：範圍內己方部隊移動與攻擊加快 35%，離開範圍後效果再維持約 2 秒', () => {
+  it('狂暴法術：範圍內己方部隊移動與攻擊加快 35%，離開範圍後效果再維持約 2 秒', () => {
     const speedOf = (rage: boolean) => {
       const g = newGame();
       const [k] = place(g, 0, 'knight', 9.5, 24.5);
@@ -615,7 +615,7 @@ describe('冰凍、狂暴、能量收集器、地道挖掘者', () => {
     expect(raged.k.rageTimer).toBeLessThanOrEqual(0);
   });
 
-  it('能量收集器：每 9 秒給 1 點能量，倒下時再給 1 點，65 秒後消失', () => {
+  it('聖水收集器：每 9 秒給 1 點能量，倒下時再給 1 點，65 秒後消失', () => {
     const g = newGame();
     const [c] = place(g, 0, 'elixir_collector', 9, 22);
     const p = g.players[0];
@@ -633,7 +633,7 @@ describe('冰凍、狂暴、能量收集器、地道挖掘者', () => {
     expect(g2.get(c2.id)).toBeUndefined();
   });
 
-  it('地道挖掘者：可放到對方半場（河道與塔上除外），鑽地途中不能被攻擊，冒出後對塔只有 25% 傷害', () => {
+  it('掘地礦工：可放到對方半場（河道與塔上除外），鑽地途中不能被攻擊，冒出後對塔只有 25% 傷害', () => {
     const g = newGame();
     const t = princess(g, 1, 0);
     hold(g, 0, 'tunneler');
@@ -663,8 +663,8 @@ describe('冰凍、狂暴、能量收集器、地道挖掘者', () => {
   });
 });
 
-describe('v3 第二批：衝車、落雷、火靈小屋、炸彈砲塔、攻城巨人', () => {
-  it('攻城衝車：直線跑一段後衝刺，撞到塔造成衝刺傷害後解體並放出 2 名蠻族戰士', () => {
+describe('v3 第二批：攻城槌、雷電法術、烈焰熔爐、炸彈塔、皇家巨人', () => {
+  it('野蠻人攻城槌：直線跑一段後衝刺，撞到塔造成衝刺傷害後解體並放出 2 名野蠻人', () => {
     const g = newGame();
     const t = princess(g, 1, 0);
     const [ram] = place(g, 0, 'siege_ram', 3.5, 20.5);
@@ -680,10 +680,10 @@ describe('v3 第二批：衝車、落雷、火靈小屋、炸彈砲塔、攻城�
     );
     expect(charged).toBe(true);
     expect(ram.alive).toBe(false);
-    // 第一下是衝車的衝刺傷害（之後的命中來自放出的蠻族戰士）
+    // 第一下是攻城槌的衝刺傷害（之後的命中來自放出的野蠻人）
     expect(hits[0]).toBe(UNITS.siege_ram.stats.charge!.damage);
     expect(freed).toBe(2);
-    // 半路被打掉也會放出 2 名蠻族戰士
+    // 半路被打掉也會放出 2 名野蠻人
     const g2 = newGame();
     const [ram2] = place(g2, 0, 'siege_ram', 9.5, 24.5);
     run(g2, 1.2);
@@ -691,7 +691,7 @@ describe('v3 第二批：衝車、落雷、火靈小屋、炸彈砲塔、攻城�
     expect(g2.entities.filter((e) => e.alive && e.unit === 'barbarian' && e.team === 0)).toHaveLength(2);
   });
 
-  it('落雷：依序劈中範圍內血量最高的 3 個目標各一次（同一目標不重複），並暈眩', () => {
+  it('雷電法術：依序劈中範圍內血量最高的 3 個目標各一次（同一目標不重複），並暈眩', () => {
     const g = newGame();
     const [giant] = place(g, 1, 'giant', 9.5, 10.5);
     const [kn] = place(g, 1, 'knight', 8.5, 11.5);
@@ -719,7 +719,7 @@ describe('v3 第二批：衝車、落雷、火靈小屋、炸彈砲塔、攻城�
     expect(hits).toEqual([Math.round(1056 * 0.3)]);
   });
 
-  it('火靈小屋：每 5 秒放出 1 隻火精靈，被摧毀時再放 1 隻', () => {
+  it('烈焰熔爐：每 5 秒放出 1 隻烈焰精靈，被摧毀時再放 1 隻', () => {
     const g = newGame();
     const [hut] = place(g, 0, 'spirit_hut', 14, 30);
     let spawned = 0;
@@ -730,7 +730,7 @@ describe('v3 第二批：衝車、落雷、火靈小屋、炸彈砲塔、攻城�
     expect(g.entities.filter((e) => e.alive && e.unit === 'fire_spirit' && e.team === 0).length).toBe(n + 1);
   });
 
-  it('炸彈砲塔：只打地面（不理會蝙蝠），倒下時留下 3 秒後爆炸的炸彈', () => {
+  it('炸彈塔：只打地面（不理會蝙蝠），倒下時留下 3 秒後爆炸的炸彈', () => {
     const g = newGame();
     const [bt] = place(g, 0, 'bomb_turret', 9, 22);
     run(g, 1.2);
@@ -761,7 +761,7 @@ describe('v3 第二批：衝車、落雷、火靈小屋、炸彈砲塔、攻城�
     expect(foe.alive).toBe(true);
   });
 
-  it('攻城巨人：只打建築，停在約 5 格外用砲轟塔', () => {
+  it('皇家巨人：只打建築，停在約 5 格外用砲轟塔', () => {
     const g = newGame();
     const t = princess(g, 1, 0);
     const [rg] = place(g, 0, 'siege_giant', 3.5, 20.5);
@@ -775,8 +775,8 @@ describe('v3 第二批：衝車、落雷、火靈小屋、炸彈砲塔、攻城�
   });
 });
 
-describe('v3 第三批：龍捲風、墓地、熔岩飛獸、迫擊砲', () => {
-  it('龍捲風：把範圍內的敵方部隊拉向中心並造成兩次傷害；建築不受影響', () => {
+describe('v3 第三批：旋風法術、骷髏召喚、熔岩獵犬、迫擊炮', () => {
+  it('旋風法術：把範圍內的敵方部隊拉向中心並造成兩次傷害；建築不受影響', () => {
     const g = newGame();
     const [kn] = place(g, 1, 'knight', 13.5, 8.5);
     const [cannon] = place(g, 1, 'cannon', 9, 8);
@@ -795,7 +795,7 @@ describe('v3 第三批：龍捲風、墓地、熔岩飛獸、迫擊砲', () => {
     expect([cannon.x, cannon.y]).toEqual(cannonPos);
   });
 
-  it('亡靈墓地：2.2 秒後開始，每 0.5 秒在範圍內冒出一隻骷髏，共 15 隻（不會冒在河上）', () => {
+  it('骷髏召喚：2.2 秒後開始，每 0.5 秒在範圍內冒出一隻骷髏，共 15 隻（不會冒在河上）', () => {
     const g = newGame();
     hold(g, 0, 'graveyard');
     expect(g.deploy(0, 0, 9.5, 12.5).ok).toBe(true);
@@ -807,7 +807,7 @@ describe('v3 第三批：龍捲風、墓地、熔岩飛獸、迫擊砲', () => {
     expect(spawns.every((s) => s.y <= ARENA.riverTop - 0.3 || s.y >= ARENA.riverBottom + 0.3)).toBe(true);
   });
 
-  it('熔岩飛獸：只打建築的飛行單位，倒下分裂成 6 隻會打空中與地面的小熔岩獸', () => {
+  it('熔岩獵犬：只打建築的飛行單位，倒下分裂成 6 隻會打空中與地面的熔岩幼犬', () => {
     const g = newGame();
     const [hound] = place(g, 0, 'lava_hound', 9.5, 24.5);
     expect(hound.stats.flying).toBe(true);
@@ -819,15 +819,15 @@ describe('v3 第三批：龍捲風、墓地、熔岩飛獸、迫擊砲', () => {
     expect(pups.every((p) => p.stats.flying && p.stats.targets === 'air-ground')).toBe(true);
   });
 
-  it('迫擊砲：射程很遠但打不到最小射程（3.5 格）以內的敵人', () => {
+  it('迫擊炮：射程很遠但打不到最小射程（3.5 格）以內的敵人', () => {
     const g = newGame();
     const [m] = place(g, 0, 'mortar', 9, 24);
     run(g, 3.6); // 部署 3.5 秒
-    const near = place(g, 1, 'skeletons', 9.5, 14.5); // 河對岸，離迫擊砲約 8 格
+    const near = place(g, 1, 'skeletons', 9.5, 14.5); // 河對岸，離迫擊炮約 8 格
     let shotNear = false;
     run(g, 6, (ev) => ev.forEach((v) => v.type === 'attack' && v.id === m.id && near.some((n) => n.id === v.targetId) && (shotNear = true)));
     expect(shotNear).toBe(true);
-    // 貼近迫擊砲的敵人不會被鎖定
+    // 貼近迫擊炮的敵人不會被鎖定
     const g2 = newGame();
     const [m2] = place(g2, 0, 'mortar', 9, 24);
     run(g2, 3.6);
@@ -840,7 +840,7 @@ describe('v3 第三批：龍捲風、墓地、熔岩飛獸、迫擊砲', () => {
   });
 });
 
-describe('v3 第四批：重裝武士、長弓遊俠、灼焰飛龍、寒霜術士、風暴術士、雷能砲車、巨錘騎士、回旋斧手', () => {
+describe('v3 第四批：皮卡超人、公主、地獄飛龍、寒冰法師、閃電法師、電磁炮、超級騎士、飛斧屠夫', () => {
   /** 把敵方部隊直接放到指定位置（略過部署區與部署時間，測試用）。 */
   function foeAt(g: Game, cardId: string, x: number, y: number): Entity[] {
     const list = place(g, 1, cardId, 9, 8);
@@ -855,7 +855,7 @@ describe('v3 第四批：重裝武士、長弓遊俠、灼焰飛龍、寒霜術�
   }
   const hitsOn = (ev: GameEvent[], id: number, out: number[]) => ev.forEach((v) => v.type === 'hit' && v.id === id && out.push(v.amount));
 
-  it('重裝武士：單下 816，三下就能打倒騎士', () => {
+  it('皮卡超人：單下 816，三下就能打倒騎士', () => {
     const g = newGame();
     place(g, 0, 'heavy_warrior', 9, 22);
     run(g, 1.1);
@@ -869,7 +869,7 @@ describe('v3 第四批：重裝武士、長弓遊俠、灼焰飛龍、寒霜術�
     expect(kn.alive).toBe(false);
   });
 
-  it('長弓遊俠：從 8 格外射出範圍火箭，落點附近的蝙蝠群一次倒下大半（可打空中）', () => {
+  it('公主：從 8 格外射出範圍火箭，落點附近的蝙蝠一次倒下大半（可打空中）', () => {
     const g = newGame();
     const [r] = place(g, 0, 'ranger', 9, 24);
     run(g, 1.1);
@@ -881,7 +881,7 @@ describe('v3 第四批：重裝武士、長弓遊俠、灼焰飛龍、寒霜術�
     expect(bats.filter((b) => !b.alive).length).toBeGreaterThanOrEqual(3);
   });
 
-  it('灼焰飛龍：飛行光束越燒越痛（36 → 121 → 423）', () => {
+  it('地獄飛龍：飛行光束越燒越痛（36 → 121 → 423）', () => {
     const g = newGame();
     place(g, 0, 'inferno_drake', 9, 22);
     run(g, 1.1);
@@ -895,7 +895,7 @@ describe('v3 第四批：重裝武士、長弓遊俠、灼焰飛龍、寒霜術�
     expect(beam[beam.length - 1]).toBe(423);
   });
 
-  it('寒霜術士：出場寒氣（83 傷害、慢 1 秒），冰彈讓目標的移動與攻擊慢 35%、持續 2.5 秒', () => {
+  it('寒冰法師：出場寒氣（83 傷害、慢 1 秒），冰彈讓目標的移動與攻擊慢 35%、持續 2.5 秒', () => {
     const g = newGame();
     const [kn] = foeAt(g, 'knight', 9, 21);
     const hp0 = kn.hp;
@@ -910,7 +910,7 @@ describe('v3 第四批：重裝武士、長弓遊俠、灼焰飛龍、寒霜術�
     expect(kn.slowAtk).toBeCloseTo(0.65);
   });
 
-  it('風暴術士：出場雷擊（192、暈眩）；同時電擊兩個目標並暈眩；只有一個目標時兩道都打它', () => {
+  it('閃電法師：出場雷擊（192、暈眩）；同時電擊兩個目標並暈眩；只有一個目標時兩道都打它', () => {
     const g = newGame();
     const [a] = foeAt(g, 'knight', 8, 21);
     const [b] = foeAt(g, 'knight', 10.5, 21);
@@ -944,7 +944,7 @@ describe('v3 第四批：重裝武士、長弓遊俠、灼焰飛龍、寒霜術�
     expect(at).toBeGreaterThan(0);
   });
 
-  it('雷能砲車：出場蓄力 3 秒才開砲（1331、範圍），開砲後退；被暈眩要重新蓄力 3 秒', () => {
+  it('電磁炮：出場蓄力 3 秒才開砲（1331、範圍），開砲後退；被暈眩要重新蓄力 3 秒', () => {
     const g = newGame();
     const [c] = place(g, 0, 'volt_cart', 9, 22);
     const [gi] = foeAt(g, 'giant', 9, 18.6);
@@ -980,7 +980,7 @@ describe('v3 第四批：重裝武士、長弓遊俠、灼焰飛龍、寒霜術�
     expect(later[0]).toBeGreaterThan(3);
   });
 
-  it('巨錘騎士：出場砸地（429）；跳向 3.5～5 格外的敵人，落地 536 範圍傷害；不會跳向塔', () => {
+  it('超級騎士：出場砸地（429）；跳向 3.5～5 格外的敵人，落地 536 範圍傷害；不會跳向塔', () => {
     const g = newGame();
     const [k] = foeAt(g, 'knight', 9, 21.6);
     place(g, 0, 'hammer_knight', 9, 23);
@@ -1007,7 +1007,7 @@ describe('v3 第四批：重裝武士、長弓遊俠、灼焰飛龍、寒霜術�
     expect(g3.players[0].crowns + (princess(g3, 1, 0).hp < TOWERS.princess.hp ? 1 : 0)).toBeGreaterThan(0);
   });
 
-  it('回旋斧手：斧頭穿過沿路所有敵人，飛出去再飛回來，每個敵人去回各挨一下', () => {
+  it('飛斧屠夫：斧頭穿過沿路所有敵人，飛出去再飛回來，每個敵人去回各挨一下', () => {
     const g = newGame();
     const [ax] = place(g, 0, 'axe_thrower', 9, 24);
     run(g, 1.1);

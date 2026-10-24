@@ -261,7 +261,7 @@ export class AiController {
     return false;
   }
 
-  /** 能量收集器：沒有威脅、能量充足時放在後場（另一路的後方）。 */
+  /** 聖水收集器：沒有威脅、能量充足時放在後場（另一路的後方）。 */
   private pump(s: Sit): boolean {
     const h = s.hand.find((x) => x.ci.pump && x.ci.cost <= s.elixir);
     if (!h || s.threats.some((t) => t.eta < 10)) return false;
@@ -272,7 +272,7 @@ export class AiController {
     return this.deployOwn(h, 9 + side * 4.5, 30.5);
   }
 
-  /** 地道挖掘者：鑽到對方側塔外側貼著塔身冒出來。 */
+  /** 掘地礦工：鑽到對方側塔外側貼著塔身冒出來。 */
   private deployTunnel(h: HandCard, lane: 0 | 1): boolean {
     const g = this.game;
     const princesses = g.towers(this.enemy).filter((t) => t.alive && t.unit === 'princess');
@@ -370,7 +370,7 @@ export class AiController {
         });
       }
     }
-    // 對手的墓地：還沒冒出來的骷髏也算威脅（之後會在範圍內陸續出現），毒霧這類持續法術才會想到要蓋上去
+    // 對手的墓地：還沒冒出來的骷髏也算威脅（之後會在範圍內陸續出現），毒藥法術這類持續法術才會想到要蓋上去
     for (const a of g.areas) {
       if (a.team === this.team || !a.spawnsLeft) continue;
       const gy = CARDS[a.cardId]?.spell?.graveyard;
@@ -537,7 +537,7 @@ export class AiController {
     for (const sp of g.spells) {
       if (sp.team !== this.team) continue;
       const st = CARDS[sp.cardId].spell!;
-      // 落雷每個目標只劈一次
+      // 雷電法術每個目標只劈一次
       if (st.kind !== 'barrel' && distTo(sp.x, sp.y, t) <= st.radius) d += Math.round(st.damage * st.towerPct) * (st.bolts ? 1 : sp.wavesLeft);
     }
     for (const a of g.areas) {
@@ -588,7 +588,7 @@ export class AiController {
     const plan = planSpell(s.spellCtx, h.id);
     if (plan && plan.tower === t) return this.castSpell(h, plan.x, plan.y, false);
     if (st.kind === 'roll') {
-      // 滾木要從塔的前方（靠我方那側）往塔滾
+      // 復仇滾木要從塔的前方（靠我方那側）往塔滾
       const vy = this.vy(t.y) + t.half + 0.5;
       return this.castSpell(h, t.x, this.wy(vy), false);
     }
@@ -804,7 +804,7 @@ export class AiController {
       const safe = !th.troopHitters;
       return at(tx + tc * (safe ? 2.5 : 1.5), safe ? tvy - 1.5 : tvy + 3);
     }
-    // 出場砸地的近戰（巨錘騎士）：直接壓在敵人頭上，砸地一起打到後排
+    // 出場砸地的近戰（超級騎士）：直接壓在敵人頭上，砸地一起打到後排
     if (st.deployHit && st.deployHit.damage >= 300 && !fst.flying) return at(fx, fvy);
     const big = fst.hp >= 1200 && !fst.flying;
     if ((ci.swarm || ci.count >= 4) && big) return at(fx, fvy + 0.6);

@@ -55,9 +55,9 @@ export interface Entity {
   tunneling: boolean; // 從地底鑽往落點中（不能被攻擊、不碰撞）
   tunnelX: number;
   tunnelY: number;
-  genTimer: number; // 能量收集器：距離下次產生能量的秒數
-  slowAtk: number; // 攻擊速度倍率（被寒霜術士的冰彈打中時 < 1）
-  leapT: number; // 巨錘騎士跳躍：起跳後經過的秒數，-1 = 沒有在跳
+  genTimer: number; // 聖水收集器：距離下次產生能量的秒數
+  slowAtk: number; // 攻擊速度倍率（被寒冰法師的冰彈打中時 < 1）
+  leapT: number; // 超級騎士跳躍：起跳後經過的秒數，-1 = 沒有在跳
   leapX0: number;
   leapY0: number;
   leapX1: number;
@@ -89,7 +89,7 @@ export interface Projectile {
   done: boolean;
 }
 
-/** 從國王塔飛出的法術（火球、箭雨、火箭、哥布林飛桶）。 */
+/** 從國王塔飛出的法術（火球、萬箭齊發、火箭、哥布林飛桶）。 */
 export interface PendingSpell {
   id: number;
   team: Team;
@@ -102,10 +102,10 @@ export interface PendingSpell {
   totalDelay: number;
   wavesLeft: number;
   waveTimer: number;
-  struck?: number[]; // 落雷已劈過的目標
+  struck?: number[]; // 雷電法術已劈過的目標
 }
 
-/** 持續範圍（毒霧）。 */
+/** 持續範圍（毒藥法術）。 */
 export interface AreaEffect {
   id: number;
   team: Team;
@@ -121,7 +121,7 @@ export interface AreaEffect {
   spawnsLeft?: number;
 }
 
-/** 滾動法術（滾木）。 */
+/** 滾動法術（復仇滾木）。 */
 export interface Roller {
   id: number;
   team: Team;
@@ -171,7 +171,7 @@ export type GameEvent =
   | { type: 'spawn'; id: number; team: Team; unit: string; x: number; y: number; source: 'card' | 'spawner' | 'death' | 'barrel' | 'tunnel' }
   | {
       type: 'attack'; id: number; unit: string; team: Team; x: number; y: number; tx: number; ty: number; targetId: number; ranged: boolean; charge: boolean;
-      extra?: { id: number; x: number; y: number }[]; // 同時打到的其他目標（風暴術士）
+      extra?: { id: number; x: number; y: number }[]; // 同時打到的其他目標（閃電法師）
     }
   | { type: 'hit'; id: number; team: Team; x: number; y: number; amount: number; isTower: boolean; isBuilding: boolean }
   | { type: 'impact'; team: Team; x: number; y: number; radius: number; visual: ProjectileVisual }
@@ -203,7 +203,7 @@ export interface PlayerState {
   cardsPlayed: number;
   elixirSpent: number;
   elixirLeaked: number;
-  elixirGained: number; // 能量收集器產生的能量（公開資訊：場上看得到）
+  elixirGained: number; // 聖水收集器產生的能量（公開資訊：場上看得到）
 }
 
 export interface MatchResult {
@@ -272,7 +272,7 @@ export function formation(count: number): [number, number][] {
     case 4: return [[-0.55, -0.55], [0.55, -0.55], [-0.55, 0.55], [0.55, 0.55]];
     case 5: return [[0, 0], [-0.8, -0.6], [0.8, -0.6], [-0.8, 0.6], [0.8, 0.6]];
     default: {
-      // 骷髏大軍等：兩圈圓陣
+      // 骷髏軍團等：兩圈圓陣
       const out: [number, number][] = [[0, 0]];
       const inner = Math.min(6, count - 1);
       for (let i = 0; i < inner; i++) {
@@ -357,7 +357,7 @@ export class Game {
       rageTimer: 0, rageMul: 1, tunneling: false, tunnelX: x, tunnelY: y, genTimer: stats.elixirGen?.interval ?? 0,
       slowAtk: 1, leapT: -1, leapX0: x, leapY0: y, leapX1: x, leapY1: y, leapCd: 0,
     };
-    // 雷能砲車出場要先蓄力
+    // 電磁炮出場要先蓄力
     if (stats.chargeUp) e.cooldown = stats.loadTime;
     this.entities.push(e);
     return e;
@@ -574,7 +574,7 @@ export class Game {
         });
         return;
       case 'lightning':
-        // 落雷：在落點上空依序劈下（第一道稍微延遲，讓畫面先出現雷雲）
+        // 雷電法術：在落點上空依序劈下（第一道稍微延遲，讓畫面先出現雷雲）
         this.events.push({ type: 'spellCast', team, cardId: card.id, x, y, fromX: x, fromY: y, delay: 0 });
         this.spells.push({ id: this.nextId++, team, cardId: card.id, x, y, fromX: x, fromY: y, delay: 0.2, totalDelay: 0.2, wavesLeft: s.bolts ?? 3, waveTimer: 0, struck: [] });
         return;
@@ -734,7 +734,7 @@ export class Game {
     this.spells = this.spells.filter((s) => s.wavesLeft > 0);
   }
 
-  /** 落雷的一道：劈中範圍內目前血量最高、還沒被劈過的敵方目標（部隊、建築或塔）。 */
+  /** 雷電法術的一道：劈中範圍內目前血量最高、還沒被劈過的敵方目標（部隊、建築或塔）。 */
   private strike(sp: PendingSpell, st: SpellStats): boolean {
     let best: Entity | null = null;
     for (const e of this.entities) {
@@ -811,7 +811,7 @@ export class Game {
     this.areas = this.areas.filter((a) => a.timeLeft > 0 || a.ticksLeft > 0);
   }
 
-  /** 龍捲風：範圍內的敵方部隊（含飛行）往中心拉；地面部隊被拉到河上時由碰撞處理推回岸邊（橋上除外）。 */
+  /** 旋風法術：範圍內的敵方部隊（含飛行）往中心拉；地面部隊被拉到河上時由碰撞處理推回岸邊（橋上除外）。 */
   private pullIn(a: AreaEffect, s: SpellStats): void {
     const step = s.pull! * DT;
     for (const e of this.entities) {
@@ -1018,7 +1018,7 @@ export class Game {
       e.facing = Math.atan2(target.y - e.y, target.x - e.x);
       if (!e.attacking) {
         e.attacking = true;
-        // 雷能砲車蓄滿的電力會保留，看到目標就開砲
+        // 電磁炮蓄滿的電力會保留，看到目標就開砲
         if (!e.stats.chargeUp) e.cooldown = Math.max(e.cooldown, e.stats.loadTime);
       }
       e.locked = true;
@@ -1055,7 +1055,7 @@ export class Game {
     this.events.push({ type: 'emerge', id: e.id, team: e.team, x: e.x, y: e.y });
   }
 
-  /** 能量收集器：定時給己方能量（滿了就浪費，計入溢出）。 */
+  /** 聖水收集器：定時給己方能量（滿了就浪費，計入溢出）。 */
   private updateElixirGen(e: Entity): void {
     const gen = e.stats.elixirGen;
     if (!gen) return;
@@ -1131,7 +1131,7 @@ export class Game {
     if (s.kamikaze) {
       if (ranged) this.launch(e, t, s.damage);
       else {
-        // 近戰自爆（攻城衝車）：撞一下（衝刺中傷害較高）就解體，死亡效果照常（放出蠻族戰士）
+        // 近戰自爆（野蠻人攻城槌）：撞一下（衝刺中傷害較高）就解體，死亡效果照常（放出野蠻人）
         let dmg = charged ? s.charge!.damage : s.damage;
         if (t.kind === 'tower' && s.towerMul !== undefined) dmg = Math.round(dmg * s.towerMul);
         this.applyDamage(t, dmg);
@@ -1183,7 +1183,7 @@ export class Game {
     return cands.slice(0, n).map((c) => c.o);
   }
 
-  /** 巨錘騎士起跳：飛向目標前緣（在空中 leap.time 秒），落地範圍傷害與擊退。 */
+  /** 超級騎士起跳：飛向目標前緣（在空中 leap.time 秒），落地範圍傷害與擊退。 */
   private startLeap(e: Entity, t: Entity): void {
     const lp = e.stats.leap!;
     const d = dist(e.x, e.y, t.x, t.y) || 1;
@@ -1548,7 +1548,7 @@ export class Game {
   }
 
   private resolveCollisions(): void {
-    // 跳躍中的巨錘騎士在空中，不參與推擠與地形限制（可以跳過河）
+    // 跳躍中的超級騎士在空中，不參與推擠與地形限制（可以跳過河）
     const movers = this.entities.filter((e) => e.alive && e.kind === 'troop' && !e.tunneling && e.leapT < 0);
     for (let i = 0; i < movers.length; i++) {
       const a = movers[i];

@@ -309,7 +309,7 @@ const VOICES: Record<string, Voice> = {
   lose: (c, o, t) => {
     [392, 370, 349, 262].forEach((f, i) => tone(c, o, t + i * 0.22, 'triangle', f, f * 0.98, i === 3 ? 0.7 : 0.22, 0.16));
   },
-  // 落雷：低沉的雷鳴滾動
+  // 雷電法術：低沉的雷鳴滾動
   thunder: (c, o, t) => {
     noise(c, o, t, 1.1, 0.32, 'lowpass', 900, 120, 1, 0.02);
     tone(c, o, t + 0.05, 'sawtooth', 70, 40, 0.9, 0.12);

@@ -42,7 +42,7 @@ const princessLoss = (g: Game, team: Team, lane: number): number => {
 };
 
 describe('防守評估的交戰模擬', () => {
-  it('巨錘騎士會跳向 3.5～5 格外的敵人，落地範圍傷害打到旁邊的部隊', () => {
+  it('超級騎士會跳向 3.5～5 格外的敵人，落地範圍傷害打到旁邊的部隊', () => {
     const mk = UNITS.hammer_knight.stats;
     const arch = UNITS.archer.stats;
     // 兩個弓箭手站在 4.5 格外，不在近戰射程內；不跳的話 0.8 秒內打不到
@@ -79,7 +79,7 @@ describe('電腦對手的判斷', () => {
     expect(defended).toBeLessThan(idle * 0.4);
   });
 
-  it('骷髏大軍衝過來時，用範圍法術處理而不是單體部隊', () => {
+  it('骷髏軍團衝過來時，用範圍法術處理而不是單體部隊', () => {
     const g = new Game({ seed: 4, decks: [['skeleton_army', ...DEFAULT_PLAYER_DECK.slice(1)], deckOf('巨人推進')] });
     const ai = new AiController(g, 1, g.rng.fork(), AI_LEVELS.normal);
     setHand(g, 1, ['arrows', 'knight', 'musketeer', 'giant'], 7);
@@ -92,7 +92,7 @@ describe('電腦對手的判斷', () => {
   });
 
   it('困難電腦數對手能量：整場估計值與實際能量的平均誤差小於 0.3', () => {
-    const g = new Game({ seed: 31, decks: [deckOf('狼騎快攻'), deckOf('巨人推進')] });
+    const g = new Game({ seed: 31, decks: [deckOf('野豬騎士快攻'), deckOf('巨人推進')] });
     const ais = [new AiController(g, 0, g.rng.fork(), AI_LEVELS.normal), new AiController(g, 1, g.rng.fork(), AI_LEVELS.hard)];
     let err = 0;
     let n = 0;

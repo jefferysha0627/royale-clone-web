@@ -106,7 +106,7 @@ const HUMANOIDS: Record<string, (t: TeamPal) => HumanoidSpec> = {
   }),
   // v3 第四批
   heavy_warrior: (t) => ({
-    // 重裝武士：深鋼板甲、金邊、隊伍色盔冠與披風，雙手巨劍；八字鬍、表情嚴肅
+    // 皮卡超人：深鋼板甲、金邊、隊伍色盔冠與披風，雙手巨劍；八字鬍、表情嚴肅
     height: 1.55, build: 1.32, headScale: 0.86, torsoScale: 1.08, skin: '#e8b890', face: 'angry', mustache: '#2a1e14', hat: 'crest', hatColor: '#4a5160',
     hatColor2: t.main, torso: '#4a5160', torso2: '#c9a24a', tabard: true, legs: '#3a3f4a', boots: '#2a2d33', arms: '#4a5160', hands: '#8a93a3', pads: true,
     cape: true, bracers: '#c9a24a', metal: 0.7, weapon: 'greatsword',
@@ -116,24 +116,24 @@ const HUMANOIDS: Record<string, (t: TeamPal) => HumanoidSpec> = {
     torso2: '#6a4a2a', legs: '#4a5a3a', boots: '#3a2a1e', arms: '#3f6a4a', cape: true, strap: '#5a3a1e', bracers: '#6a4a2a', offhand: 'bow',
   }),
   frost_mage: () => ({
-    // 寒霜術士：銀白長髮配冰藍額環、淺藍長袍與隊伍色圍巾、冰晶法杖
+    // 寒冰法師：銀白長髮配冰藍額環、淺藍長袍與隊伍色圍巾、冰晶法杖
     height: 1.2, skin: '#f0d6c0', face: 'dot', eyeColor: '#2a6aa8', hair: { style: 'long', color: '#e8f4ff' }, hat: 'band', hatColor2: '#9fdcff',
     torso: '#5aa0d8', apron: '#3a78b8', robe: true, legs: '#3a78b8', boots: '#2a4a6a', scarf: true, bracers: '#dff2ff', weapon: 'froststaff',
   }),
   storm_mage: () => ({
-    // 風暴術士：深靛尖帽配冰藍帽帶、白色短鬍、深靛長袍與披風、引雷杖
+    // 閃電法師：深靛尖帽配冰藍帽帶、白色短鬍、深靛長袍與披風、引雷杖
     height: 1.22, skin: '#e8c0a0', face: 'angry', eyeColor: '#1e3a8a', beard: { color: '#f4f1e8', size: 0.7 }, mustache: '#f4f1e8',
     hat: 'wizard', hatColor: '#2a3070', hatColor2: '#7fd0ff', torso: '#3a3f7a', apron: '#2a2f5a', robe: true, legs: '#2a2f5a', boots: '#1e2238', sash: true,
     cape: true, weapon: 'stormstaff',
   }),
   hammer_knight: (t) => ({
-    // 巨錘騎士：比一般騎士壯一圈的板甲、開面頭盔、火紅大鬍子，雙手巨錘
+    // 超級騎士：比一般騎士壯一圈的板甲、開面頭盔、火紅大鬍子，雙手巨錘
     height: 1.5, build: 1.45, headScale: 0.84, torsoScale: 1.05, skin: '#e8b890', face: 'angry', beard: { color: '#c4532a', size: 1.25 }, mustache: '#a8401e',
     hat: 'helmet', hatColor: '#7d8794', torso: '#7d8794', torso2: '#5a3a1e', legs: '#5d6b80', boots: '#3a3f4a', arms: '#7d8794', hands: '#9aa3b0', pads: true,
     belly: true, strap: t.dark, metal: 0.75, weapon: 'warhammer',
   }),
   axe_thrower: (t) => ({
-    // 回旋斧手：光頭綁隊伍色頭巾、黑色大鬍子、皮圍裙與護腕，雙刃巨斧
+    // 飛斧屠夫：光頭綁隊伍色頭巾、黑色大鬍子、皮圍裙與護腕，雙刃巨斧
     height: 1.35, build: 1.3, skin: '#e0a878', face: 'angry', nose: 'ball', beard: { color: '#2a1e14', size: 1.2 }, mustache: '#2a1e14', hat: 'bandana',
     hatColor2: t.main, torso: '#6a4a32', apron: '#4a3424', torso2: '#2a1e14', legs: '#4a3a2a', boots: '#2a1e14', arms: '#e0a878', bracers: '#5a3a1e',
     strap: '#3a2a1e', belly: true, weapon: 'axe2',

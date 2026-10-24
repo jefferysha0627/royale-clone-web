@@ -461,7 +461,7 @@ export class Effects {
     }
   }
 
-  /** 兩點之間的鋸齒電弧（風暴術士的電擊、雷能砲車的放電）。 */
+  /** 兩點之間的鋸齒電弧（閃電法師的電擊、電磁炮的放電）。 */
   arc(ax: number, ay: number, az: number, bx: number, by: number, bz: number, color = '#bfe8ff', jitter = 0.35): void {
     const segs = 4;
     let p = new Vector3(ax, ay, az);

@@ -18,7 +18,7 @@ export interface AnimState {
   active: boolean; // 國王塔已喚醒
   aimYaw: number; // 砲塔／守衛相對本體的瞄準角
   wakeT: number; // 國王塔喚醒後經過的秒數
-  charge: number; // 雷能砲車的蓄力（0～1）
+  charge: number; // 電磁炮的蓄力（0～1）
 }
 
 export function newAnimState(): AnimState {
@@ -176,7 +176,7 @@ function biped(inst: ModelInstance, p: AnimProfile, s: AnimState, seated = false
     default:
       break;
   }
-  // 跳躍（巨錘騎士）：雙手把武器高舉過頭、雙腿收起
+  // 跳躍（超級騎士）：雙手把武器高舉過頭、雙腿收起
   if (s.jumping && !seated) {
     aL = -2.7;
     aR = -2.7;
@@ -222,7 +222,7 @@ function mount(inst: ModelInstance, p: AnimProfile, s: AnimState): void {
   biped(inst, p, s, true);
 }
 
-/** 車輛（雷能砲車）：輪子隨移動轉動、車身微晃，雷球隨蓄力變大並旋轉，開砲時車身往後一頓。 */
+/** 車輛（電磁炮）：輪子隨移動轉動、車身微晃，雷球隨蓄力變大並旋轉，開砲時車身往後一頓。 */
 function cart(inst: ModelInstance, s: AnimState): void {
   const b = inst.byName;
   if (b.wheelF) b.wheelF.rotation.x = s.walk * 0.9;

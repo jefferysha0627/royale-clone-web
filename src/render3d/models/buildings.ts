@@ -76,7 +76,7 @@ export function buildTombstone(team: TeamPal): ModelAsset {
   return k.build(1.4);
 }
 
-/** 能量收集器（原創造型「能量井」）：石砌井座裡是粉紫色能量液，木架上吊著一顆會旋轉發光的能量水晶。 */
+/** 聖水收集器（原創造型「能量井」）：石砌井座裡是粉紫色能量液，木架上吊著一顆會旋轉發光的能量水晶。 */
 export function buildCollector(team: TeamPal): ModelAsset {
   const k = new Kit();
   const root = k.addBone('root', -1, [0, 0, 0]);

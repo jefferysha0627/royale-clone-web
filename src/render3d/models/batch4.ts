@@ -2,7 +2,7 @@ import { CylinderGeometry } from 'three';
 import { Kit, type ModelAsset } from '../kit';
 import { addHumanoid, type HumanoidSpec } from './humanoid';
 
-// v3 第四批單位的原創模型：長弓遊俠（背箭袋）、灼焰飛龍、雷能砲車。
+// v3 第四批單位的原創模型：公主（背箭袋）、地獄飛龍、電磁炮。
 
 type TeamPal = { main: string; dark: string; light: string };
 
@@ -17,7 +17,7 @@ function wing(k: Kit, sx: number, bone: number, span: number, at: [number, numbe
   for (const f of [0.55, 0.85]) k.cone(0.03, 0.1, { at: [at[0] + sx * span * f, at[1] + 0.1, at[2] - span * 0.05], rot: [0, 0, -sx * 0.5], color: '#2a1a14', bone }, 4);
 }
 
-/** 長弓遊俠：尖耳、金色長髮、綠色皮甲與披風，左手長弓、背後箭袋（隊伍色箭羽）。 */
+/** 公主：尖耳、金色長髮、綠色皮甲與披風，左手長弓、背後箭袋（隊伍色箭羽）。 */
 export function buildRanger(spec: HumanoidSpec, team: TeamPal): ModelAsset {
   const k = new Kit();
   const root = k.addBone('root', -1, [0, 0, 0]);
@@ -36,7 +36,7 @@ export function buildRanger(spec: HumanoidSpec, team: TeamPal): ModelAsset {
 }
 
 /**
- * 灼焰飛龍：比幼龍大一號，暗紅鱗片、熔岩橘的腹甲與發光的喉嚨，兩對往後彎的角、隊伍色背棘，翼膜是餘燼般的深橘色。
+ * 地獄飛龍：比飛龍寶寶大一號，暗紅鱗片、熔岩橘的腹甲與發光的喉嚨，兩對往後彎的角、隊伍色背棘，翼膜是餘燼般的深橘色。
  */
 export function buildFireDrake(team: TeamPal): ModelAsset {
   const S = 1.12;
@@ -102,7 +102,7 @@ function wheel(k: Kit, x: number, y: number, z: number, r: number, bone: number)
 }
 
 /**
- * 雷能砲車：四輪木車上架著銅製鍋爐與三圈線圈，頂端是蓄電用的雷球，前方一支喇叭狀放電砲口；兩側隊伍色護板與小旗。
+ * 電磁炮：四輪木車上架著銅製鍋爐與三圈線圈，頂端是蓄電用的雷球，前方一支喇叭狀放電砲口；兩側隊伍色護板與小旗。
  * 骨頭：body（車身）、wheelF／wheelB（前後輪軸）、orb（雷球，蓄力時放大）。
  */
 export function buildVoltCart(team: TeamPal): ModelAsset {

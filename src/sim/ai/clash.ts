@@ -1,7 +1,7 @@
 // 防守評估用的簡化交戰模擬：沿用 game.ts 的索敵規則（視野內最近、沒有就走向最近的塔、
 // 開打後鎖定、建築與塔只打射程內），但走直線、不推擠、不繞橋，
 // 用來比較「不出牌」與「出某張牌」在接下來幾秒的結果（塔掉血、雙方剩下的價值）。
-// 數值直接讀 cards.ts 的 UnitStats：範圍傷害、衝鋒、熔岩塔蓄力、冰凍、召喚、死亡效果都有估算。
+// 數值直接讀 cards.ts 的 UnitStats：範圍傷害、衝鋒、地獄之塔蓄力、冰凍、召喚、死亡效果都有估算。
 import { UNITS, type UnitStats } from '../cards';
 import { KING_ACTIVATION_TIME } from '../config';
 import { unitValue } from './knowledge';
@@ -33,7 +33,7 @@ export interface ClashUnit {
   repickAt: number;
   ref: number; // 對應的實體 id（-1 = 假想單位）
   lockRef: number; // 開打中的目標實體 id
-  leapAt: number; // 幾秒後可以再跳（巨錘騎士）
+  leapAt: number; // 幾秒後可以再跳（超級騎士）
 }
 
 export interface ClashResult {
@@ -260,7 +260,7 @@ export function runClash(list: ClashUnit[], horizon = 11, dt = 0.2, hits: ClashH
       const b = blasts[i];
       if (b.at > now) continue;
       blasts.splice(i, 1);
-      // 死亡爆炸，或巨錘騎士跳躍落地（與 Game.updateLeap 相同：打地面、塔也算）
+      // 死亡爆炸，或超級騎士跳躍落地（與 Game.updateLeap 相同：打地面、塔也算）
       const dd = b.leap ? { ...b.st.leap!, towerMul: 1 } : b.st.deathDamage!;
       for (let j = 0; j < list.length; j++) {
         const o = list[j];
@@ -310,7 +310,7 @@ export function runClash(list: ClashUnit[], horizon = 11, dt = 0.2, hits: ClashH
       }
       if (!t) continue;
       const d = edge(u, t);
-      // 巨錘騎士：目標在跳躍距離內就跳到它前緣，落地時範圍傷害（與 Game 相同，不跳向塔）
+      // 超級騎士：目標在跳躍距離內就跳到它前緣，落地時範圍傷害（與 Game 相同，不跳向塔）
       const lp = s.leap;
       if (lp && now >= u.leapAt && !u.attacking && t.kind !== 'tower' && d >= lp.min && d <= lp.max) {
         const len = Math.hypot(t.x - u.x, t.y - u.y) || 1;

@@ -35,7 +35,7 @@ export class OpponentModel {
     const dt = g.time - this.time;
     this.time = g.time;
     if (dt > 0) this.elixir = Math.min(MATCH.maxElixir, this.elixir + MATCH.elixirPerSecond * g.elixirMultiplier() * dt);
-    // 對手的能量收集器產生的能量（場上看得到幫浦運作）
+    // 對手的聖水收集器產生的能量（場上看得到幫浦運作）
     if (p.elixirGained !== this.gained) {
       this.elixir = Math.min(MATCH.maxElixir, this.elixir + (p.elixirGained - this.gained));
       this.gained = p.elixirGained;
@@ -74,7 +74,7 @@ export class OpponentModel {
     for (const a of g.areas) note(a.id, a.team, a.cardId, a.x, a.y, true);
     for (const r of g.rollers) note(r.id, r.team, r.cardId, r.x, r.y, true);
     this.maxId = top;
-    // 立即生效的法術（雷擊）不會留下任何東西：用剩下的費用反推
+    // 立即生效的法術（電擊法術）不會留下任何東西：用剩下的費用反推
     const known = found.reduce((s, id) => s + CARDS[id].cost, 0);
     if (found.length < n && spent - known > 0) {
       const rest = spent - known;

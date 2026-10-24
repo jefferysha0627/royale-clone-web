@@ -32,7 +32,7 @@ export interface SpellCtx {
   foeBonus: (f: Foe) => number; // 額外價值倍率（例如正在威脅我方塔的單位）
 }
 
-/** 法術從己方國王塔飛到 (x, y) 的秒數；雷擊、毒霧、滾木為 0。 */
+/** 法術從己方國王塔飛到 (x, y) 的秒數；電擊法術、毒藥法術、復仇滾木為 0。 */
 export function spellFlight(game: Game, team: Team, s: SpellStats, x: number, y: number): number {
   if (s.kind === 'instant' || s.kind === 'area' || s.kind === 'roll' || s.speed <= 0) return 0;
   const k = game.king(team);
@@ -56,7 +56,7 @@ function poisonTicks(f: Foe): number {
   return Math.max(2, Math.min(8, Math.round(4 / f.st.speed + f.e.deployTimer)));
 }
 
-/** 落雷：只會劈範圍內血量最高的 bolts 個目標（含塔），每個一道。 */
+/** 雷電法術：只會劈範圍內血量最高的 bolts 個目標（含塔），每個一道。 */
 function evalLightning(ctx: SpellCtx, cardId: string, s: SpellStats, foes: Foe[], x: number, y: number): SpellPlan {
   const g = ctx.game;
   const wait = ctx.delay ?? 0;
@@ -98,7 +98,7 @@ function evalPoint(ctx: SpellCtx, cardId: string, s: SpellStats, foes: Foe[], x:
   // 飛得越久，移動目標的落點越不準（火箭只適合打定點）
   const trust = Math.max(0.35, Math.min(1, 1.25 - 0.25 * land));
   const plan: SpellPlan = { cardId, x, y, land, value: 0, hits: [], towerDmg: 0, tower: null };
-  // 持續型法術（毒霧）會打到之後才出現的目標（例如墓地陸續冒出的骷髏）
+  // 持續型法術（毒藥法術）會打到之後才出現的目標（例如墓地陸續冒出的骷髏）
   const lastWave = land + (s.kind === 'area' ? (s.duration ?? 0) * 0.8 : (s.waves ?? 1) * (s.waveInterval ?? 0));
   for (const f of foes) {
     if (f.appear > wait + lastWave + 0.02) continue; // 法術生效時還沒落地（飛桶）
@@ -108,7 +108,7 @@ function evalPoint(ctx: SpellCtx, cardId: string, s: SpellStats, foes: Foe[], x:
     let v = hitValue(f, dmg) * (1 + ctx.foeBonus(f));
     if (moving(f, land)) v *= trust;
     if (s.stun && f.e) {
-      // 雷擊打斷熔岩塔蓄力、衝鋒
+      // 電擊法術打斷地獄之塔蓄力、衝鋒
       if (f.st.ramp && f.e.rampTime >= 1.2) v += 2;
       else if (f.e.charging) v += 0.8;
       else v += 0.1;
@@ -126,7 +126,7 @@ function evalPoint(ctx: SpellCtx, cardId: string, s: SpellStats, foes: Foe[], x:
   return plan;
 }
 
-/** 滾木：從落點朝對方滾 rollRange 格，掃過寬 2×radius 的帶狀區域。 */
+/** 復仇滾木：從落點朝對方滾 rollRange 格，掃過寬 2×radius 的帶狀區域。 */
 function planLog(ctx: SpellCtx, cardId: string, s: SpellStats, foes: Foe[]): SpellPlan | null {
   const g = ctx.game;
   const dir = ctx.team === 0 ? -1 : 1;

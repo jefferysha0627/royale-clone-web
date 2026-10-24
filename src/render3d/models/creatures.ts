@@ -3,7 +3,7 @@ import { addHumanoid, shade, type HumanoidSpec } from './humanoid';
 
 type TeamPal = { main: string; dark: string; light: string };
 
-// ───────── 石巨像（岩石人形） ─────────
+// ───────── 戈侖石人（岩石人形） ─────────
 
 export function buildGolem(team: TeamPal, small: boolean): ModelAsset {
   const k = new Kit();
@@ -72,7 +72,7 @@ export function buildSpirit(team: TeamPal, kind: 'ice' | 'fire'): ModelAsset {
   return k.build(0.85);
 }
 
-// ───────── 飛行：蝙蝠、石像鬼、幼龍 ─────────
+// ───────── 飛行：蝙蝠、亡靈、飛龍寶寶 ─────────
 
 function wing(k: Kit, sx: number, bone: number, span: number, at: [number, number, number], color: string, membrane: string): void {
   // 骨架 + 兩片膜
@@ -172,7 +172,7 @@ export function buildBabyDragon(team: TeamPal): ModelAsset {
   return k.build(1.15);
 }
 
-// ───────── 炸彈飛艇 ─────────
+// ───────── 氣球兵 ─────────
 
 export function buildBlimp(team: TeamPal): ModelAsset {
   const k = new Kit();
@@ -206,7 +206,7 @@ export function buildBlimp(team: TeamPal): ModelAsset {
   return k.build(1.4);
 }
 
-// ───────── 坐騎：狼騎兵、衝鋒騎士 ─────────
+// ───────── 坐騎：野豬騎士、王子 ─────────
 
 interface MountSpec {
   len: number;

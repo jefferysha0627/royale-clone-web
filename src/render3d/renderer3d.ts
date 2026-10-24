@@ -413,7 +413,7 @@ export class Renderer3D implements BattleRenderer {
               fx.ring(X, Z, 0.2, ev.radius, '#ffb347', 0.3, 0.7);
               break;
             case 'volt':
-              // 雷能砲車的電砲：強光、電弧四射、地面焦痕
+              // 電磁炮的電砲：強光、電弧四射、地面焦痕
               fx.flash(X, 0.6, Z, 0.3, ev.radius * 1.2, '#dff4ff', 0.3);
               for (let i = 0; i < 4; i++) {
                 const a = (i / 4) * Math.PI * 2 + Math.random();
@@ -446,7 +446,7 @@ export class Renderer3D implements BattleRenderer {
               this.units.delete(ev.id);
             } else if (v.dyingT < 0) v.dyingT = 0;
           }
-          // 攻城衝車撞完解體：木屑與塵土
+          // 野蠻人攻城槌撞完解體：木屑與塵土
           if (ev.kamikaze && ev.unit === 'siege_ram') {
             fx.burst('splinter', toX(ev.x), 0.5, toZ(ev.y), 1.2, 22);
             fx.burst('dust', toX(ev.x), 0, toZ(ev.y), 1.2, 14);
@@ -518,7 +518,7 @@ export class Renderer3D implements BattleRenderer {
           break;
         }
         case 'emerge': {
-          // 地道挖掘者冒出地面：土石噴發＋彈出動畫
+          // 掘地礦工冒出地面：土石噴發＋彈出動畫
           const X = toX(ev.x);
           const Z = toZ(ev.y);
           const v = this.units.get(ev.id);
@@ -540,7 +540,7 @@ export class Renderer3D implements BattleRenderer {
           break;
         }
         case 'strike': {
-          // 落雷：從雷雲劈下兩道鋸齒閃電，落點閃光與暈眩火花
+          // 雷電法術：從雷雲劈下兩道鋸齒閃電，落點閃光與暈眩火花
           const X = toX(ev.x);
           const Z = toZ(ev.y);
           fx.bolt(X, Z, '#e2d6ff');
@@ -811,7 +811,7 @@ export class Renderer3D implements BattleRenderer {
     }
     const stage = Math.min(2, Math.floor(e.rampTime / (e.stats.ramp?.stageTime ?? 2)));
     const tv = this.units.get(t.id);
-    // 熔岩塔從頂端水晶發射；灼焰飛龍從嘴巴（飛行高度＋身體前方）
+    // 地獄之塔從頂端水晶發射；地獄飛龍從嘴巴（飛行高度＋身體前方）
     const a = e.unit === 'inferno' ? new Vector3(v.x, 1.8, v.z) : new Vector3(v.x + Math.sin(v.yaw) * 0.6, v.hover + 0.95, v.z + Math.cos(v.yaw) * 0.6);
     const b = new Vector3(toX(t.x), tv ? tv.hover + 0.6 : t.kind === 'tower' ? 1.5 : 0.6, toZ(t.y));
     const d = b.clone().sub(a);
@@ -921,7 +921,7 @@ export class Renderer3D implements BattleRenderer {
   }
 
   private syncSpells(game: Game, dt: number): void {
-    // 飛行中的法術（火球、火箭、飛桶、箭雨）
+    // 飛行中的法術（火球、火箭、飛桶、萬箭齊發）
     const live = new Set<number>();
     for (const s of game.spells) {
       if (s.delay <= 0) continue;
@@ -986,7 +986,7 @@ export class Renderer3D implements BattleRenderer {
       this.flights.delete(id);
     }
 
-    // 毒霧範圍
+    // 毒藥法術範圍
     const liveA = new Set<number>();
     for (const a of game.areas) {
       liveA.add(a.id);
@@ -1036,7 +1036,7 @@ export class Renderer3D implements BattleRenderer {
       this.areas.delete(id);
     }
 
-    // 滾木
+    // 復仇滾木
     const liveR = new Set<number>();
     for (const r of game.rollers) {
       liveR.add(r.id);

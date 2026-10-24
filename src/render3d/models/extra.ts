@@ -1,7 +1,7 @@
 import { Kit, type ModelAsset } from '../kit';
 import { addHumanoid, shade, type HumanoidSpec } from './humanoid';
 
-// v3 第二批單位的原創模型：重甲石像鬼、攻城衝車（兩名扛槌手＋金屬羊頭撞槌）、火靈小屋、炸彈砲塔。
+// v3 第二批單位的原創模型：重甲亡靈、野蠻人攻城槌（兩名扛槌手＋金屬羊頭撞槌）、烈焰熔爐、炸彈塔。
 
 type TeamPal = { main: string; dark: string; light: string };
 
@@ -19,7 +19,7 @@ function wing(k: Kit, sx: number, bone: number, span: number, at: [number, numbe
   k.cone(0.035, 0.12, { at: [at[0] + sx * span * 0.92, at[1] + 0.14, at[2]], rot: [0, 0, -sx * 0.4], color: '#d8d0bc', bone }, 4);
 }
 
-/** 重甲石像鬼：比石像鬼大一號、深色岩身，戴金屬頭盔、胸甲與隊伍色肩甲，眼睛發橘光。 */
+/** 重甲亡靈：比亡靈大一號、深色岩身，戴金屬頭盔、胸甲與隊伍色肩甲，眼睛發橘光。 */
 export function buildHeavyGargoyle(team: TeamPal): ModelAsset {
   const S = 1.22;
   const k = new Kit();
@@ -61,14 +61,14 @@ export function buildHeavyGargoyle(team: TeamPal): ModelAsset {
   return k.build(1.15);
 }
 
-/** 扛撞槌的蠻族壯漢（衝車的兩名扛手）。 */
+/** 扛撞槌的蠻族壯漢（攻城槌的兩名扛手）。 */
 const carrier = (t: TeamPal): HumanoidSpec => ({
   height: 0.98, build: 1.15, skin: '#e8b07a', face: 'angry', beard: { color: '#8a4a2a', size: 0.85 }, hair: { style: 'tuft', color: '#8a4a2a' },
   hat: 'band', hatColor2: t.main, torso: '#7a5230', torso2: '#3a2a1e', arms: '#e8b07a', legs: '#6b5a40', boots: '#4a3a2a', bracers: '#5a3a1e',
 });
 
 /**
- * 攻城衝車：一根大圓木（前端包金屬、做成捲角羊頭），左右各一名扛手。
+ * 野蠻人攻城槌：一根大圓木（前端包金屬、做成捲角羊頭），左右各一名扛手。
  * 骨架沿用坐騎的四條腿：左邊扛手的雙腳＝legFL／legBL、右邊扛手＝legFR／legBR（相位剛好一前一後）。
  */
 export function buildSiegeRam(team: TeamPal): ModelAsset {
@@ -107,7 +107,7 @@ export function buildSiegeRam(team: TeamPal): ModelAsset {
   return k.build(1.05);
 }
 
-/** 火靈小屋：石砌圓屋、隊伍色尖頂、門裡透出火光，煙囪冒火（火精靈從這裡出來）。 */
+/** 烈焰熔爐：石砌圓屋、隊伍色尖頂、門裡透出火光，煙囪冒火（烈焰精靈從這裡出來）。 */
 export function buildSpiritHut(team: TeamPal): ModelAsset {
   const k = new Kit();
   const root = k.addBone('root', -1, [0, 0, 0]);
@@ -138,7 +138,7 @@ export function buildSpiritHut(team: TeamPal): ModelAsset {
   return k.build(1.9);
 }
 
-/** 炸彈砲塔：城垛石塔上一門朝前上方的短臼砲，旁邊堆著備用炸彈。 */
+/** 炸彈塔：城垛石塔上一門朝前上方的短臼砲，旁邊堆著備用炸彈。 */
 export function buildBombTurret(team: TeamPal): ModelAsset {
   const k = new Kit();
   const root = k.addBone('root', -1, [0, 0, 0]);
@@ -165,7 +165,7 @@ export function buildBombTurret(team: TeamPal): ModelAsset {
   return k.build(1.75);
 }
 
-/** 熔岩飛獸（大／小）：玄武岩外殼、發光的熔岩裂縫、蝠翼與短尾；大的戴隊伍色項圈。 */
+/** 熔岩獵犬（大／小）：玄武岩外殼、發光的熔岩裂縫、蝠翼與短尾；大的戴隊伍色項圈。 */
 export function buildLavaBeast(team: TeamPal, small: boolean): ModelAsset {
   const S = small ? 0.5 : 1;
   const k = new Kit();
@@ -213,7 +213,7 @@ export function buildLavaBeast(team: TeamPal, small: boolean): ModelAsset {
   return k.build(small ? 0.8 : 1.55);
 }
 
-/** 迫擊砲：寬石台＋木架上的大口徑短砲管（朝前上方），砲台邊堆沙包與砲彈。 */
+/** 迫擊炮：寬石台＋木架上的大口徑短砲管（朝前上方），砲台邊堆沙包與砲彈。 */
 export function buildMortar(team: TeamPal): ModelAsset {
   const k = new Kit();
   const root = k.addBone('root', -1, [0, 0, 0]);

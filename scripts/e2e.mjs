@@ -885,7 +885,7 @@ if (run('5')) {
   await page.evaluate(() => {
     const b = window.__btd;
     b.autoplay(20);
-    // 雙方各放一隊骷髏大軍、哥布林與幼龍在河邊交戰，做出大量單位同時混戰的畫面
+    // 雙方各放一隊骷髏軍團、哥布林與飛龍寶寶在河邊交戰，做出大量單位同時混戰的畫面
     const g = b.game();
     const put = (team, card, x, y) => {
       const p = g.players[team];

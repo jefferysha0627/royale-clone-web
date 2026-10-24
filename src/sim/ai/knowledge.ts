@@ -11,7 +11,7 @@ export interface CardInfo {
   spell?: SpellStats;
   count: number;
   hp: number; // 總血量（多隻合計）
-  dps: number; // 對部隊的總秒傷（熔岩塔取第二段）
+  dps: number; // 對部隊的總秒傷（地獄之塔取第二段）
   splash: number; // 範圍傷害半徑（法術為法術半徑）
   hitsAir: boolean;
   flying: boolean;
@@ -21,11 +21,11 @@ export interface CardInfo {
   tank: boolean; // 單隻高血量前排
   bruiser: boolean; // 中型近戰（能扛也能打）
   spirit: boolean; // 自爆精靈
-  win: boolean; // 進攻核心：只打建築、衝鋒、飛桶或地道挖掘者
+  win: boolean; // 進攻核心：只打建築、衝鋒、飛桶或掘地礦工
   damageSpell: boolean; // 用來打價值的傷害法術（不含飛桶、冰凍、狂暴）
   freeze: boolean; // 冰凍法術
   rage: boolean; // 狂暴法術
-  pump: boolean; // 能量收集器
+  pump: boolean; // 聖水收集器
   tunnel: boolean; // 可鑽地部署到任何地方
 }
 
@@ -57,7 +57,7 @@ export function cardInfo(id: string): CardInfo {
     swarm: !!st && count >= 3 && st.hp <= 400,
     tank: !!st && def.kind === 'troop' && count === 1 && st.hp >= 2500,
     bruiser: !!st && def.kind === 'troop' && count === 1 && st.hp >= 1200 && st.hp < 2500 && st.targets !== 'buildings',
-    spirit: !!st?.kamikaze && !!st.projectile, // 撲上去自爆的小精靈（攻城衝車雖然也會解體，但它是推進卡）
+    spirit: !!st?.kamikaze && !!st.projectile, // 撲上去自爆的小精靈（野蠻人攻城槌雖然也會解體，但它是推進卡）
     win: st?.targets === 'buildings' || spell?.kind === 'barrel' || !!spell?.graveyard || !!st?.charge || !!st?.tunnelSpeed,
     damageSpell: def.kind === 'spell' && !!spell && spell.kind !== 'barrel' && spell.damage > 0 && !spell.freeze && !spell.rage,
     freeze: !!spell?.freeze,
@@ -128,7 +128,7 @@ export function formationOffsets(count: number): [number, number][] {
   }
 }
 
-/** 法術對單一目標的總傷害（箭雨三波合計；毒霧依停留秒數估算）。 */
+/** 法術對單一目標的總傷害（萬箭齊發三波合計；毒藥法術依停留秒數估算）。 */
 export function spellDamage(s: SpellStats, tower: boolean, ticks = 8): number {
   const waves = s.waves ?? 1;
   if (s.kind === 'area') {

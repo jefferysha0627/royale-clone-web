@@ -653,7 +653,7 @@ function spellIcon(cardId: string): Group {
       for (let i = 0; i < 4; i++) glow('#d9d4cc', 0.16 + i * 0.05, -0.9 - i * 0.12, -0.95 - i * 0.05, -0.2, 0.7);
       break;
     case 'log':
-      // 滾木：長木頭、年輪切面與尖刺，下方揚起塵土
+      // 復仇滾木：長木頭、年輪切面與尖刺，下方揚起塵土
       k.cyl(0.38, 0.38, 1.6, { rot: [0, 0, Math.PI / 2 - 0.25], color: '#8a5a2e' }, 16);
       k.cyl(0.33, 0.33, 0.05, { at: [0.78, 0.2, 0], rot: [0, 0, Math.PI / 2 - 0.25], color: '#d9b77a' }, 16);
       k.torus(0.2, 0.025, { at: [0.8, 0.205, 0], rot: [0, Math.PI / 2, 0.25], color: '#b88a50' }, 14);
@@ -711,7 +711,7 @@ function spellIcon(cardId: string): Group {
       }
       break;
     case 'tornado': {
-      // 龍捲風：一圈圈細環由上往下收窄、左右扭動成漏斗，外層半透明氣旋，周圍捲著碎片
+      // 旋風法術：一圈圈細環由上往下收窄、左右扭動成漏斗，外層半透明氣旋，周圍捲著碎片
       for (let i = 0; i < 13; i++) {
         const t = i / 12;
         const r = 0.7 - t * 0.56;
@@ -729,7 +729,7 @@ function spellIcon(cardId: string): Group {
       break;
     }
     case 'graveyard': {
-      // 亡靈墓地：土丘上一大一小兩塊圓頂墓碑，前方地裡伸出骷髏手，墓碑後透出紫色鬼火
+      // 骷髏召喚：土丘上一大一小兩塊圓頂墓碑，前方地裡伸出骷髏手，墓碑後透出紫色鬼火
       glow('#9a6cff', 0.42, 0.0, 0.2, -0.9, 0.16, true);
       k.sphere(0.95, { at: [0, -1.12, -0.45], scale: [1.3, 0.34, 0.7], color: '#6a5a48' }, 18);
       for (const [x, z, r] of [[-0.75, 0.05, 0.12], [0.7, 0.1, 0.1], [0.05, 0.25, 0.08]] as const) k.rock(r, { at: [x, -0.7, z], color: '#7a6e60' });
@@ -752,7 +752,7 @@ function spellIcon(cardId: string): Group {
       break;
     }
     case 'lightning': {
-      // 落雷：厚厚的紫灰色雷雲，底下劈出三道白紫色閃電，落點有光暈
+      // 雷電法術：厚厚的紫灰色雷雲，底下劈出三道白紫色閃電，落點有光暈
       const cloud: [number, number, number, number][] = [[0, 0.62, 0, 0.42], [-0.42, 0.55, -0.05, 0.32], [0.44, 0.56, 0, 0.34], [-0.2, 0.78, -0.1, 0.32], [0.22, 0.8, -0.12, 0.3]];
       for (const [x, y, z, r] of cloud) k.sphere(r, { at: [x, y, z], scale: [1.2, 0.8, 0.9], color: '#5a5070' }, 12);
       for (const [x, y, z, r] of cloud) k.sphere(r * 0.6, { at: [x + 0.05, y + r * 0.35, z + 0.15], scale: [1.1, 0.6, 0.6], color: '#8a80a8' }, 10);
